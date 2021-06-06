@@ -18,6 +18,8 @@ pwd
 
 echo "---------------- Update Conda Environment ---------------"
 echo "Updating conda environment"
+# exclude 8.0 or more advanced arch to be compatible with cuda 10.0
+export TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0"
 conda env create --file scripts/env.yml
 # or use `conda env update to update the current environment`
 conda activate tabert

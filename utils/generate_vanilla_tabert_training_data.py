@@ -39,7 +39,8 @@ from table_bert.utils import BertTokenizer
 from table_bert.input_formatter import VanillaTableBertInputFormatter, TableBertBertInputFormatter
 from table_bert.config import TableBertConfig
 from table_bert.dataset import Example, TableDatabase
-from utils.prepare_training_data import sample_context
+#from utils.prepare_training_data import sample_context
+from utils.generate_vertical_tabert_training_data import sample_context
 
 
 def generate_for_epoch(table_db: TableDatabase,

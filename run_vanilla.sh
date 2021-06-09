@@ -1,9 +1,11 @@
-mkdir -p data/runs/vanilla_tabert
+input_dir=data/train_data/vanilla_tabert
+output_dir=data/runs/vanilla_tabert
+mkdir -p ${output_dir}
 
 export NGPU=4; python -m torch.distributed.launch --nproc_per_node=$NGPU train.py \
     --task vanilla \
-    --data-dir data/train_data/vanilla_tabert \
-    --output-dir data/runs/vanilla_tabert \
+    --data-dir ${input_dir} \
+    --output-dir ${output_dir} \
     --table-bert-extra-config '{}' \
     --train-batch-size 8 \
     --gradient-accumulation-steps 8 \

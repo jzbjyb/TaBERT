@@ -18,8 +18,12 @@ RUN wget -qO /tmp/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-${
 WORKDIR '/app'
 
 # TaBERT env
-COPY . .
+COPY scripts/env.yml /tmp/env.yml
 RUN export TORCH_CUDA_ARCH_LIST="5.2 6.0 6.1 7.0"
-RUN conda env create --file scripts/env.yml
+RUN conda env create --file /tmp/env.yml
+COPY . .
 SHELL ["conda", "run", "-n", "tabert", "/bin/bash", "-c"]
 RUN pip install --editable .
+
+# deepspeed
+RUN pip install deepspeed

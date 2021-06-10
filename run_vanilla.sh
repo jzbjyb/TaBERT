@@ -11,7 +11,7 @@ epochs=10
 # export NGPU=8; deepspeed train.py
 # (3) multi node w/ deepspeed
 # export NGPU=8; deepspeed --hostfile=myhostfile train.py
-export NGPU=8; deepspeed train.py
+export NGPU=8; deepspeed train.py \
     --task vanilla \
     --data-dir ${input_dir} \
     --output-dir ${output_dir} \

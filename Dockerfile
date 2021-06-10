@@ -3,7 +3,7 @@ FROM pytorch/pytorch:1.7.1-cuda11.0-cudnn8-devel
 # essential tools
 RUN apt-get update
 RUN apt-get -y install openssh-client vim tmux sudo apt-transport-https apt-utils curl \
-    git wget lsb-release ca-certificates gnupg gcc g++ pdsh
+    git wget lsb-release ca-certificates gnupg gcc g++
 
 # Conda Environment
 ENV MINICONDA_VERSION py37_4.9.2
@@ -31,3 +31,4 @@ RUN pip install --editable .
 
 # deepspeed
 RUN pip install deepspeed
+RUN apt-get -y install pdsh

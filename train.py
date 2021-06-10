@@ -196,7 +196,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Prepare model
-    if args.multi_gpu and args.global_rank != 0:
+    if args.multi_gpu and args.local_rank != 0:
         torch.distributed.barrier()
 
     if args.no_init:
@@ -204,7 +204,7 @@ def main():
     else:
         model = task['model'](table_bert_config)
 
-    if args.multi_gpu and args.global_rank == 0:
+    if args.multi_gpu and args.local_rank == 0:
         torch.distributed.barrier()
 
     if args.fp16:

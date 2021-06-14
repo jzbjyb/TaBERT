@@ -5,7 +5,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Union, Dict, List, Tuple, Optional
+from typing import Union, Dict, List, Tuple, Optional, Set
 import sys
 import json
 from pathlib import Path
@@ -60,11 +60,21 @@ class TableBertModel(nn.Module):
 
         if hasattr(self._bert_model, 'bert'):
             return self._bert_model.bert
+        elif hasattr(self, '_as_electra_discrimiator'):
+            def _forward(*args, **kwargs):
+                if 'output_all_encoded_layers' in kwargs:
+                    kwargs['output_hidden_states'] = kwargs['output_all_encoded_layers']
+                    del kwargs['output_all_encoded_layers']
+                outputs = self._bert_model.electra(*args, **kwargs)
+                return outputs[-1], None
+            return _forward
         else:
             return self._bert_model
 
     @property
     def bert_config(self) -> BertConfig:
+        if hasattr(self, '_as_electra_discrimiator'):
+            return self._bert_model_config
         return self.bert.config
 
     @property
@@ -73,6 +83,8 @@ class TableBertModel(nn.Module):
 
     @property
     def output_size(self):
+        if hasattr(self, '_as_electra_discrimiator'):
+            return self._bert_model_config.hidden_size
         return self.bert.config.hidden_size
 
     @classmethod
@@ -152,6 +164,14 @@ class TableBertModel(nn.Module):
 
         return model
 
+    @staticmethod
+    def is_electra_state_dict(state_dict):
+        keys = set(state_dict.keys())
+        for key in keys:
+            if 'electra' in key:
+                return True
+        return False
+
     @classmethod
     def from_pretrained(
         cls,
@@ -215,8 +235,10 @@ class TableBertModel(nn.Module):
 
         model = model_cls(config, **model_kwargs)
 
+        is_electra = False
         if state_dict is None:
             state_dict = torch.load(model_name_or_path, map_location="cpu")
+            is_electra = cls.is_electra_state_dict(state_dict)
 
         # fix the name for weight `cls.predictions.decoder.bias`,
         # to make it compatible with the latest version of HuggingFace `transformers`
@@ -233,6 +255,18 @@ class TableBertModel(nn.Module):
 
             for old_key, new_key in old_key_to_new_key_names:
                 state_dict[new_key] = state_dict[old_key]
+
+        if is_electra:
+            model.as_electra_discrimiator('google/electra-base-discriminator')  # TODO: add convertion from bert name to eletrc name
+            for key in set(state_dict.keys()):
+                if '.generator.' in key:
+                    del state_dict[key]
+                elif '.discriminator.' in key:
+                    new_key = key.replace('_electra.discriminator.', '_bert_model.')
+                    state_dict[new_key] = state_dict[key]
+                    del state_dict[key]
+                else:
+                    raise ValueError('not a electra state dict')
 
         model.load_state_dict(state_dict, strict=True)
 

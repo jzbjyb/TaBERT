@@ -56,6 +56,15 @@ class VanillaTableBert(TableBertModel):
         electra_loss = ELECTRALoss()
         return electra, electra_loss
 
+    def as_electra_discrimiator(self, electra_disc_name: str):
+        if not hasattr(self, '_bert_model'):  # only w
+            raise NotImplementedError('can only convert bert model to electra discriminator')
+        if hasattr(self, '_as_electra_discrimiator'):
+            pass
+        self._bert_model_config = self.bert.config
+        self._bert_model = ElectraForPreTraining.from_pretrained(electra_disc_name)
+        self._as_electra_discrimiator = True
+
     def forward(self, *args, **kwargs):
         if not self.config.use_electra:
             return self.forward_bert(*args, **kwargs)

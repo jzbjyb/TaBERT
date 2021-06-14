@@ -15,7 +15,7 @@ from collections import OrderedDict
 from types import SimpleNamespace
 from typing import Dict, Union
 
-from table_bert.utils import BertTokenizer, BertConfig
+from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig
 
 
 BERT_CONFIGS = {
@@ -64,6 +64,12 @@ BERT_CONFIGS = {
     )
 }
 
+ELECTRA_GEN_DIVISOR = {
+    'google/electra-small-generator': 4,
+    'google/electra-base-generator': 3,
+    'google/electra-large-generator': 4
+}
+
 
 class TableBertConfig(SimpleNamespace):
     def __init__(
@@ -87,6 +93,7 @@ class TableBertConfig(SimpleNamespace):
         super(TableBertConfig, self).__init__()
 
         self.base_model_name = base_model_name
+        self.use_electra = 'electra' in base_model_name.lower()
         self.column_delimiter = column_delimiter
         self.context_first = context_first
         self.column_representation = column_representation
@@ -97,13 +104,15 @@ class TableBertConfig(SimpleNamespace):
 
         self.do_lower_case = do_lower_case
 
+        self.tokenizer_cls = BertTokenizer if not self.use_electra else ElectraTokenizer
         # tokenizer = BertTokenizer.from_pretrained(self.base_model_name)
         if isinstance(cell_input_template, str):
             if ' ' in cell_input_template:
                 cell_input_template = cell_input_template.split(' ')
             else:
                 print(f'WARNING: cell_input_template is outdated: {cell_input_template}', file=sys.stderr)
-                cell_input_template = BertTokenizer.from_pretrained(self.base_model_name).tokenize(cell_input_template)
+                cell_input_template = \
+                    self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(cell_input_template)
 
         self.cell_input_template = cell_input_template
 
@@ -114,9 +123,19 @@ class TableBertConfig(SimpleNamespace):
         self.table_mask_strategy = table_mask_strategy
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
-            bert_config = BERT_CONFIGS[self.base_model_name]
-            for k, v in vars(bert_config).items():
-                setattr(self, k, v)
+            if not self.use_electra:
+                bert_config = BERT_CONFIGS[self.base_model_name]
+                for k, v in vars(bert_config).items():
+                    setattr(self, k, v)
+            else:
+                assert 'generator' in self.base_model_name, 'use "generator" as the base_model_name when using ELECTRA'
+                divisor = ELECTRA_GEN_DIVISOR[self.base_model_name]
+                self.disc_config = ElectraConfig.from_pretrained(
+                    self.base_model_name.replace('generator', 'discriminator'))
+                self.gen_config = ElectraConfig.from_pretrained(self.base_model_name)
+                self.gen_config.hidden_size = self.disc_config.hidden_size // divisor
+                self.gen_config.num_attention_heads = self.disc_config.num_attention_heads // divisor
+                self.gen_config.intermediate_size = self.disc_config.intermediate_size // divisor
 
     @classmethod
     def add_args(cls, parser: ArgumentParser):

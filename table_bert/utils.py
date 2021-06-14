@@ -40,3 +40,6 @@ except ImportError:
 
     hf_flag = 'new'
     TRANSFORMER_VERSION = TransformerVersion.TRANSFORMERS
+
+# ELECTRA
+from transformers import ElectraConfig, ElectraTokenizer, ElectraForMaskedLM, ElectraForPreTraining

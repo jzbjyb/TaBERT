@@ -34,8 +34,6 @@ from tqdm import tqdm, trange
 
 from random import shuffle, choice, sample, random
 
-from table_bert.utils import BertTokenizer
-
 from table_bert.input_formatter import VanillaTableBertInputFormatter, TableBertBertInputFormatter
 from table_bert.config import TableBertConfig
 from table_bert.dataset import Example, TableDatabase
@@ -102,6 +100,8 @@ def generate_for_epoch(table_db: TableDatabase,
                 masked_lm_positions.extend(instance['masked_lm_positions'])
                 masked_lm_label_ids.extend(instance['masked_lm_label_ids'])
                 masked_lm_offsets.append([cur_pos, cur_pos + lm_mask_len])
+        except KeyboardInterrupt as e:
+            raise e
         except:
             # raise
             typ, value, tb = sys.exc_info()
@@ -140,7 +140,7 @@ def main():
     sys.stderr.flush()
 
     table_bert_config = TableBertConfig.from_dict(vars(args))
-    tokenizer = BertTokenizer.from_pretrained(table_bert_config.base_model_name)
+    tokenizer = table_bert_config.tokenizer_cls.from_pretrained(table_bert_config.base_model_name)
     input_formatter = VanillaTableBertInputFormatter(table_bert_config, tokenizer)
 
     total_tables_num = int(subprocess.check_output(f"wc -l {args.train_corpus}", shell=True).split()[0])

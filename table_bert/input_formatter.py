@@ -286,16 +286,22 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         masked_token_labels = []
 
         for index in masked_indices:
-            # 80% of the time, replace with [MASK]
-            if random() < 0.8:
-                masked_token = "[MASK]"
-            else:
-                # 10% of the time, keep original
-                if random() < 0.5:
-                    masked_token = tokens[index]
-                # 10% of the time, replace with random word
+            if not self.config.use_electra:  # BERT style masking
+                # 80% of the time, replace with [MASK]
+                if random() < 0.8:
+                    masked_token = "[MASK]"
                 else:
-                    masked_token = choice(self.vocab_list)
+                    # 10% of the time, keep original
+                    if random() < 0.5:
+                        masked_token = tokens[index]
+                    # 10% of the time, replace with random word
+                    else:
+                        masked_token = choice(self.vocab_list)
+            else:  # ELECTRA style masking
+                if random() < 0.85:  # 85% of the time, replace with [MASK]
+                    masked_token = "[MASK]"
+                else:  # 15% of the time, keep original
+                    masked_token = tokens[index]
             masked_token_labels.append(tokens[index])
             # Once we've saved the true label for that token, we can overwrite it with the masked version
             tokens[index] = masked_token

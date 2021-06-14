@@ -5,7 +5,7 @@ RUN apt-get update
 RUN apt-get -y install openssh-client vim tmux sudo apt-transport-https apt-utils curl \
     git wget lsb-release ca-certificates gnupg gcc g++
 
-# Conda Environment
+# Conda environment
 ENV MINICONDA_VERSION py37_4.9.2
 ENV PATH /opt/miniconda/bin:$PATH
 RUN wget -qO /tmp/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh && \
@@ -32,3 +32,6 @@ RUN pip install --editable .
 # deepspeed
 RUN pip install deepspeed
 RUN apt-get -y install pdsh
+
+# ELECTRA
+RUN pip install -r /tmp/scripts/requirements_electra.txt

@@ -48,7 +48,7 @@ class TableBertModel(nn.Module):
             )
 
         self._bert_model = bert_model
-        self.tokenizer = BertTokenizer.from_pretrained(config.base_model_name)
+        self.tokenizer = config.tokenizer_cls.from_pretrained(config.base_model_name)
         self.config = config
 
     @property

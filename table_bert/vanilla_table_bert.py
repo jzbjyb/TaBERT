@@ -18,10 +18,12 @@ from torch.nn import CrossEntropyLoss
 from torch_scatter import scatter_max, scatter_mean
 
 from table_bert.utils import BertForPreTraining, BertForMaskedLM, TRANSFORMER_VERSION, TransformerVersion
+from table_bert.utils import ElectraForPreTraining, ElectraForMaskedLM
 from table_bert.table_bert import TableBertModel
 from table_bert.config import TableBertConfig, BERT_CONFIGS
 from table_bert.table import Table
 from table_bert.input_formatter import VanillaTableBertInputFormatter
+from table_bert.electra import ELECTRAModel, ELECTRALoss
 
 
 class VanillaTableBert(TableBertModel):
@@ -34,10 +36,33 @@ class VanillaTableBert(TableBertModel):
     ):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
-        self._bert_model = BertForMaskedLM.from_pretrained(config.base_model_name)
+        if not config.use_electra:
+            self._bert_model = BertForMaskedLM.from_pretrained(config.base_model_name)
+        else:
+            self._electra, self._electra_loss = self.load_electra()
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
+    def load_electra(self):
+        # from scratch
+        #generator = ElectraForMaskedLM(self.config.gen_config)
+        #discriminator = ElectraForPreTraining(self.config.disc_config)
+        # from pre-trained
+        generator = ElectraForMaskedLM.from_pretrained(self.config.base_model_name)
+        discriminator = ElectraForPreTraining.from_pretrained(
+            self.config.base_model_name.replace('generator', 'discriminator'))
+        discriminator.electra.embeddings = generator.electra.embeddings
+        generator.generator_lm_head.weight = generator.electra.embeddings.word_embeddings.weight
+        electra = ELECTRAModel(generator, discriminator)
+        electra_loss = ELECTRALoss()
+        return electra, electra_loss
+
+    def forward(self, *args, **kwargs):
+        if not self.config.use_electra:
+            return self.forward_bert(*args, **kwargs)
+        else:
+            return self.forward_electra(*args, **kwargs)
+
+    def forward_bert(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         sequence_output, _ = self._bert_model.bert(input_ids, token_type_ids, attention_mask,
                                        output_all_encoded_layers=False)
         prediction_scores = self._bert_model.cls(sequence_output)
@@ -55,6 +80,19 @@ class VanillaTableBert(TableBertModel):
             return masked_lm_loss, logging_output
         else:
             return prediction_scores
+
+    def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
+        gen_logits, generated, disc_logits, is_replaced, attention_mask, is_mlm_applied = \
+            self._electra(input_ids, token_type_ids, attention_mask, masked_lm_labels)
+        loss = self._electra_loss(
+            (gen_logits, generated, disc_logits, is_replaced, attention_mask, is_mlm_applied), masked_lm_labels)
+        sample_size = masked_lm_labels.ne(-1).sum().item()
+        loss = loss * sample_size
+        logging_output = {
+            'sample_size': sample_size,
+            'loss': loss.item()
+        }
+        return loss, logging_output  # to be consistent
 
     def encode_context_and_table(
         self,

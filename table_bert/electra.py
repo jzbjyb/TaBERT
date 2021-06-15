@@ -4,6 +4,15 @@ import torch.nn.functional as F
 from transformers import ElectraForMaskedLM, ElectraForPreTraining
 
 
+def gumbel_noise(t):
+    noise = torch.zeros_like(t).uniform_(0, 1)
+    return -torch.log(-torch.log(noise))
+
+
+def gumbel_sample(logits, temperature = 1.):
+    return ((logits / temperature) + gumbel_noise(logits)).argmax(dim=-1)
+
+
 class ELECTRAModel(nn.Module):
     def __init__(self,
                  generator: ElectraForMaskedLM,
@@ -41,8 +50,9 @@ class ELECTRAModel(nn.Module):
 
     def sample(self, logits, method: str='fp32_gumbel'):
         if method == 'fp32_gumbel':
-            gumbel = self.gumbel_dist.sample(logits.shape).to(logits.device)
-            return (logits.float() + gumbel).argmax(dim=-1)
+            return gumbel_sample(logits)  # faster than sampling from the distribution
+            #gumbel = self.gumbel_dist.sample(logits.shape).to(logits.device)
+            #return (logits.float() + gumbel).argmax(dim=-1)
         elif method == 'fp16_gumbel':  # 5.06 ms
             gumbel = self.gumbel_dist.sample(logits.shape).to(logits.device)
             return (logits + gumbel).argmax(dim=-1)

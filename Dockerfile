@@ -22,12 +22,7 @@ RUN conda env create --file /tmp/scripts/env.yml
 
 # MAPO env
 RUN conda env update --name tabert --file /tmp/scripts/env_mapo.yml
-
-# TaBERT
-WORKDIR '/app'
-COPY . .
 SHELL ["conda", "run", "-n", "tabert", "/bin/bash", "-c"]
-RUN pip install --editable .
 
 # deepspeed
 RUN pip install deepspeed
@@ -35,3 +30,8 @@ RUN apt-get -y install pdsh
 
 # ELECTRA
 RUN pip install -r /tmp/scripts/requirements_electra.txt
+
+# TaBERT
+WORKDIR '/app'
+COPY . .
+RUN pip install --editable .

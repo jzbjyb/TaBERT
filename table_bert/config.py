@@ -14,8 +14,9 @@ from pathlib import Path
 from collections import OrderedDict
 from types import SimpleNamespace
 from typing import Dict, Union
+from enum import Enum
 
-from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig
+from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig, RobertaTokenizer, RobertaConfig
 
 
 BERT_CONFIGS = {
@@ -71,6 +72,32 @@ ELECTRA_GEN_DIVISOR = {
 }
 
 
+class ModelType(Enum):
+    BERT = 0
+    ELECTRA = 1
+    RoBERTa = 2
+
+
+MODEL2TOKENIZER = {
+    ModelType.BERT: BertTokenizer,
+    ModelType.ELECTRA: ElectraTokenizer,
+    ModelType.RoBERTa: RobertaTokenizer
+}
+
+MODEL2SEP = {
+    ModelType.BERT: '[SEP]',
+    ModelType.ELECTRA: '[SEP]',
+    ModelType.RoBERTa: '</s>'
+}
+
+
+MODEL2CLS = {
+    ModelType.BERT: '[CLS]',
+    ModelType.ELECTRA: '[CLS]',
+    ModelType.RoBERTa: '<s>'
+}
+
+
 class TableBertConfig(SimpleNamespace):
     def __init__(
         self,
@@ -93,8 +120,13 @@ class TableBertConfig(SimpleNamespace):
         super(TableBertConfig, self).__init__()
 
         self.base_model_name = base_model_name
-        self.use_electra = 'electra' in base_model_name.lower()
+        self.model_type = self.check_model_type(base_model_name)
+        self.use_electra = self.model_type == ModelType.ELECTRA
         self.column_delimiter = column_delimiter
+        if column_delimiter == '[SEP]':  # model-dependent delimiter
+            self.column_delimiter = MODEL2SEP[self.model_type]
+        self.sep_token = MODEL2SEP[self.model_type]
+        self.cls_token = MODEL2CLS[self.model_type]
         self.context_first = context_first
         self.column_representation = column_representation
 
@@ -104,7 +136,7 @@ class TableBertConfig(SimpleNamespace):
 
         self.do_lower_case = do_lower_case
 
-        self.tokenizer_cls = BertTokenizer if not self.use_electra else ElectraTokenizer
+        self.tokenizer_cls = MODEL2TOKENIZER[self.model_type]
         # tokenizer = BertTokenizer.from_pretrained(self.base_model_name)
         if isinstance(cell_input_template, str):
             if ' ' in cell_input_template:
@@ -123,11 +155,11 @@ class TableBertConfig(SimpleNamespace):
         self.table_mask_strategy = table_mask_strategy
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
-            if not self.use_electra:
+            if self.model_type == ModelType.BERT:
                 bert_config = BERT_CONFIGS[self.base_model_name]
                 for k, v in vars(bert_config).items():
                     setattr(self, k, v)
-            else:
+            elif self.model_type == ModelType.ELECTRA:
                 assert 'generator' in self.base_model_name, 'use "generator" as the base_model_name when using ELECTRA'
                 divisor = ELECTRA_GEN_DIVISOR[self.base_model_name]
                 self.disc_config = ElectraConfig.from_pretrained(
@@ -136,6 +168,10 @@ class TableBertConfig(SimpleNamespace):
                 self.gen_config.hidden_size = self.disc_config.hidden_size // divisor
                 self.gen_config.num_attention_heads = self.disc_config.num_attention_heads // divisor
                 self.gen_config.intermediate_size = self.disc_config.intermediate_size // divisor
+            elif self.model_type == ModelType.RoBERTa:
+                self.roberta_config = RobertaConfig.from_pretrained(self.base_model_name)
+            else:
+                raise NotImplementedError
 
     @classmethod
     def add_args(cls, parser: ArgumentParser):
@@ -206,6 +242,14 @@ class TableBertConfig(SimpleNamespace):
     @classmethod
     def from_dict(cls, args: Dict):
         return cls(**args)
+
+    def check_model_type(self, model_name: str) -> ModelType:
+        model_name = model_name.lower()
+        if 'electra' in model_name:
+            return ModelType.ELECTRA
+        if 'roberta' in model_name:
+            return ModelType.RoBERTa
+        return ModelType.BERT
 
     def with_new_args(self, **updated_args):
         new_config = self.__class__(**vars(self))

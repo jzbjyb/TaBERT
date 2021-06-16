@@ -20,9 +20,12 @@ class TableBertBertInputFormatter(object):
     def __init__(self, config: TableBertConfig, tokenizer: BertTokenizer):
         self.config = config
         self.tokenizer = tokenizer
-
-        self.vocab_list = list(self.tokenizer.vocab.keys())
-
+        if hasattr(self.tokenizer, 'vocab'):
+            self.vocab_list = list(self.tokenizer.vocab.keys())
+        elif hasattr(self.tokenizer, 'get_vocab'):
+            self.vocab_list = list(self.tokenizer.get_vocab().keys())
+        else:
+            raise Exception('cannot find vocab for the tokenizer {}'.format(self.tokenizer))
 
 class TableTooLongError(ValueError):
     pass
@@ -72,12 +75,12 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], trim_long_table=False):
         if self.config.context_first:
-            table_tokens_start_idx = len(context) + 2  # account for [CLS] and [SEP]
-            # account for [CLS] and [SEP], and the ending [SEP]
+            table_tokens_start_idx = len(context) + 2  # account for cls and sep
+            # account for cls and sep, and the ending sep
             max_table_token_length = MAX_BERT_INPUT_LENGTH - len(context) - 2 - 1
         else:
-            table_tokens_start_idx = 1  # account for starting [CLS]
-            # account for [CLS] and [SEP], and the ending [SEP]
+            table_tokens_start_idx = 1  # account for starting cls
+            # account for cls and sep, and the ending sep
             max_table_token_length = MAX_BERT_INPUT_LENGTH - len(context) - 2 - 1
 
         # generate table tokens
@@ -144,13 +147,13 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             del row_input_tokens[-1]
 
         if self.config.context_first:
-            sequence = ['[CLS]'] + context + ['[SEP]'] + row_input_tokens + ['[SEP]']
+            sequence = [self.config.cls_token] + context + [self.config.sep_token] + row_input_tokens + [self.config.sep_token]
             # segment_ids = [0] * (len(context) + 2) + [1] * (len(row_input_tokens) + 1)
             segment_a_length = len(context) + 2
             context_span = (0, 1 + len(context))
             # context_token_indices = list(range(0, 1 + len(context)))
         else:
-            sequence = ['[CLS]'] + row_input_tokens + ['[SEP]'] + context + ['[SEP]']
+            sequence = [self.config.cls_token] + row_input_tokens + [self.config.sep_token] + context + [self.config.sep_token]
             # segment_ids = [0] * (len(row_input_tokens) + 2) + [1] * (len(context) + 1)
             segment_a_length = len(row_input_tokens) + 2
             context_span = (len(row_input_tokens) + 1, len(row_input_tokens) + 1 + 1 + len(context) + 1)
@@ -162,7 +165,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'segment_a_length': segment_a_length,
             # 'segment_ids': segment_ids,
             'column_spans': column_token_span_maps,
-            'context_length': 1 + len(context),  # beginning [CLS]/[SEP] + input question
+            'context_length': 1 + len(context),  # beginning cls/sep + input question
             'context_span': context_span,
             # 'context_token_indices': context_token_indices
         }
@@ -200,7 +203,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def create_pretraining_instance(self, context, header):
         table = Table('fake_table', header)
-        input_instance = self.get_input(context, table, trim_long_table=True)
+        input_instance = self.get_input(context, table, trim_long_table=True)  # core format function
         column_spans = input_instance['column_spans']
 
         column_candidate_indices = [

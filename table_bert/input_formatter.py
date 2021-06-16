@@ -290,9 +290,9 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         for index in masked_indices:
             if not self.config.use_electra:  # BERT style masking
-                # 80% of the time, replace with [MASK]
+                # 80% of the time, replace with mask
                 if random() < 0.8:
-                    masked_token = "[MASK]"
+                    masked_token = self.config.mask_token
                 else:
                     # 10% of the time, keep original
                     if random() < 0.5:
@@ -301,8 +301,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     else:
                         masked_token = choice(self.vocab_list)
             else:  # ELECTRA style masking
-                if random() < 0.85:  # 85% of the time, replace with [MASK]
-                    masked_token = "[MASK]"
+                if random() < 0.85:  # 85% of the time, replace with mask
+                    masked_token = self.config.mask_token
                 else:  # 15% of the time, keep original
                     masked_token = tokens[index]
             masked_token_labels.append(tokens[index])

@@ -98,6 +98,13 @@ MODEL2CLS = {
 }
 
 
+MODEL2MASK = {
+    ModelType.BERT: '[MASK]',
+    ModelType.ELECTRA: '[MASK]',
+    ModelType.RoBERTa: '<mask>'
+}
+
+
 class TableBertConfig(SimpleNamespace):
     def __init__(
         self,
@@ -127,6 +134,7 @@ class TableBertConfig(SimpleNamespace):
             self.column_delimiter = MODEL2SEP[self.model_type]
         self.sep_token = MODEL2SEP[self.model_type]
         self.cls_token = MODEL2CLS[self.model_type]
+        self.mask_token = MODEL2MASK[self.model_type]
         self.context_first = context_first
         self.column_representation = column_representation
 

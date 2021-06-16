@@ -9,6 +9,7 @@ import re
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
+from functools import partial
 
 import torch
 import random
@@ -276,7 +277,7 @@ def main():
             train_sampler = RandomSampler(epoch_dataset)
             train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=real_batch_size,
                                           num_workers=0,
-                                          collate_fn=epoch_dataset.collate)
+                                          collate_fn=partial(epoch_dataset.collate, pad_id=table_bert_config.pad_id))
 
         samples_iter = GroupedIterator(iter(train_dataloader), args.gradient_accumulation_steps)
         trainer.resume_batch_loader(samples_iter)

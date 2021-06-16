@@ -242,7 +242,7 @@ class TableDataset(Dataset):
         return self.examples[item]
 
     @staticmethod
-    def collate(examples):
+    def collate(examples, pad_id: int=0):
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
 

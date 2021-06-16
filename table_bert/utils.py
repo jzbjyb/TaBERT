@@ -45,4 +45,4 @@ except ImportError:
 from transformers import ElectraConfig, ElectraTokenizer, ElectraForMaskedLM, ElectraForPreTraining
 
 # RoBERTa
-from transformers import RobertaConfig, RobertaTokenizer
+from transformers import RobertaConfig, RobertaTokenizer, RobertaForMaskedLM

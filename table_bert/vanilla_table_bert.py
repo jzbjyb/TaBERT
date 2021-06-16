@@ -18,7 +18,7 @@ from torch.nn import CrossEntropyLoss
 from torch_scatter import scatter_max, scatter_mean
 
 from table_bert.utils import BertForPreTraining, BertForMaskedLM, TRANSFORMER_VERSION, TransformerVersion
-from table_bert.utils import ElectraForPreTraining, ElectraForMaskedLM
+from table_bert.utils import ElectraForPreTraining, ElectraForMaskedLM, RobertaForMaskedLM
 from table_bert.table_bert import TableBertModel
 from table_bert.config import TableBertConfig, BERT_CONFIGS
 from table_bert.table import Table
@@ -36,11 +36,11 @@ class VanillaTableBert(TableBertModel):
     ):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
-        if not config.use_electra:
-            self._bert_model = BertForMaskedLM.from_pretrained(config.base_model_name)
-        else:
-            self._electra, self._electra_loss = self.load_electra()
+        getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
+
+    def load_bert(self):
+        self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_electra(self):
         # from scratch
@@ -52,24 +52,14 @@ class VanillaTableBert(TableBertModel):
             self.config.base_model_name.replace('generator', 'discriminator'))
         discriminator.electra.embeddings = generator.electra.embeddings
         generator.generator_lm_head.weight = generator.electra.embeddings.word_embeddings.weight
-        electra = ELECTRAModel(generator, discriminator)
-        electra_loss = ELECTRALoss()
-        return electra, electra_loss
+        self._electra = ELECTRAModel(generator, discriminator)
+        self._electra_loss = ELECTRALoss()
 
-    def as_electra_discrimiator(self, electra_disc_name: str):
-        if not hasattr(self, '_bert_model'):  # only w
-            raise NotImplementedError('can only convert bert model to electra discriminator')
-        if hasattr(self, '_as_electra_discrimiator'):
-            pass
-        self._bert_model_config = self.bert.config
-        self._bert_model = ElectraForPreTraining.from_pretrained(electra_disc_name)
-        self._as_electra_discrimiator = True
+    def load_roberta(self):
+        self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def forward(self, *args, **kwargs):
-        if not self.config.use_electra:
-            return self.forward_bert(*args, **kwargs)
-        else:
-            return self.forward_electra(*args, **kwargs)
+        return getattr(self, 'forward_{}'.format(self.config.model_type.value))(*args, **kwargs)
 
     def forward_bert(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         sequence_output, _ = self._bert_model.bert(input_ids, token_type_ids, attention_mask,
@@ -102,6 +92,17 @@ class VanillaTableBert(TableBertModel):
             'loss': loss.item()
         }
         return loss, logging_output  # to be consistent
+
+    def forward_roberta(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
+        sequence_logits = self._roberta(input_ids, attention_mask)[0]
+        loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='sum')
+        masked_lm_loss = loss_fct(sequence_logits.view(-1, sequence_logits.size(-1)), masked_lm_labels.view(-1))
+        sample_size = masked_lm_labels.ne(-1).sum().item()
+        logging_output = {
+            'sample_size': sample_size,
+            'loss': masked_lm_loss.item()
+        }
+        return masked_lm_loss, logging_output
 
     def encode_context_and_table(
         self,
@@ -354,10 +355,3 @@ class VanillaTableBert(TableBertModel):
         }
 
         return valid_result
-
-    def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True):
-        if not any(key.startswith('_bert_model') for key in state_dict):
-            logging.warning('warning: loading model from an old version')
-            self._bert_model.load_state_dict(state_dict, strict)
-        else:
-            super(VanillaTableBert, self).load_state_dict(state_dict, strict)

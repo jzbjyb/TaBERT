@@ -73,9 +73,9 @@ ELECTRA_GEN_DIVISOR = {
 
 
 class ModelType(Enum):
-    BERT = 0
-    ELECTRA = 1
-    RoBERTa = 2
+    BERT = 'bert'
+    ELECTRA = 'electra'
+    RoBERTa = 'roberta'
 
 
 MODEL2TOKENIZER = {
@@ -102,6 +102,13 @@ MODEL2MASK = {
     ModelType.BERT: '[MASK]',
     ModelType.ELECTRA: '[MASK]',
     ModelType.RoBERTa: '<mask>'
+}
+
+
+MODEL2PADID = {
+    ModelType.BERT: 0,
+    ModelType.ELECTRA: 0,
+    ModelType.RoBERTa: 1
 }
 
 
@@ -135,6 +142,7 @@ class TableBertConfig(SimpleNamespace):
         self.sep_token = MODEL2SEP[self.model_type]
         self.cls_token = MODEL2CLS[self.model_type]
         self.mask_token = MODEL2MASK[self.model_type]
+        self.pad_id = MODEL2PADID[self.model_type]
         self.context_first = context_first
         self.column_representation = column_representation
 

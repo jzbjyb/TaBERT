@@ -20,7 +20,7 @@ from table_bert.utils import (
     TransformerVersion, TRANSFORMER_VERSION
 )
 from table_bert.table import Table
-from table_bert.config import TableBertConfig
+from table_bert.config import TableBertConfig, ModelType
 
 
 MAX_BERT_INPUT_LENGTH = 512
@@ -54,28 +54,50 @@ class TableBertModel(nn.Module):
     @property
     def bert(self) -> BertModel:
         """Return the underlying base BERT model"""
+        return getattr(self, 'bert_{}'.format(self.config.model_type.value))()
 
+    def bert_bert(self):
         if not hasattr(self, '_bert_model') or getattr(self, '_bert_model') is None:
             raise ValueError('This instance does not have a base BERT model.')
-
         if hasattr(self._bert_model, 'bert'):
             return self._bert_model.bert
-        elif hasattr(self, '_as_electra_discrimiator'):
-            def _forward(*args, **kwargs):
-                if 'output_all_encoded_layers' in kwargs:
-                    kwargs['output_hidden_states'] = kwargs['output_all_encoded_layers']
-                    del kwargs['output_all_encoded_layers']
-                outputs = self._bert_model.electra(*args, **kwargs)
-                return outputs[-1], None
-            return _forward
         else:
             return self._bert_model
 
+    def bert_electra(self):
+        def _forward(*args, **kwargs):
+            if 'output_all_encoded_layers' in kwargs:
+                del kwargs['output_all_encoded_layers']
+            if 'return_dict' in kwargs:
+                del kwargs['return_dict']
+            kwargs['output_hidden_states'] = True
+            outputs = self._electra.discriminator(*args, **kwargs, return_dict=True).hidden_states[-1]
+            return outputs, None
+        return _forward
+
+    def bert_roberta(self):
+        def _forward(*args, **kwargs):
+            if 'output_all_encoded_layers' in kwargs:
+                del kwargs['output_all_encoded_layers']
+            if 'return_dict' in kwargs:
+                del kwargs['return_dict']
+            if 'token_type_ids' in kwargs:
+                del kwargs['token_type_ids']
+            kwargs['output_hidden_states'] = True
+            outputs = self._roberta(*args, **kwargs, return_dict=True).hidden_states[-1]
+            return outputs, None
+        return _forward
+
     @property
     def bert_config(self) -> BertConfig:
-        if hasattr(self, '_as_electra_discrimiator'):
-            return self._bert_model_config
-        return self.bert.config
+        if self.config.model_type == ModelType.BERT:
+            return self.bert.config
+        elif self.config.model_type == ModelType.ELECTRA:
+            return self._electra.discriminator.config
+        elif self.config.model_type == ModelType.RoBERTa:
+            return self._roberta.config
+        else:
+            raise NotImplementedError
 
     @property
     def device(self):
@@ -83,9 +105,7 @@ class TableBertModel(nn.Module):
 
     @property
     def output_size(self):
-        if hasattr(self, '_as_electra_discrimiator'):
-            return self._bert_model_config.hidden_size
-        return self.bert.config.hidden_size
+        return self.bert_config.hidden_size
 
     @classmethod
     def load(
@@ -164,14 +184,6 @@ class TableBertModel(nn.Module):
 
         return model
 
-    @staticmethod
-    def is_electra_state_dict(state_dict):
-        keys = set(state_dict.keys())
-        for key in keys:
-            if 'electra' in key:
-                return True
-        return False
-
     @classmethod
     def from_pretrained(
         cls,
@@ -235,14 +247,12 @@ class TableBertModel(nn.Module):
 
         model = model_cls(config, **model_kwargs)
 
-        is_electra = False
         if state_dict is None:
             state_dict = torch.load(model_name_or_path, map_location="cpu")
-            is_electra = cls.is_electra_state_dict(state_dict)
 
         # fix the name for weight `cls.predictions.decoder.bias`,
         # to make it compatible with the latest version of HuggingFace `transformers`
-        if TRANSFORMER_VERSION == TransformerVersion.TRANSFORMERS:
+        if TRANSFORMER_VERSION == TransformerVersion.TRANSFORMERS and config.model_type == ModelType.BERT:
             old_key_to_new_key_names: List[(str, str)] = []
             for key in state_dict:
                 if key.endswith('.predictions.bias'):
@@ -255,18 +265,6 @@ class TableBertModel(nn.Module):
 
             for old_key, new_key in old_key_to_new_key_names:
                 state_dict[new_key] = state_dict[old_key]
-
-        if is_electra:
-            model.as_electra_discrimiator('google/electra-base-discriminator')  # TODO: add convertion from bert name to eletrc name
-            for key in set(state_dict.keys()):
-                if '.generator.' in key:
-                    del state_dict[key]
-                elif '.discriminator.' in key:
-                    new_key = key.replace('_electra.discriminator.', '_bert_model.')
-                    state_dict[new_key] = state_dict[key]
-                    del state_dict[key]
-                else:
-                    raise ValueError('not a electra state dict')
 
         model.load_state_dict(state_dict, strict=True)
 

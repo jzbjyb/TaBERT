@@ -246,7 +246,7 @@ class TableDataset(Dataset):
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
 
-        input_array = np.zeros((batch_size, max_len), dtype=np.int)
+        input_array = np.full((batch_size, max_len), dtype=np.int, fill_value=pad_id)
         mask_array = np.zeros((batch_size, max_len), dtype=np.bool)
         segment_array = np.zeros((batch_size, max_len), dtype=np.bool)
         lm_label_array = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)

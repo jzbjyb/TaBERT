@@ -129,6 +129,8 @@ class TableBertConfig(SimpleNamespace):
         context_sample_strategy: str = 'nearest',
         table_mask_strategy: str = 'column',
         do_lower_case: bool = True,
+        objective_function: str = 'mlm',
+        contrastive_emb_size: int = 512,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -145,6 +147,9 @@ class TableBertConfig(SimpleNamespace):
         self.pad_id = MODEL2PADID[self.model_type]
         self.context_first = context_first
         self.column_representation = column_representation
+        self.objective_function = objective_function
+        self.contrastive_emb_size = contrastive_emb_size
+        assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm'}
 
         self.max_cell_len = max_cell_len
         self.max_sequence_len = max_sequence_len

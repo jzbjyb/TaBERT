@@ -190,6 +190,19 @@ class TableDataset(Dataset):
             'total_size': cum_size
         }
 
+    def add_for_contrastive(self, example: Dict):
+        if not self.config.context_first:
+            raise NotImplementedError
+        al = example['sequence_a_length']
+        raw_input_ids = np.copy(example['token_ids'])
+        masked_lm_positions = example['masked_lm_positions']
+        masked_lm_label_ids = example['masked_lm_label_ids']
+        raw_input_ids[masked_lm_positions] = masked_lm_label_ids
+        # assume there is a sep in between and make sure that the sep is included in both
+        context, table = raw_input_ids[:al], raw_input_ids[al - 1:]
+        example['context_token_ids'] = context
+        example['table_token_ids'] = table
+
     def load_epoch(self, file_prefix: Path, shard_num: int, valid_indices: Set = None):
         examples = []
         idx = -1
@@ -228,6 +241,9 @@ class TableDataset(Dataset):
                 example['masked_lm_positions'] = masked_lm_positions[tgt_begin: tgt_end]
                 example['masked_lm_label_ids'] = masked_lm_label_ids[tgt_begin: tgt_end]
 
+                if 'contrastive' in self.config.objective_function:
+                    self.add_for_contrastive(example)
+
                 examples.append(example)
 
             if isinstance(data, h5py.File):
@@ -245,11 +261,26 @@ class TableDataset(Dataset):
     def collate(examples, pad_id: int=0):
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
+        has_contrastive = False
+        for e in examples:  # use the first one to check
+            if 'context_token_ids' in e:
+                has_contrastive = True
+            break
+        if has_contrastive:
+            max_context_len = max(len(e['context_token_ids']) for e in examples)
+            max_table_len = max(len(e['table_token_ids']) for e in examples)
 
         input_array = np.full((batch_size, max_len), dtype=np.int, fill_value=pad_id)
         mask_array = np.zeros((batch_size, max_len), dtype=np.bool)
         segment_array = np.zeros((batch_size, max_len), dtype=np.bool)
         lm_label_array = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
+        if has_contrastive:
+            context_input_array = np.full((batch_size, max_context_len), dtype=np.int, fill_value=pad_id)
+            table_input_array = np.full((batch_size, max_table_len), dtype=np.int, fill_value=pad_id)
+            context_mask_array = np.zeros((batch_size, max_context_len), dtype=np.bool)
+            table_mask_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
+            context_segment_array = np.zeros((batch_size, max_context_len), dtype=np.bool)
+            table_segment_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
 
         for e_id, example in enumerate(examples):
             token_ids = example['token_ids']
@@ -265,14 +296,29 @@ class TableDataset(Dataset):
             segment_array[e_id, example['sequence_a_length']:] = 1
             lm_label_array[e_id, masked_lm_positions] = masked_label_ids
 
-        # input_ids, input_mask, segment_ids, lm_label_ids
-        return {
+            if has_contrastive:
+                context_token_ids = example['context_token_ids']
+                table_token_ids = example['table_token_ids']
+                context_input_array[e_id, :len(context_token_ids)] = context_token_ids
+                table_input_array[e_id, :len(table_token_ids)] = table_token_ids
+                context_mask_array[e_id, :len(context_token_ids)] = 1
+                table_mask_array[e_id, :len(table_token_ids)] = 1
+
+        result = {
             'input_ids': torch.tensor(input_array.astype(np.int64)),
             'attention_mask': torch.tensor(mask_array.astype(np.int64)),
             'token_type_ids': torch.tensor(segment_array.astype(np.int64)),
             'masked_lm_labels': torch.tensor(lm_label_array.astype(np.int64)),
             'sample_size': (lm_label_array != -1).sum()
         }
+        if has_contrastive:
+            result['context_input_ids'] = torch.tensor(context_input_array.astype(np.int64))
+            result['table_input_ids'] = torch.tensor(table_input_array.astype(np.int64))
+            result['context_attention_mask'] = torch.tensor(context_mask_array.astype(np.int64))
+            result['table_attention_mask'] = torch.tensor(table_mask_array.astype(np.int64))
+            result['context_token_type_ids'] = torch.tensor(context_segment_array.astype(np.int64))
+            result['table_token_type_ids'] = torch.tensor(table_segment_array.astype(np.int64))
+        return result
 
 
 class Example(object):

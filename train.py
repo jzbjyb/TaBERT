@@ -76,6 +76,7 @@ def parse_train_arg():
     parser.add_argument("--table-bert-extra-config", type=json.loads, default='{}')
     parser.add_argument('--no-init', action='store_true', default=False)
     # parser.add_argument('--config-file', type=Path, help='table_bert config file if do not use pre-trained BERT table_bert.')
+    parser.add_argument('--objective-function', type=str, default='mlm')
 
     # distributed training
     parser.add_argument("--ddp-backend", type=str, default='pytorch', choices=['pytorch', 'apex'])

@@ -24,6 +24,7 @@ from table_bert.config import TableBertConfig, BERT_CONFIGS
 from table_bert.table import Table
 from table_bert.input_formatter import VanillaTableBertInputFormatter
 from table_bert.electra import ELECTRAModel, ELECTRALoss
+from table_bert.contrastive import CLIPLoss
 
 
 class VanillaTableBert(TableBertModel):
@@ -37,6 +38,8 @@ class VanillaTableBert(TableBertModel):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
         getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
+        if 'contrastive' in self.config.objective_function:
+            self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
@@ -62,47 +65,82 @@ class VanillaTableBert(TableBertModel):
         return getattr(self, 'forward_{}'.format(self.config.model_type.value))(*args, **kwargs)
 
     def forward_bert(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
-        sequence_output, _ = self._bert_model.bert(input_ids, token_type_ids, attention_mask,
-                                       output_all_encoded_layers=False)
-        prediction_scores = self._bert_model.cls(sequence_output)
-
-        if masked_lm_labels is not None:
-            loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='sum')
-            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.bert_config.vocab_size), masked_lm_labels.view(-1))
-
+        total_loss: torch.Tensor = 0.0
+        sample_size = 0
+        if 'mlm' in self.config.objective_function:
+            sequence_output, _ = self._bert_model.bert(input_ids, token_type_ids, attention_mask,
+                                           output_all_encoded_layers=False)
+            prediction_scores = self._bert_model.cls(sequence_output)
+            loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
+            masked_lm_loss = loss_fct(prediction_scores.view(-1, prediction_scores.size(-1)), masked_lm_labels.view(-1))
             sample_size = masked_lm_labels.ne(-1).sum().item()
-            logging_output = {
-                'sample_size': sample_size,
-                'loss': masked_lm_loss.item()
-            }
+            total_loss += masked_lm_loss
+        if 'contrastive' in self.config.objective_function:
+            # use the representation corresponding to the first token (cls or sep)
+            context_repr = self._bert_model.bert(
+                kwargs['context_input_ids'], kwargs['context_token_type_ids'], kwargs['context_attention_mask'],
+                output_all_encoded_layers=False)[0][:, 0, :]
+            table_repr = self._bert_model.bert(
+                kwargs['table_input_ids'], kwargs['table_token_type_ids'], kwargs['table_attention_mask'],
+                output_all_encoded_layers=False)[0][:, 0, :]
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr)
+            total_loss += contrastive_loss
 
-            return masked_lm_loss, logging_output
-        else:
-            return prediction_scores
+        total_loss = total_loss * sample_size
+        logging_output = {
+            'sample_size': sample_size,
+            'loss': total_loss.item()
+        }
+        return total_loss, logging_output
 
     def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
-        gen_logits, generated, disc_logits, is_replaced, attention_mask, is_mlm_applied = \
-            self._electra(input_ids, token_type_ids, attention_mask, masked_lm_labels)
-        loss = self._electra_loss(
-            (gen_logits, generated, disc_logits, is_replaced, attention_mask, is_mlm_applied), masked_lm_labels)
-        sample_size = masked_lm_labels.ne(-1).sum().item()
-        loss = loss * sample_size
+        total_loss: torch.Tensor = 0.0
+        sample_size = 0
+        if 'mlm' in self.config.objective_function:
+            gen_logits, generated, disc_logits, is_replaced, attention_mask, is_mlm_applied = \
+                self._electra(input_ids, token_type_ids, attention_mask, masked_lm_labels)
+            electra_loss = self._electra_loss(
+                (gen_logits, generated, disc_logits, is_replaced, attention_mask, is_mlm_applied), masked_lm_labels)
+            sample_size = masked_lm_labels.ne(-1).sum().item()
+            total_loss += electra_loss
+        if 'contrastive' in self.config.objective_function:
+            # use the representation corresponding to the first token (cls or sep)
+            context_repr = self._electra.discriminator.electra(
+                kwargs['context_input_ids'],  kwargs['context_attention_mask'], kwargs['context_token_type_ids'])[0][:, 0, :]
+            table_repr = self._electra.discriminator.electra(
+                kwargs['table_input_ids'], kwargs['table_attention_mask'], kwargs['table_token_type_ids'])[0][:, 0, :]
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr)
+            total_loss += contrastive_loss
+
+        total_loss = total_loss * sample_size
         logging_output = {
             'sample_size': sample_size,
-            'loss': loss.item()
+            'loss': total_loss.item()
         }
-        return loss, logging_output  # to be consistent
+        return total_loss, logging_output
 
     def forward_roberta(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
-        sequence_logits = self._roberta(input_ids, attention_mask)[0]
-        loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='sum')
-        masked_lm_loss = loss_fct(sequence_logits.view(-1, sequence_logits.size(-1)), masked_lm_labels.view(-1))
-        sample_size = masked_lm_labels.ne(-1).sum().item()
+        total_loss: torch.Tensor = 0.0
+        sample_size = 0
+        if 'mlm' in self.config.objective_function:
+            sequence_logits = self._roberta(input_ids, attention_mask)[0]
+            loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
+            masked_lm_loss = loss_fct(sequence_logits.view(-1, sequence_logits.size(-1)), masked_lm_labels.view(-1))
+            sample_size = masked_lm_labels.ne(-1).sum().item()
+            total_loss += masked_lm_loss
+        if 'contrastive' in self.config.objective_function:
+            # use the representation corresponding to the first token (cls or sep)
+            context_repr = self._roberta.roberta(kwargs['context_input_ids'], kwargs['context_attention_mask'])[0][:, 0, :]
+            table_repr = self._roberta.roberta(kwargs['table_input_ids'], kwargs['table_attention_mask'])[0][:, 0, :]
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr)
+            total_loss += contrastive_loss
+
+        total_loss = total_loss * sample_size
         logging_output = {
             'sample_size': sample_size,
-            'loss': masked_lm_loss.item()
+            'loss': total_loss.item()
         }
-        return masked_lm_loss, logging_output
+        return total_loss, logging_output
 
     def encode_context_and_table(
         self,

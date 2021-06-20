@@ -266,7 +266,7 @@ class TableDataset(Dataset):
         return self.examples[item]
 
     @staticmethod
-    def collate(examples, pad_id: int=0):
+    def collate(examples, pad_id: int = 0, sep_id: int = 102, max_allow_len: int = 512):  # TODO: add model specific param
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
         has_contrastive = False
@@ -294,7 +294,7 @@ class TableDataset(Dataset):
             table_segment_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
         elif has_contrastive_concat:
             d_bs = batch_size * batch_size
-            max_len = max_context_len + max_table_len
+            max_len = min(max_context_len + max_table_len, max_allow_len)  # might exceed max allowed length
             concat_input_array = np.full((d_bs, max_len), dtype=np.int, fill_value=pad_id)
             concat_mask_array = np.zeros((d_bs, max_len), dtype=np.bool)
             concat_segment_array = np.zeros((d_bs, max_len), dtype=np.bool)
@@ -329,7 +329,11 @@ class TableDataset(Dataset):
                     table_token_ids = example2['table_token_ids']
                     ind = e_id * batch_size + e_id2
                     concat_input_array[ind, :len(context_token_ids)] = context_token_ids
-                    concat_input_array[ind, len(context_token_ids):len(context_token_ids) + len(table_token_ids)] = table_token_ids
+                    if len(context_token_ids) + len(table_token_ids) > max_allow_len:
+                        concat_input_array[ind, len(context_token_ids):] = table_token_ids[:max_allow_len - len(context_token_ids)]
+                        concat_input_array[ind, -1] = sep_id
+                    else:
+                        concat_input_array[ind, len(context_token_ids):len(context_token_ids) + len(table_token_ids)] = table_token_ids
                     concat_mask_array[ind, :len(context_token_ids) + len(table_token_ids)] = 1
                     concat_segment_array[ind, len(context_token_ids):] = 1
                     context_mask_array[ind, 0] = 1

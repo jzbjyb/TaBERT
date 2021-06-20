@@ -35,7 +35,7 @@ from table_bert.config import TableBertConfig
 from table_bert.dataset import TableDataset
 from utils.evaluator import Evaluator
 from utils.trainer import Trainer
-from utils.util import init_logger
+from utils.util import get_logger
 
 
 task_dict = {
@@ -145,7 +145,7 @@ def main():
     task = task_dict[args.task]
 
     init_distributed_mode(args)
-    logger = init_logger(args)
+    logger = get_logger(args)
 
     if hasattr(args, 'base_model_name'):
         logger.warning('Argument base_model_name is deprecated! Use `--table-bert-extra-config` instead!')
@@ -154,8 +154,12 @@ def main():
 
     train_data_dir = args.data_dir / 'train'
     dev_data_dir = args.data_dir / 'dev'
+    if args.multi_gpu and args.local_rank != 0:  # load tokenizer needs barrier
+        torch.distributed.barrier()
     table_bert_config = task['config'].from_file(
         args.data_dir / 'config.json', **args.table_bert_extra_config)
+    if args.multi_gpu and args.local_rank == 0:
+        torch.distributed.barrier()
 
     if args.is_master:
         args.output_dir.mkdir(exist_ok=True, parents=True)

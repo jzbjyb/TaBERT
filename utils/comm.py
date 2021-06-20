@@ -15,9 +15,7 @@ import subprocess
 import torch
 import torch.distributed as dist
 
-from logging import getLogger
-
-logger = getLogger()
+from utils.util import get_logger
 
 
 def get_rank():
@@ -124,6 +122,7 @@ def accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
 
 
 def sig_handler(signum, frame):
+    logger = get_logger()
     logger.warning("Signal handler called with signal " + str(signum))
     prod_id = int(os.environ['SLURM_PROCID'])
     if prod_id == 0:
@@ -135,6 +134,7 @@ def sig_handler(signum, frame):
 
 
 def term_handler(signum, frame):
+    logger = get_logger()
     logger.warning("Signal handler called with signal " + str(signum))
     logger.warning("Bypassing SIGTERM.")
 
@@ -143,6 +143,7 @@ def init_signal_handler():
     """
     Handle signals sent by SLURM for time limit / pre-emption.
     """
+    logger = get_logger()
     signal.signal(signal.SIGUSR1, sig_handler)
     signal.signal(signal.SIGTERM, term_handler)
     logger.warning("Signal handler installed.")
@@ -158,6 +159,7 @@ def init_distributed_mode(params):
         - global_rank
         - world_size
     """
+    logger = get_logger()
     params.is_slurm_job = 'SLURM_JOB_ID' in os.environ and not params.debug_slurm
     print("SLURM job: %s" % str(params.is_slurm_job))
 
@@ -203,6 +205,30 @@ def init_distributed_mode(params):
         # set environment variables for 'env://'
         os.environ['MASTER_ADDR'] = params.master_addr
         os.environ['MASTER_PORT'] = str(params.master_port)
+        os.environ['WORLD_SIZE'] = str(params.world_size)
+        os.environ['RANK'] = str(params.global_rank)
+
+    # jobs started with MPI
+    elif 'OMPI_COMM_WORLD_SIZE' in os.environ:
+        world_size = int(os.environ['OMPI_COMM_WORLD_SIZE'])
+        local_size = int(os.environ['OMPI_COMM_WORLD_LOCAL_SIZE'])
+        global_rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
+        local_rank = int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+        #node_rank = int(os.environ['OMPI_COMM_WORLD_NODE_RANK'])
+        master_addr = os.environ['MASTER_ADDR']
+        master_port = os.environ['MASTER_PORT']
+
+        params.master_addr = master_addr
+        params.master_port = master_port
+
+        params.global_rank = global_rank
+        params.world_size = world_size
+        params.local_rank = local_rank
+        params.n_gpu_per_node = local_size
+        params.n_nodes = world_size // local_size
+        params.node_id = global_rank // local_size
+
+        # set environment variables for 'env://'
         os.environ['WORLD_SIZE'] = str(params.world_size)
         os.environ['RANK'] = str(params.global_rank)
 

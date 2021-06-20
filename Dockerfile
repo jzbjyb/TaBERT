@@ -3,7 +3,7 @@ FROM pytorch/pytorch:1.7.1-cuda11.0-cudnn8-devel
 # essential tools
 RUN apt-get update
 RUN apt-get -y install openssh-client vim tmux sudo apt-transport-https apt-utils curl \
-    git wget lsb-release ca-certificates gnupg gcc g++
+    git wget lsb-release ca-certificates gnupg gcc g++ pv iftop libopenmpi-dev
 
 # Conda environment
 ENV MINICONDA_VERSION py37_4.9.2
@@ -14,6 +14,11 @@ RUN wget -qO /tmp/miniconda.sh https://repo.continuum.io/miniconda/Miniconda3-${
     rm -rf /opt/miniconda/pkgs && \
     rm /tmp/miniconda.sh && \
     find / -type d -name __pycache__ | xargs rm -rf
+
+# bugs for amulet
+RUN pip install pip==9.0.0
+RUN pip install ruamel.yaml==0.16 --disable-pip-version-check
+RUN pip install --upgrade pip
 
 # TaBERT env
 COPY scripts /tmp/scripts/

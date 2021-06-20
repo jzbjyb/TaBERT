@@ -16,16 +16,29 @@ from fairseq.options import eval_str_list
 from fairseq.optim.adam import FairseqAdam
 from fairseq.optim.lr_scheduler.polynomial_decay_schedule import PolynomialDecaySchedule
 
+_logger = {
+    'specific': None,
+    'generic': None,
+}
 
-def init_logger(args):
-    # setup logger
-    logger = logging.getLogger()
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(f"[{socket.gethostname()} | Node {args.node_id} | Rank {args.global_rank} | %(asctime)s] %(message)s",
-                                  datefmt='%Y-%m-%d %H:%M:%S')
-    handler.setFormatter(formatter)
-    logger.handlers.clear()
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-    return logger
+def get_logger(args = None):
+    global _logger
+    if args is not None:
+        if _logger['specific'] is None:
+            # setup logger
+            logger = logging.getLogger()
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter(f"[{socket.gethostname()} | Node {args.node_id} | Rank {args.global_rank} | %(asctime)s] %(message)s",
+                                          datefmt='%Y-%m-%d %H:%M:%S')
+            handler.setFormatter(formatter)
+            logger.handlers.clear()
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+            _logger['specific'] = logger
+        return _logger['specific']
+    else:
+        if _logger['generic'] is None:
+            logger = logging.getLogger()
+            logger.setLevel(logging.INFO)
+            _logger['generic'] = logger
+        return _logger['generic']

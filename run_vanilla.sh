@@ -25,6 +25,7 @@ fi
 # export NGPU=1; deepspeed --num_gpus 1 train.py
 # (4) multi node w/ deepspeed
 # export NGPU=8; deepspeed train.py
+#export NGPU=1; python -m torch.distributed.launch --nproc_per_node=$NGPU train.py \
 python train.py \
     --task vanilla \
     --data-dir ${input_dir} \

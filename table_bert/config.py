@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from collections import OrderedDict
 from types import SimpleNamespace
-from typing import Dict, Union
+from typing import Dict, Union, Set
 from enum import Enum
 
 from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig, RobertaTokenizer, RobertaConfig
@@ -148,8 +148,8 @@ class TableBertConfig(SimpleNamespace):
         self.context_first = context_first
         self.column_representation = column_representation
         self.objective_function = objective_function
+        assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm'}
         self.contrastive_emb_size = contrastive_emb_size
-        assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm'}
 
         self.max_cell_len = max_cell_len
         self.max_sequence_len = max_sequence_len

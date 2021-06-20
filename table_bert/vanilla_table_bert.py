@@ -40,6 +40,8 @@ class VanillaTableBert(TableBertModel):
         getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
         if 'contrastive' in self.config.objective_function:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
+        elif 'contrast-concat' in self.config.objective_function:
+            self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
@@ -85,6 +87,14 @@ class VanillaTableBert(TableBertModel):
                 output_all_encoded_layers=False)[0][:, 0, :]
             contrastive_loss = self.contrastive_loss(context_repr, table_repr)
             total_loss += contrastive_loss
+        if 'contrast-concat' in self.config.objective_function:
+            # use the representation corresponding to the first token (cls or sep)
+            concat_repr = self._bert_model.bert(
+                kwargs['concat_input_ids'], kwargs['concat_token_type_ids'], kwargs['concat_attention_mask'])[0]
+            context_repr = concat_repr[kwargs['context_mask'], :]
+            table_repr = concat_repr[kwargs['table_mask'], :]
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
+            total_loss += contrastive_loss
 
         total_loss = total_loss * sample_size
         logging_output = {
@@ -111,6 +121,14 @@ class VanillaTableBert(TableBertModel):
                 kwargs['table_input_ids'], kwargs['table_attention_mask'], kwargs['table_token_type_ids'])[0][:, 0, :]
             contrastive_loss = self.contrastive_loss(context_repr, table_repr)
             total_loss += contrastive_loss
+        if 'contrast-concat' in self.config.objective_function:
+            # use the representation corresponding to the first token (cls or sep)
+            concat_repr = self._electra.discriminator.electra(
+                kwargs['concat_input_ids'], kwargs['concat_attention_mask'], kwargs['concat_token_type_ids'])[0]
+            context_repr = concat_repr[kwargs['context_mask'], :]
+            table_repr = concat_repr[kwargs['table_mask'], :]
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
+            total_loss += contrastive_loss
 
         total_loss = total_loss * sample_size
         logging_output = {
@@ -133,6 +151,13 @@ class VanillaTableBert(TableBertModel):
             context_repr = self._roberta.roberta(kwargs['context_input_ids'], kwargs['context_attention_mask'])[0][:, 0, :]
             table_repr = self._roberta.roberta(kwargs['table_input_ids'], kwargs['table_attention_mask'])[0][:, 0, :]
             contrastive_loss = self.contrastive_loss(context_repr, table_repr)
+            total_loss += contrastive_loss
+        if 'contrast-concat' in self.config.objective_function:
+            # use the representation corresponding to the first token (cls or sep)
+            concat_repr = self._roberta.roberta(kwargs['concat_input_ids'], kwargs['concat_attention_mask'])[0]
+            context_repr = concat_repr[kwargs['context_mask'], :]
+            table_repr = concat_repr[kwargs['table_mask'], :]
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
             total_loss += contrastive_loss
 
         total_loss = total_loss * sample_size

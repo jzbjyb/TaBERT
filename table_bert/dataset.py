@@ -190,7 +190,7 @@ class TableDataset(Dataset):
             'total_size': cum_size
         }
 
-    def add_for_contrastive(self, example: Dict):
+    def add_for_contrastive(self, example: Dict, concat: bool = False):
         if not self.config.context_first:
             raise NotImplementedError
         al = example['sequence_a_length']
@@ -198,10 +198,16 @@ class TableDataset(Dataset):
         masked_lm_positions = example['masked_lm_positions']
         masked_lm_label_ids = example['masked_lm_label_ids']
         raw_input_ids[masked_lm_positions] = masked_lm_label_ids
-        # assume there is a sep in between and make sure that the sep is included in both
-        context, table = raw_input_ids[:al], raw_input_ids[al - 1:]
+        if not concat:
+            # assume there is a sep in between and make sure that the sep is included in both
+            context, table = raw_input_ids[:al], raw_input_ids[al - 1:]
+        else:
+            # assume there is a sep in between and make sure that the sep is included in context
+            context, table = raw_input_ids[:al], raw_input_ids[al:]
+            example['contrastive_concat'] = True
         example['context_token_ids'] = context
         example['table_token_ids'] = table
+        assert len(example['context_token_ids']) == al, 'context length inconsistent with sequence_a_length'
 
     def load_epoch(self, file_prefix: Path, shard_num: int, valid_indices: Set = None):
         examples = []
@@ -243,6 +249,8 @@ class TableDataset(Dataset):
 
                 if 'contrastive' in self.config.objective_function:
                     self.add_for_contrastive(example)
+                elif 'contrast-concat' in self.config.objective_function:
+                    self.add_for_contrastive(example, concat=True)
 
                 examples.append(example)
 
@@ -262,11 +270,14 @@ class TableDataset(Dataset):
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
         has_contrastive = False
+        has_contrastive_concat = False
         for e in examples:  # use the first one to check
-            if 'context_token_ids' in e:
+            if 'context_token_ids' in e and 'contrastive_concat' not in e:
                 has_contrastive = True
+            if 'context_token_ids' in e and 'contrastive_concat' in e:
+                has_contrastive_concat = True
             break
-        if has_contrastive:
+        if has_contrastive or has_contrastive_concat:
             max_context_len = max(len(e['context_token_ids']) for e in examples)
             max_table_len = max(len(e['table_token_ids']) for e in examples)
 
@@ -281,6 +292,15 @@ class TableDataset(Dataset):
             table_mask_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
             context_segment_array = np.zeros((batch_size, max_context_len), dtype=np.bool)
             table_segment_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
+        elif has_contrastive_concat:
+            d_bs = batch_size * batch_size
+            max_len = max_context_len + max_table_len
+            concat_input_array = np.full((d_bs, max_len), dtype=np.int, fill_value=pad_id)
+            concat_mask_array = np.zeros((d_bs, max_len), dtype=np.bool)
+            concat_segment_array = np.zeros((d_bs, max_len), dtype=np.bool)
+            context_mask_array = np.zeros((d_bs, max_len), dtype=np.bool)
+            table_mask_array = np.zeros((d_bs, max_len), dtype=np.bool)
+            concat_labels = np.diag(np.ones(batch_size)).reshape(-1)
 
         for e_id, example in enumerate(examples):
             token_ids = example['token_ids']
@@ -303,6 +323,17 @@ class TableDataset(Dataset):
                 table_input_array[e_id, :len(table_token_ids)] = table_token_ids
                 context_mask_array[e_id, :len(context_token_ids)] = 1
                 table_mask_array[e_id, :len(table_token_ids)] = 1
+            elif has_contrastive_concat:
+                context_token_ids = example['context_token_ids']
+                for e_id2, example2 in enumerate(examples):
+                    table_token_ids = example2['table_token_ids']
+                    ind = e_id * batch_size + e_id2
+                    concat_input_array[ind, :len(context_token_ids)] = context_token_ids
+                    concat_input_array[ind, len(context_token_ids):len(context_token_ids) + len(table_token_ids)] = table_token_ids
+                    concat_mask_array[ind, :len(context_token_ids) + len(table_token_ids)] = 1
+                    concat_segment_array[ind, len(context_token_ids):] = 1
+                    context_mask_array[ind, 0] = 1
+                    table_mask_array[ind, len(context_token_ids) - 1] = 1  # sep is in context
 
         result = {
             'input_ids': torch.tensor(input_array.astype(np.int64)),
@@ -318,6 +349,13 @@ class TableDataset(Dataset):
             result['table_attention_mask'] = torch.tensor(table_mask_array.astype(np.int64))
             result['context_token_type_ids'] = torch.tensor(context_segment_array.astype(np.int64))
             result['table_token_type_ids'] = torch.tensor(table_segment_array.astype(np.int64))
+        elif has_contrastive_concat:
+            result['concat_input_ids'] = torch.tensor(concat_input_array.astype(np.int64))
+            result['concat_attention_mask'] = torch.tensor(concat_mask_array.astype(np.int64))
+            result['concat_token_type_ids'] = torch.tensor(concat_segment_array.astype(np.int64))
+            result['context_mask'] = torch.tensor(context_mask_array)
+            result['table_mask'] = torch.tensor(table_mask_array)
+            result['concat_labels'] = torch.tensor(concat_labels.astype(np.int64))
         return result
 
 

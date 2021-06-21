@@ -5,8 +5,10 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+from typing import List
 import logging
 from enum import Enum
+import numpy as np
 
 
 class TransformerVersion(Enum):
@@ -46,3 +48,7 @@ from transformers import ElectraConfig, ElectraTokenizer, ElectraForMaskedLM, El
 
 # RoBERTa
 from transformers import RobertaConfig, RobertaTokenizer, RobertaForMaskedLM
+
+
+def compute_mrr(scores: List[float], labels: List[int]):
+    return np.mean([1 / (i + 1) for i, (s, r) in enumerate(sorted(zip(scores, labels), key=lambda x: -x[0])) if r])

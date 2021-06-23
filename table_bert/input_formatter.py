@@ -65,15 +65,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return input, span_map
 
-    def get_input(self, context: List[str], table: Table, trim_long_table=False):
+    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [], trim_long_table=False):
         row_data = [
             column.sample_value_tokens
             for column in table.header
         ]
 
-        return self.get_row_input(context, table.header, row_data, trim_long_table=trim_long_table)
+        return self.get_row_input(context, table.header, row_data, additional_rows, trim_long_table=trim_long_table)
 
-    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], trim_long_table=False):
+    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table=False):
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
             # account for cls and sep, and the ending sep
@@ -88,8 +88,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
 
-        for col_id, column in enumerate(header):
-            value_tokens = row_data[col_id]
+        ext_header = header * (len(additional_rows) + 1)
+        ext_row_data = row_data + [i for r in additional_rows for i in r]
+
+        for col_id, column in enumerate(ext_header):
+            value_tokens = ext_row_data[col_id]
             truncated_value_tokens = value_tokens[:self.config.max_cell_len]
 
             column_input_tokens, token_span_map = self.get_cell_input(
@@ -184,32 +187,63 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             # row_num = len(example.column_data)
             # sampled_row_id = choice(list(range(row_num)))
 
-            for col_idx, column in enumerate(example.header):
-                col_values = example.column_data[col_idx]
-                col_values = [val for val in col_values if val is not None and len(val) > 0]
+            success = False
+            additional_rows = []
+            if self.config.additional_row_count > 0 and len(example.column_data) > 0:
+                num_rows = len(example.column_data[0])
+                # get valid rows
+                valid_rows = []
+                for row_idx in range(num_rows):
+                    valid = True
+                    for col_idx, column in enumerate(example.header):
+                        val = example.column_data[col_idx][row_idx]
+                        if val is None or len(val) == 0:
+                            valid = False
+                            break
+                    if valid:
+                        valid_rows.append(row_idx)
+                # sample additional_row_count + 1 rows
+                sampled_rows = sample(valid_rows, min(len(valid_rows), self.config.additional_row_count + 1))
+                if len(sampled_rows) > 0:
+                    success = True
+                    # the first sampled row is the main row to be masked
+                    # the other rows are additional rows used as context
+                    additional_rows = [[] for _ in range(len(sampled_rows) - 1)]
+                    for col_idx, column in enumerate(example.header):
+                        sampled_value = example.column_data[col_idx][sampled_rows[0]]
+                        sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
+                        column.sample_value_tokens = sampled_value_tokens
+                        for i, row_idx in enumerate(sampled_rows[1:]):
+                            additional_rows[i].append(self.tokenizer.tokenize(example.column_data[col_idx][row_idx]))
 
-                sampled_value = choice(col_values)
+            if not success:
+                for col_idx, column in enumerate(example.header):
+                    col_values = example.column_data[col_idx]
+                    col_values = [val for val in col_values if val is not None and len(val) > 0]
 
-                # print('chosen value', sampled_value)
-                sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
-                column.sample_value_tokens = sampled_value_tokens
+                    sampled_value = choice(col_values)
 
-            instance = self.create_pretraining_instance(context, example.header)
+                    # print('chosen value', sampled_value)
+                    sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
+                    column.sample_value_tokens = sampled_value_tokens
+
+            instance = self.create_pretraining_instance(context, example.header, additional_rows)
             instance['source'] = example.source
 
             instances.append(instance)
 
         return instances
 
-    def create_pretraining_instance(self, context, header):
+    def create_pretraining_instance(self, context, header, additional_rows: List[List[Any]] = []):
         table = Table('fake_table', header)
-        input_instance = self.get_input(context, table, trim_long_table=True)  # core format function
+        input_instance = self.get_input(context, table, additional_rows, trim_long_table=True)  # core format function
         column_spans = input_instance['column_spans']
 
         column_candidate_indices = [
             (
                 list(range(*span['column_name']) if 'column_name' in span else []) +
                 list(range(*span['type']) if 'type' in span else []) +
+                list(range(*span['value']) if 'value' in span and self.config.additional_row_count > 0 else []) +  # mask values when using more than a single row
                 (
                     span['other_tokens']
                     if random() < 0.01 and 'other_tokens' in span
@@ -217,7 +251,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 )
             )
             for col_id, span
-            in enumerate(column_spans)
+            in enumerate(column_spans[:len(header)])  # only mask the first row
         ]
 
         context_candidate_indices = (

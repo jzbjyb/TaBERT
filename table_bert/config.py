@@ -131,6 +131,7 @@ class TableBertConfig(SimpleNamespace):
         do_lower_case: bool = True,
         objective_function: str = 'mlm',
         contrastive_emb_size: int = 512,
+        additional_row_count: int = 0,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -174,6 +175,8 @@ class TableBertConfig(SimpleNamespace):
         self.max_predictions_per_seq = max_predictions_per_seq
         self.context_sample_strategy = context_sample_strategy
         self.table_mask_strategy = table_mask_strategy
+        self.additional_row_count = additional_row_count
+        assert additional_row_count >= 0
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
             if self.model_type == ModelType.BERT:
@@ -222,7 +225,7 @@ class TableBertConfig(SimpleNamespace):
                             choices=['nearest', 'concate_and_enumerate'])
         parser.add_argument('--table_mask_strategy', type=str, default='column',
                             choices=['column', 'column_token'])
-
+        parser.add_argument('--additional_row_count', type=int, default=0)
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)
 

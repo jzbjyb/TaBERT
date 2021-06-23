@@ -114,7 +114,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                             span_start_idx, span_end_idx = token_span_map[key]
                             if span_start_idx < end_index < span_end_idx:
                                 token_span_map[key] = (span_start_idx, end_index)
-                            elif end_index < span_start_idx:
+                            elif end_index <= span_start_idx:
                                 keys_to_delete.append(key)
                         elif key == 'other_tokens':
                             old_positions = token_span_map[key]

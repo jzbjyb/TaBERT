@@ -5,7 +5,7 @@ output_dir=$2  # data/runs/vanilla_tabert
 mkdir -p ${output_dir}
 batchsize=32
 gradac=1
-epochs=10
+epochs=5
 
 # activate env if needed
 if [[ "$PATH" == *"tabert"* ]]; then

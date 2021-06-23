@@ -1,5 +1,6 @@
 output_dir=data/train_data/vanilla_tabert
 input_dir=data/preprocessed_data/tables.jsonl
+additional_row_count=0
 mkdir -p ${output_dir}
 worldsize=40
 
@@ -20,6 +21,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --cell_input_template 'column|type|value' \
     --column_delimiter "[SEP]" \
     --world_size ${worldsize} \
+    --additional_row_count ${additional_row_count} \
     --global_rank $i >> ${output_dir}.out &
 done
 wait

@@ -47,16 +47,16 @@ class Spider(object):
             raise e
         return df
 
-    def sampe_from_table_df(self, df):
+    def sample_from_table_df(self, df):
         if len(df) == 0:
             return None
         return df.iloc[random.randint(0, len(df) - 1)]
 
-    def sample_negative(self, output_path: Path, neg_num: int = 9):
+    def sample_negative(self, split: str, output_path: Path, neg_num: int = 9):
         assert hasattr(self, 'db2table2column')
         all_tables = ['{}|||{}'.format(db, tn) for db in self.db2table2column for tn in self.db2table2column[db]]
         with open(output_path, 'w') as fout:
-            for example in tqdm(self.dev_data):
+            for example in tqdm(getattr(self, '{}_data'.format(split))):
                 db_id = example['db_id']
                 question = example['question']
                 for tn in self.db2table2column[db_id]:
@@ -70,11 +70,11 @@ class Spider(object):
                         n_db_id, n_tn = s.split('|||', 1)
                         fout.write('{}\t{}\t{}\t{}\n'.format(question, n_db_id, n_tn, 0))
 
-    def convert_to_tabert_format(self, output_path: Path):
+    def convert_to_tabert_format(self, split: str, output_path: Path):
         all_types = set()
         no_row_count = 0
         self.db2table2column: Dict[str, Dict[str, List[Tuple[str, str, Union[None, str]]]]] = {}
-        for example in tqdm(self.dev_data):
+        for example in tqdm(getattr(self, '{}_data'.format(split))):
             db_id = example['db_id']
             db = self.dbs[db_id]
             if db_id in self.db2table2column:
@@ -82,7 +82,7 @@ class Spider(object):
             self.db2table2column[db_id] = {}
             for id, (tn, tno) in enumerate(zip(db['table_names'], db['table_names_original'])):
                 self.db2table2column[db_id][tn] = []
-                row = self.sampe_from_table_df(self.load_database(db_id, tno))
+                row = self.sample_from_table_df(self.load_database(db_id, tno))
                 if row is None:
                     # raise Exception('DB "{}" table "{}" has no rows'.format(db_id, tno))
                     no_row_count += 1

@@ -19,98 +19,134 @@ code:
 
 jobs:
 - name: electra
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/electra/model.bin
-    /mnt/root/TaBERT/data/rank/electra 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/electra 32 --finetune
 - name: tabert_electra_ep5
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_ep5/pytorch_model_epoch04.bin
-    /mnt/root/TaBERT/data/rank/tabert_electra_ep5 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_electra_ep5 32 --finetune
 - name: tabert_electra_contrastive_quarter_ep5
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_contrastive_quarter_ep5/pytorch_model_epoch04.bin
-    /mnt/root/TaBERT/data/rank/tabert_electra_contrastive_quarter_ep5 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_electra_contrastive_quarter_ep5 32 --finetune
 - name: tabert_electra_contrastive_concat_quarter_ep5
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_contrastive_concat_quarter_ep5/pytorch_model_epoch04.bin
-    /mnt/root/TaBERT/data/rank/tabert_electra_contrastive_concat_quarter_ep5 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_electra_contrastive_concat_quarter_ep5 32 --finetune
 - name: tabert_electra_2row_ep1
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_2row_ep5/pytorch_model_epoch00.bin
-    /mnt/root/TaBERT/data/rank/tabert_electra_2row_ep1 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_electra_2row_ep1 32 --finetune
 - name: bert
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     bert-base-uncased
-    /mnt/root/TaBERT/data/rank/bert 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/bert 32 --finetune
 - name: tabert
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/tabert_base_k1/model.bin
-    /mnt/root/TaBERT/data/rank/tabert 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert 32 --finetune
 - name: tabert_ep10
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_ep10/pytorch_model_epoch09.bin
-    /mnt/root/TaBERT/data/rank/tabert_ep10 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_ep10 32 --finetune
 - name: tabert_2row_ep1
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_2row_ep5/pytorch_model_epoch00.bin
-    /mnt/root/TaBERT/data/rank/tabert_2row_ep1 32 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_2row_ep1 32 --finetune
 - name: roberta
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/roberta/model.bin
-    /mnt/root/TaBERT/data/rank/roberta 24 --finetune
+    /mnt/root/TaBERT/data/rank_dist/roberta 24 --finetune
 - name: tabert_roberta_ep5
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_roberta_ep5/pytorch_model_epoch04.bin
-    /mnt/root/TaBERT/data/rank/tabert_roberta_ep5 24 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_roberta_ep5 24 --finetune
 - name: tabert_roberta_contrastive_ep5
-  sku: G1
+  sku: G8
   sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
   command:
   - ./run_rank.sh
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_roberta_contrastive_ep5/pytorch_model_epoch04.bin
-    /mnt/root/TaBERT/data/rank/tabert_roberta_contrastive_ep5 24 --finetune
+    /mnt/root/TaBERT/data/rank_dist/tabert_roberta_contrastive_ep5 24 --finetune

@@ -5,7 +5,7 @@ model_path=$2
 output_dir=$3
 batchsize=$4
 args="${@:5}"
-epochs=2
+epochs=5
 
 # activate env if needed
 if [[ "$PATH" == *"tabert"* ]]; then
@@ -17,6 +17,7 @@ else
   conda activate tabert
 fi
 
+#export NGPU=2; export NCCL_DEBUG=INFO; python -m torch.distributed.launch --nproc_per_node=$NGPU utils/rank.py \
 python -m utils.rank \
     --sample_file ${input_dir}/samples.tsv \
     --db_file ${input_dir}/db_tabert.json \

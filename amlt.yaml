@@ -1,4 +1,4 @@
-description: test
+description: pretrain
 
 environment:
   image: jzbjyb/my-repo:latest
@@ -18,11 +18,27 @@ code:
   local_dir: $CONFIG_DIR
 
 jobs:
-- name: test_amulet
+- name: tabert_electra_contrast_concat_quarter_fast
+  sku: G8
+  sku_count: 4
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_electra_quarter /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_contrastive_concat_quarter_ep5_fast
+- name: tabert_2row
   sku: G8
   sku_count: 2
   aml_mpirun:
     process_count_per_node: 8
     communicator: "OpenMpi"
   command:
-  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_100k /mnt/root/TaBERT/data/runs/vanilla_tabert_100k
+  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_2row /mnt/root/TaBERT/data/runs/vanilla_tabert_2row_ep5
+- name: tabert_electra_2row
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_electra_2row /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_2row_ep5

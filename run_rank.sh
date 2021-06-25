@@ -3,7 +3,8 @@
 input_dir=$1
 model_path=$2
 output_dir=$3
-batchsize=32
+batchsize=$4
+args="${@:5}"
 epochs=2
 
 # activate env if needed
@@ -27,4 +28,4 @@ python -m utils.rank \
     --adam-eps 1e-08 \
     --weight-decay 0.0 \
     --clip-norm 1.0 \
-    --finetune
+    ${args}

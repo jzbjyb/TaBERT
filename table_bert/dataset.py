@@ -405,7 +405,11 @@ class Example(object):
     @classmethod
     def from_dict(cls, entry: Dict, tokenizer: Optional[BertTokenizer], suffix) -> 'Example':
         def _get_data_source():
-            return 'wiki' if 'wiki' in entry['uuid'] else 'common_crawl'
+            if 'wiki' in entry['uuid']:
+                return 'wiki'
+            if entry['uuid'].startswith('totto_'):
+                return 'totto'
+            return 'common_crawl'
 
         source = _get_data_source()
 
@@ -420,7 +424,8 @@ class Example(object):
             column = Column(col['name'],
                             col['type'],
                             sample_value,
-                            name_tokens=name_tokens)
+                            name_tokens=name_tokens,
+                            used=col['used'] if 'used' in col else False)
             header.append(column)
 
         if source == 'wiki':

@@ -218,10 +218,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
             if not success:
                 for col_idx, column in enumerate(example.header):
-                    col_values = example.column_data[col_idx]
-                    col_values = [val for val in col_values if val is not None and len(val) > 0]
+                    if self.config.use_sampled_value:
+                        sampled_value = column.sample_value
+                    else:
+                        col_values = example.column_data[col_idx]
+                        col_values = [val for val in col_values if val is not None and len(val) > 0]
+                        sampled_value = choice(col_values) if len(col_values) > 0 else ''
 
-                    sampled_value = choice(col_values)
+                    if len(sampled_value) <= 0:  # use column name as value if this column is empty
+                        sampled_value = column.name
 
                     # print('chosen value', sampled_value)
                     sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
@@ -243,7 +248,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             (
                 list(range(*span['column_name']) if 'column_name' in span else []) +
                 list(range(*span['type']) if 'type' in span else []) +
-                list(range(*span['value']) if 'value' in span and self.config.additional_row_count > 0 else []) +  # mask values when using more than a single row
+                list(range(*span['value']) if 'value' in span and self.config.mask_value else []) +  # mask values when using more than a single row
                 (
                     span['other_tokens']
                     if random() < 0.01 and 'other_tokens' in span
@@ -251,8 +256,12 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 )
             )
             for col_id, span
-            in enumerate(column_spans[:len(header)])  # only mask the first row
+            in enumerate(column_spans[:len(header)])  # only mask the first row and used columns if specified
+            if not self.config.mask_used_column_prob or header[col_id].used
         ]
+        masked_column_prob = None
+        if self.config.mask_used_column_prob:
+            masked_column_prob = min(self.config.masked_column_prob * len(column_spans[:len(header)]) / (len(column_candidate_indices) or 1), 1.0)
 
         context_candidate_indices = (
             list(range(*input_instance['context_span']))[1:]
@@ -261,7 +270,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         )
 
         masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(
-            input_instance['tokens'], context_candidate_indices, column_candidate_indices
+            input_instance['tokens'], context_candidate_indices, column_candidate_indices, masked_column_prob=masked_column_prob
         )
 
         info['num_columns'] = len(header)
@@ -280,9 +289,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def create_masked_lm_predictions(
         self,
-        tokens, context_indices, column_indices
+        tokens, context_indices, column_indices, masked_column_prob=None
     ):
         table_mask_strategy = self.config.table_mask_strategy
+        masked_column_prob = masked_column_prob or self.config.masked_column_prob
 
         info = dict()
         info['num_maskable_column_tokens'] = sum(len(token_ids) for token_ids in column_indices)
@@ -290,12 +300,12 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         if table_mask_strategy == 'column_token':
             column_indices = [i for l in column_indices for i in l]
             num_column_tokens_to_mask = min(self.config.max_predictions_per_seq,
-                                            max(2, int(len(column_indices) * self.config.masked_column_prob)))
+                                            max(2, int(len(column_indices) * masked_column_prob)))
             shuffle(column_indices)
             masked_column_token_indices = sorted(sample(column_indices, num_column_tokens_to_mask))
         elif table_mask_strategy == 'column':
             num_maskable_columns = len(column_indices)
-            num_column_to_mask = max(1, ceil(num_maskable_columns * self.config.masked_column_prob))
+            num_column_to_mask = max(1, ceil(num_maskable_columns * masked_column_prob))
             columns_to_mask = sorted(sample(list(range(num_maskable_columns)), num_column_to_mask))
             shuffle(columns_to_mask)
             num_column_tokens_to_mask = sum(len(column_indices[i]) for i in columns_to_mask)

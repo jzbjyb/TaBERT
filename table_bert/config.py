@@ -132,6 +132,9 @@ class TableBertConfig(SimpleNamespace):
         objective_function: str = 'mlm',
         contrastive_emb_size: int = 512,
         additional_row_count: int = 0,
+        use_sampled_value: bool = False,
+        mask_used_column_prob: float = 0.0,
+        mask_value: bool = False,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -177,6 +180,10 @@ class TableBertConfig(SimpleNamespace):
         self.table_mask_strategy = table_mask_strategy
         self.additional_row_count = additional_row_count
         assert additional_row_count >= 0
+        self.use_sampled_value = use_sampled_value
+        self.mask_used_column_prob = mask_used_column_prob
+        assert mask_used_column_prob in {0.0, 1.0}, 'other values are not implemented'
+        self.mask_value = mask_value or additional_row_count > 0
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
             if self.model_type == ModelType.BERT:
@@ -226,6 +233,9 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--table_mask_strategy', type=str, default='column',
                             choices=['column', 'column_token'])
         parser.add_argument('--additional_row_count', type=int, default=0)
+        parser.add_argument('--use_sampled_value', action='store_true')
+        parser.add_argument('--mask_used_column_prob', type=float, default=0.0, help='probability of only masking used columns')
+        parser.add_argument('--mask_value', action='store_true')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)
 

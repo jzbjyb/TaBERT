@@ -150,3 +150,36 @@ jobs:
     /mnt/root/TaBERT/data/spider/train
     /mnt/root/TaBERT/data/runs/vanilla_tabert_roberta_contrastive_ep5/pytorch_model_epoch04.bin
     /mnt/root/TaBERT/data/rank_dist/tabert_roberta_contrastive_ep5 24 --finetune
+- name: tabert_totto_maskvalue_ep5
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_rank.sh
+    /mnt/root/TaBERT/data/spider/train
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_ep5/pytorch_model_epoch04.bin
+    /mnt/root/TaBERT/data/rank_dist/tabert_totto_maskvalue_ep5 32 --finetune
+- name: tabert_totto_maskvalue_samplevalue_ep5
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_rank.sh
+    /mnt/root/TaBERT/data/spider/train
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_ep5/pytorch_model_epoch04.bin
+    /mnt/root/TaBERT/data/rank_dist/tabert_totto_maskvalue_samplevalue_ep5 32 --finetune
+- name: tabert_totto_maskvalue_samplevalue_maskusedcolumn_ep5
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_rank.sh
+    /mnt/root/TaBERT/data/spider/train
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_maskusedcolumn_ep5/pytorch_model_epoch04.bin
+    /mnt/root/TaBERT/data/rank_dist/tabert_totto_maskvalue_samplevalue_maskusedcolumn_ep5 32 --finetune

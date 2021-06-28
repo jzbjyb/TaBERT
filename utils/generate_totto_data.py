@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
 from pathlib import Path
-from table_bert.spider import Spider
+import os
+import random
+from table_bert.totto import Totto
 
 
 def main():
@@ -10,9 +12,11 @@ def main():
     parser.add_argument('--split', type=str, default='dev')
     args = parser.parse_args()
 
-    spider = Spider(args.spider_path)
-    spider.convert_to_tabert_format(args.split, args.output_dir / args.split / 'db_tabert.json')
-    spider.sample_negative(args.split, args.output_dir / args.split / 'samples.tsv', neg_num=9)
+    random.seed(2021)
+
+    totto = Totto(args.path)
+    os.makedirs(args.output_dir / args.split, exist_ok=True)
+    totto.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed.jsonl')
 
 
 if __name__ == '__main__':

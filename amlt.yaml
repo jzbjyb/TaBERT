@@ -42,3 +42,27 @@ jobs:
     communicator: "OpenMpi"
   command:
   - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_electra_2row /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_2row_ep5
+- name: tabert_totto_maskvalue
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskvalue /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_ep5
+- name: tabert_totto_maskvalue_samplevalue
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskvalue_samplevalue /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_ep5
+- name: tabert_totto_maskvalue_samplevalue_maskusedcolumn
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskvalue_samplevalue_maskusedcolumn /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_maskusedcolumn_ep5

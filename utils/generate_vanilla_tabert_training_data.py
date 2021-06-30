@@ -34,7 +34,7 @@ from tqdm import tqdm, trange
 
 from random import shuffle, choice, sample, random
 
-from table_bert.input_formatter import VanillaTableBertInputFormatter, TableBertBertInputFormatter
+from table_bert.input_formatter import VanillaTableBertInputFormatter, TableBertBertInputFormatter, trim_count
 from table_bert.config import TableBertConfig
 from table_bert.dataset import Example, TableDatabase
 #from utils.prepare_training_data import sample_context
@@ -186,6 +186,8 @@ def main():
             gc.collect()
             epoch_filename = args.output_dir / 'train' / f"epoch_{epoch}.shard{args.global_rank}.h5"
             generate_for_epoch(table_db, local_train_table_indices, epoch_filename, input_formatter, args)
+
+    print('trimed table statistics', trim_count)
 
 
 if __name__ == '__main__':

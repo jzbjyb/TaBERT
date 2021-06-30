@@ -135,6 +135,8 @@ class TableBertConfig(SimpleNamespace):
         use_sampled_value: bool = False,
         mask_used_column_prob: float = 0.0,
         mask_value: bool = False,
+        mask_value_column_separate: bool = False,
+        max_column_len: int = None,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -155,7 +157,8 @@ class TableBertConfig(SimpleNamespace):
         assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm'}
         self.contrastive_emb_size = contrastive_emb_size
 
-        self.max_cell_len = max_cell_len
+        self.max_cell_len = max_cell_len  # for cell value
+        self.max_column_len = max_column_len  # for column name
         self.max_sequence_len = max_sequence_len
         self.max_context_len = max_context_len
 
@@ -183,7 +186,8 @@ class TableBertConfig(SimpleNamespace):
         self.use_sampled_value = use_sampled_value
         self.mask_used_column_prob = mask_used_column_prob
         assert mask_used_column_prob in {0.0, 1.0}, 'other values are not implemented'
-        self.mask_value = mask_value or additional_row_count > 0
+        self.mask_value_column_separate = mask_value_column_separate
+        self.mask_value = mask_value or additional_row_count > 0 or mask_value_column_separate
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
             if self.model_type == ModelType.BERT:
@@ -220,6 +224,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument("--max_sequence_len", type=int, default=512)
         parser.add_argument("--max_context_len", type=int, default=256)
         parser.add_argument("--max_cell_len", type=int, default=5)
+        parser.add_argument("--max_column_len", type=int, default=None)
 
         parser.add_argument("--masked_context_prob", type=float, default=0.15,
                             help="Probability of masking each token for the LM task")
@@ -236,6 +241,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--use_sampled_value', action='store_true')
         parser.add_argument('--mask_used_column_prob', type=float, default=0.0, help='probability of only masking used columns')
         parser.add_argument('--mask_value', action='store_true')
+        parser.add_argument('--mask_value_column_separate', action='store_true')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)
 

@@ -1,8 +1,8 @@
-output_dir=data/train_data/vanilla_tabert
-input_dir=data/preprocessed_data/tables.jsonl
+output_dir=~/mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
+input_dir=data/totto_data/train/preprocessed.jsonl
 additional_row_count=0
 mkdir -p ${output_dir}
-worldsize=40
+worldsize=1
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -11,8 +11,10 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name bert-base-uncased \
     --do_lower_case \
-    --epochs_to_generate 15 \
+    --epochs_to_generate 10 \
     --max_context_len 128 \
+    --max_column_len 15 \
+    --max_cell_len 15 \
     --table_mask_strategy column \
     --context_sample_strategy concate_and_enumerate \
     --masked_column_prob 0.2 \
@@ -22,6 +24,9 @@ for (( i=0; i<${worldsize}; ++i)); do
     --column_delimiter "[SEP]" \
     --world_size ${worldsize} \
     --additional_row_count ${additional_row_count} \
-    --global_rank $i >> ${output_dir}.out &
+    --use_sampled_value \
+    --mask_value \
+    --mask_value_column_separate \
+    --global_rank $i
 done
 wait

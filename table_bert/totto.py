@@ -31,6 +31,8 @@ class Totto(object):
 
     @staticmethod
     def is_number(s):
+        if s is None:
+            return False
         try:
             float(s)
             return True
@@ -237,11 +239,14 @@ class Totto(object):
                     if col_idx in col2rows:  # highlight column
                         row_idx = random.choice(list(col2rows[col_idx]))
                         header['used'] = True
+                        value = expand_table[row_idx][col_idx]['value']
                     else:  # sample from all data
-                        row_idx = random.randint(0 if fake_header else num_hr, len(expand_table) - 1)
-                    cell = expand_table[row_idx][col_idx]
-                    header['type'] = 'real' if Totto.is_number(cell['value']) else 'text'
-                    header['sample_value']['value'] = cell['value']
+                        all_values = [expand_table[i][col_idx]['value']
+                                      for i in range(0 if fake_header else num_hr, len(expand_table))
+                                      if expand_table[i][col_idx]['value']]  # choose non-empty values
+                        value = random.choice(all_values) if len(all_values) > 0 else None
+                    header['type'] = 'real' if Totto.is_number(value) else 'text'
+                    header['sample_value']['value'] = value
 
                 # write
                 fout.write(json.dumps(td) + '\n')

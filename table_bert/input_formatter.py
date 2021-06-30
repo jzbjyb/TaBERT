@@ -15,6 +15,8 @@ from table_bert.config import TableBertConfig
 from table_bert.dataset import Example
 from table_bert.table import Column, Table
 
+trim_count = {'total': 0, 'trim': 0}
+
 
 class TableBertBertInputFormatter(object):
     def __init__(self, config: TableBertConfig, tokenizer: BertTokenizer):
@@ -46,9 +48,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         for token in self.config.cell_input_template:
             start_token_abs_position = len(input) + token_offset
             if token == 'column':
+                name_tokens = column.name_tokens if self.config.max_column_len is None else column.name_tokens[:self.config.max_column_len]
                 span_map['column_name'] = (start_token_abs_position,
-                                           start_token_abs_position + len(column.name_tokens))
-                input.extend(column.name_tokens)
+                                           start_token_abs_position + len(name_tokens))
+                input.extend(name_tokens)
             elif token == 'value':
                 span_map['value'] = (start_token_abs_position,
                                      start_token_abs_position + len(cell_value))
@@ -104,7 +107,9 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
             early_stop = False
             if trim_long_table:
+                trim_count['total'] += 1
                 if len(row_input_tokens) + len(column_input_tokens) > max_table_token_length:
+                    trim_count['trim'] += 1
                     valid_column_input_token_len = max_table_token_length - len(row_input_tokens)
                     column_input_tokens = column_input_tokens[:valid_column_input_token_len]
                     end_index = column_start_idx + len(column_input_tokens)
@@ -225,8 +230,9 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                         col_values = [val for val in col_values if val is not None and len(val) > 0]
                         sampled_value = choice(col_values) if len(col_values) > 0 else ''
 
-                    if len(sampled_value) <= 0:  # use column name as value if this column is empty
-                        sampled_value = column.name
+                    if sampled_value is None or len(sampled_value) <= 0:
+                        # use a special symbol if this column is empty
+                        sampled_value = '-'
 
                     # print('chosen value', sampled_value)
                     sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
@@ -248,7 +254,6 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             (
                 list(range(*span['column_name']) if 'column_name' in span else []) +
                 list(range(*span['type']) if 'type' in span else []) +
-                list(range(*span['value']) if 'value' in span and self.config.mask_value else []) +  # mask values when using more than a single row
                 (
                     span['other_tokens']
                     if random() < 0.01 and 'other_tokens' in span
@@ -259,6 +264,19 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             in enumerate(column_spans[:len(header)])  # only mask the first row and used columns if specified
             if not self.config.mask_used_column_prob or header[col_id].used
         ]
+        if self.config.mask_value:
+            column_candidate_indices_value = [
+                list(range(*span['value']) if 'value' in span else [])
+                for col_id, span
+                in enumerate(column_spans[:len(header)])  # only mask the first row and used columns if specified
+                if not self.config.mask_used_column_prob or header[col_id].used
+            ]
+            assert len(column_candidate_indices_value) == len(column_candidate_indices), 'candidate indices length inconsistent'
+            if self.config.mask_value_column_separate:
+                column_candidate_indices = column_candidate_indices + column_candidate_indices_value
+            else:
+                column_candidate_indices = [ci + civ for ci, civ in zip(column_candidate_indices, column_candidate_indices_value)]
+
         masked_column_prob = None
         if self.config.mask_used_column_prob:
             masked_column_prob = min(self.config.masked_column_prob * len(column_spans[:len(header)]) / (len(column_candidate_indices) or 1), 1.0)
@@ -329,6 +347,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             masked_indices = sorted(masked_context_token_indices + masked_column_token_indices)
         else:
             masked_indices = masked_column_token_indices
+        assert len(set(masked_column_token_indices)) == len(masked_column_token_indices), 'duplicate indicies'
 
         masked_token_labels = []
 

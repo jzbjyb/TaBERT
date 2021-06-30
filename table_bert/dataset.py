@@ -16,7 +16,7 @@ import multiprocessing
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Optional, Iterator, Set
+from typing import Dict, Optional, Iterator, Set, Union
 import redis
 
 import numpy as np
@@ -615,7 +615,8 @@ class TableDatabase:
         tokenizer: Optional[BertTokenizer] = None,
         backend='redis',
         num_workers=None,
-        indices=None
+        indices=None,
+        skip_column_name_longer_than: int=10,
     ) -> 'TableDatabase':
         file_path = Path(file_path)
 
@@ -639,7 +640,7 @@ class TableDatabase:
                         suffix=None
                     )
 
-                    if TableDatabase.is_valid_example(example):
+                    if TableDatabase.is_valid_example(example, skip_column_name_longer_than=skip_column_name_longer_than):
                         example_store[idx] = example
                         
             db.__example_store = example_store
@@ -725,10 +726,11 @@ class TableDatabase:
             self.client.flushall()
 
     @classmethod
-    def is_valid_example(cls, example):
+    def is_valid_example(cls, example, skip_column_name_longer_than: int = 10):
         # TODO: move this to preprocess pre-processing
-        if any(len(col.name.split(' ')) > 10 for col in example.header):
-            return False
+        if skip_column_name_longer_than > 0:
+            if any(len(col.name.split(' ')) > skip_column_name_longer_than for col in example.header):
+                return False
 
         if any(len(col.name_tokens) == 0 for col in example.header):
             return False

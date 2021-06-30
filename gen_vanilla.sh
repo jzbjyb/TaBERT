@@ -27,6 +27,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --use_sampled_value \
     --mask_value \
     --mask_value_column_separate \
+    --skip_column_name_longer_than 0 \
     --global_rank $i
 done
 wait

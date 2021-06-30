@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from torch import nn
 import numpy as np
@@ -12,8 +11,19 @@ class CLIPLoss(nn.Module):
         self.is_paired = is_paired
         self.source_projection = nn.Parameter(torch.empty(input_dim, output_dim), requires_grad=True)
         self.target_projection = nn.Parameter(torch.empty(input_dim, output_dim), requires_grad=True)
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 1.0), requires_grad=True)
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07), requires_grad=True)
         self.initialize_parameters()
+
+    @staticmethod
+    def get_diag_label(repr, binary: bool = False):  # (B, emb_size)
+        l = np.sqrt(repr.size(0))
+        assert l == int(l), 'batch size is not valid'
+        l = int(l)
+        if binary:
+            label = torch.diag(torch.ones(l)).long().to(repr.device).view(-1)
+        else:
+            label = torch.arange(l).to(repr.device)
+        return l, label
 
     def initialize_parameters(self):
         nn.init.normal_(self.source_projection, std=self.input_dim ** -0.5)
@@ -64,15 +74,13 @@ class CLIPLoss(nn.Module):
         logits = logit_scale * (source * target).sum(-1)  # (B, )
 
         if labels is None:  # cross entropy loss
-            l = np.sqrt(source.size(0))
-            assert l == int(l), 'batch size is not a valid'
-            l = int(l)
-            label = torch.arange(l).to(source.device)
+            l, label = CLIPLoss.get_diag_label(source)
             logits = logits.view((l, l))
             loss_fct = nn.CrossEntropyLoss(reduction='mean')
             pre_source_loss = loss_fct(logits, label)
             pre_target_loss = loss_fct(logits.t(), label)
             avg_loss = (pre_source_loss + pre_target_loss) / 2
         else:  # binary loss
-            raise NotImplementedError
+            loss_fct = nn.BCEWithLogitsLoss(reduction='mean')
+            avg_loss = loss_fct(logits.view(-1), labels.view(-1).float())
         return avg_loss

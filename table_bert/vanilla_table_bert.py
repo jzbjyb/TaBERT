@@ -42,10 +42,15 @@ class VanillaTableBert(TableBertModel):
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
         elif 'contrast-concat' in self.config.objective_function:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
+        elif 'nsp' in self.config.objective_function:
+            self.nsp_loss = CrossEntropyLoss(ignore_index=-1, reduction='mean')
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
-        self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
+        if 'nsp' in self.config.objective_function:
+            self._bert_model = BertForPreTraining.from_pretrained(self.config.base_model_name)
+        else:
+            self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_electra(self):
         # from scratch
@@ -61,6 +66,8 @@ class VanillaTableBert(TableBertModel):
         self._electra_loss = ELECTRALoss()
 
     def load_roberta(self):
+        if 'nsp' in self.config.objective_function:
+            raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def forward(self, *args, **kwargs):
@@ -70,9 +77,11 @@ class VanillaTableBert(TableBertModel):
         total_loss: torch.Tensor = 0.0
         sample_size = 0
         if 'mlm' in self.config.objective_function:
-            sequence_output, _ = self._bert_model.bert(input_ids, token_type_ids, attention_mask,
-                                           output_all_encoded_layers=False)
-            prediction_scores = self._bert_model.cls(sequence_output)
+            sequence_output, pooled_output = self._bert_model.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
+            if type(self._bert_model) is BertForMaskedLM:
+                prediction_scores = self._bert_model.cls(sequence_output)
+            elif type(self._bert_model) is BertForPreTraining:
+                prediction_scores, _ = self._bert_model.cls(sequence_output, pooled_output)
             loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
             masked_lm_loss = loss_fct(prediction_scores.view(-1, prediction_scores.size(-1)), masked_lm_labels.view(-1))
             sample_size = masked_lm_labels.ne(-1).sum().item()
@@ -89,12 +98,22 @@ class VanillaTableBert(TableBertModel):
             total_loss += contrastive_loss
         if 'contrast-concat' in self.config.objective_function:
             # use the representation corresponding to the first token (cls or sep)
-            concat_repr = self._bert_model.bert(
-                kwargs['concat_input_ids'], kwargs['concat_token_type_ids'], kwargs['concat_attention_mask'])[0]
+            concat_repr, _ = self._bert_model.bert(
+                kwargs['concat_input_ids'], kwargs['concat_token_type_ids'], kwargs['concat_attention_mask'], output_all_encoded_layers=False)
             context_repr = concat_repr[kwargs['context_mask'], :]
             table_repr = concat_repr[kwargs['table_mask'], :]
-            contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
+            l, binary_label = CLIPLoss.get_diag_label(context_repr, binary=True)
+            contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=binary_label)
             total_loss += contrastive_loss
+        if 'nsp' in self.config.objective_function:
+            # only use cls
+            sequence_output, pooled_output = self._bert_model.bert(
+                kwargs['concat_input_ids'], kwargs['concat_token_type_ids'], kwargs['concat_attention_mask'], output_all_encoded_layers=False)
+            _, seq_relationship_score = self._bert_model.cls(sequence_output, pooled_output)
+            l, nsp_label = CLIPLoss.get_diag_label(pooled_output, binary=True)
+            nsp_label = 1 - nsp_label  # 0 => next sentence is the continuation, 1 => next sentence is a random sentence
+            nsp_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), nsp_label.view(-1))
+            total_loss += nsp_loss
 
         total_loss = total_loss * sample_size
         logging_output = {

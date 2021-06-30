@@ -155,7 +155,7 @@ class TableBertConfig(SimpleNamespace):
         self.context_first = context_first
         self.column_representation = column_representation
         self.objective_function = objective_function
-        assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm'}
+        assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm'}
         self.contrastive_emb_size = contrastive_emb_size
 
         self.max_cell_len = max_cell_len  # for cell value

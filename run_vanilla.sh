@@ -3,9 +3,9 @@
 input_dir=$1  # data/train_data/vanilla_tabert
 output_dir=$2  # data/runs/vanilla_tabert
 mkdir -p ${output_dir}
-batchsize=32
+batchsize=$3
 gradac=1
-epochs=$3
+epochs=$4
 
 # activate env if needed
 if [[ "$PATH" == *"tabert"* ]]; then

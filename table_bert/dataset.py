@@ -249,7 +249,7 @@ class TableDataset(Dataset):
 
                 if 'contrastive' in self.config.objective_function:
                     self.add_for_contrastive(example)
-                elif 'contrast-concat' in self.config.objective_function:
+                elif 'contrast-concat' in self.config.objective_function or 'nsp' in self.config.objective_function:
                     self.add_for_contrastive(example, concat=True)
 
                 examples.append(example)

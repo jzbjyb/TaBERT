@@ -1,8 +1,11 @@
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Tuple, Any
 import json
+from copy import deepcopy
 from pathlib import Path
 from collections import defaultdict
 import random
+from tqdm import tqdm
+import numpy as np
 
 
 class Totto(object):
@@ -16,6 +19,15 @@ class Totto(object):
             for l in fin:
                 data.append(json.loads(l))
         return data
+
+    @staticmethod
+    def dummy_cell(is_header: bool = False):
+        return {
+            'column_span': 1,
+            'is_header': is_header,
+            'row_span': 1,
+            'value': '',
+        }
 
     @staticmethod
     def is_number(s):
@@ -33,11 +45,118 @@ class Totto(object):
     def is_valid_header(cell):
         return cell['is_header'] and Totto.is_valid_cell(cell)
 
+    @staticmethod
+    def visualize(table, max_cell_len: int = 10):
+        for row in table:
+            for cell in row:
+                print('{}\t'.format(str(cell['value'])[:max_cell_len].replace('\n', ' ')), end='')
+            print('')
+
+    @staticmethod
+    def table_dict_to_list(table, strict: bool = False, miss_value: Any = None, truncate_by_first_row: bool = False):
+        table_list: List[List[Dict]] = []
+        if len(table) <= 0:
+            return table_list
+        total_num_rows = np.max(list(table.keys())) + 1
+        total_num_cols = (np.max(list(table[0].keys())) + 1) if truncate_by_first_row else (
+                    np.max([c for r in table for c in table[r]]) + 1)
+        for i in range(total_num_rows):
+            table_list.append([])
+            assert not strict or total_num_cols == len(
+                table[i]), 'number of columns inconsistent between different rows'
+            for j in range(total_num_cols):
+                if i in table and j in table[i]:
+                    table_list[-1].append(table[i][j])
+                else:
+                    table_list[-1].append(miss_value)
+        if len(table[0]) < total_num_cols:
+            Totto.visualize(table_list)
+            raise Exception('header incomplete')
+        return table_list
+
+    @staticmethod
+    def expand_table(table, highlighted_cells: Set[Tuple[int, int]] = set()):
+        _table: Dict[int, Dict[int, Dict]] = defaultdict(dict)  # expanded table, row_idx -> col_idx -> cell
+        _highlighted_cells: Set[Tuple[int, int]] = set()  # expanded highlighted cells
+        _row_idx = _col_idx = 0  # index of the expanded table
+        row_idx = col_idx = 0  # index to the original collapsed table
+        is_expanded = False
+        while True:
+            _has_table_row = _row_idx in _table
+            has_table_row = row_idx < len(table)
+            if not _has_table_row and not has_table_row:  # both expanded and original tables are exhausted
+                break
+            _col_idx = col_idx = 0  # reset col idx
+            visited_col_idx = set()
+            use_table = False  # whether or not the current row of the original table is used
+            while True:
+                if _has_table_row and _col_idx in _table[_row_idx]:  # expanded table first
+                    visited_col_idx.add(_col_idx)
+                    _col_idx += 1
+                elif has_table_row and col_idx < len(table[row_idx]):  # original table second
+                    cell = table[row_idx][col_idx]
+                    rs = cell['row_span']
+                    cs = cell['column_span']
+                    if rs > 1 or cs > 1:
+                        _cell = deepcopy(cell)
+                        is_expanded = True
+                    else:
+                        _cell = cell
+                    _cell['row_span'] = 1
+                    _cell['column_span'] = 1
+                    for i in range(rs):
+                        for j in range(cs):
+                            # the same position could be visited multiple times, which means the table might be corrupted
+                            # but we ignore this because it's not a large portion and it's impossible to fix it unless we
+                            # download the row tables from Wikipedia ourselves.
+                            _table[_row_idx + i][_col_idx + j] = _cell
+                            visited_col_idx.add(_col_idx + j)
+                            if (row_idx, col_idx) in highlighted_cells:
+                                _highlighted_cells.add((_row_idx + i, _col_idx + j))
+                    _col_idx += cs
+                    col_idx += 1
+                    use_table = True
+                else:  # exhauseted row
+                    if has_table_row and len(table[row_idx]) == 0:  # make sure to mark empty row used
+                        use_table = True
+                    _row_idx += 1
+                    row_idx += int(use_table)
+                    break
+        _table_list = Totto.table_dict_to_list(_table, miss_value=Totto.dummy_cell(is_header=False),
+                                               truncate_by_first_row=True)
+        return _table_list, _highlighted_cells, is_expanded
+
+    @staticmethod
+    def get_header_rows_and_merge(table: List[List[Dict]], merge_sym: str = ' // '):
+        # find the number of header rows from the top of the table and merge
+        header_rows = []
+        for row_idx, row in enumerate(table):
+            # a row is a header row if all cells are marked as header
+            # otherwise, we treat is as a data row
+            header_sub = [cell for cell in row if cell['is_header']]
+            if len(header_sub) == len(row):
+                header_rows.append(row_idx)
+            else:
+                break
+        num_hr = len(header_rows)
+        merged_hr: List[Dict] = []
+        if num_hr >= 1:
+            for col_idx, cell in enumerate(table[header_rows[0]]):
+                _cell = deepcopy(cell)
+                new_value = [table[row_idx][col_idx]['value'] for row_idx in header_rows]
+                _cell['value'] = merge_sym.join(new_value)
+                merged_hr.append(_cell)
+        return num_hr, merged_hr
+
     def convert_to_tabert_format(self, split: str, output_path: Path):
         count = num_rows = num_cols = num_used_rows = num_used_cols = 0
         data = getattr(self, '{}_data'.format(split))
+
+        cases = {'inner_header': 0, 'no_header': 0, 'no_data': 0, 'fake_header': 0,
+                 'multi_header': 0, 'partial_header': 0, 'expand': 0}
+
         with open(output_path, 'w') as fout:
-            for example in data:
+            for example in tqdm(data):
                 td = {
                     'uuid': None,
                     'table': {'caption': '', 'header': [], 'data': [], 'used_header': []},
@@ -45,32 +164,62 @@ class Totto(object):
                     'context_after': []
                 }
                 td['uuid'] = 'totto_{}'.format(example['example_id'])
-                td['context_before'].append(example['sentence_annotations'][0]['final_sentence'])  # use the first annotated sentence
+                td['context_before'].append(
+                    example['sentence_annotations'][0]['final_sentence'])  # use the first annotated sentence
                 row2count: Dict[int, int] = defaultdict(lambda: 0)
                 col2rows: Dict[int, Set] = defaultdict(set)
-                for r, c in example['highlighted_cells']:
+
+                invalid_table = False
+
+                # expand table
+                table = example['table']
+                expand_table, expand_highlighted_cells, is_expand = Totto.expand_table(
+                    table, set(map(tuple, example['highlighted_cells'])))
+                cases['expand'] += int(is_expand)
+
+                # merge header
+                num_hr, merged_header = Totto.get_header_rows_and_merge(expand_table)
+                cases['multi_header'] += int(num_hr > 1)
+                if num_hr <= 0:  # table must contain at least one header row
+                    cases['no_header'] += 1
+                    invalid_table = True
+                    continue
+                if len(expand_table) < num_hr + 1:  # table must contain at least one data row
+                    cases['no_data'] += 1
+                    invalid_table = True
+                    continue
+                for r, c in expand_highlighted_cells:
                     row2count[r] += 1
                     col2rows[c].add(r)
-                table = example['table']
-                num_rows += len(table)
-                num_cols += len(table[0]) if len(table) > 0 else 0
+                num_rows += len(expand_table)
+                num_cols += len(expand_table[0])
                 num_used_rows += len(row2count)
                 num_used_cols += len(col2rows)
-                invalid_table = False
+                # highlighted cells could be header rows, which mean that header rows are not a real header.
+                # See example with id 3182391131405542101 for an example
+                fake_header = np.any([i in row2count for i in range(num_hr)])
+                cases['fake_header'] += int(fake_header)
+
                 # extract data
-                for row in table[1:]:
-                    r = [col['value'] for col in row if not col['is_header'] and Totto.is_valid_cell(col)]
-                    if len(r) < len(row):
-                        invalid_table = True
-                        break
+                inner_header = False
+                partial_header = False
+                for row in expand_table[num_hr:]:
+                    header_sub = [cell['value'] for cell in row if cell['is_header']]
+                    if len(header_sub) == len(row):
+                        inner_header = True
+                    elif len(header_sub) > 0:
+                        partial_header = True
+                    r = [cell['value'] for cell in row]
                     td['table']['data'].append(r)
-                if invalid_table:
-                    continue
+                cases['inner_header'] += int(inner_header)
+                cases['partial_header'] += int(partial_header)
+                if fake_header:  # add fake header
+                    for row_idx in range(num_hr):
+                        r = [cell['value'] for cell in expand_table[row_idx]]
+                        td['table']['data'].insert(0, r)
+
                 # extract column name
-                for col in table[0]:
-                    if not Totto.is_valid_header(col):
-                        invalid_table = True
-                        break
+                for cell in merged_header:
                     td['table']['header'].append({
                         'name': '',
                         'name_tokens': None,
@@ -81,37 +230,22 @@ class Totto(object):
                         'foreign_key': None,
                         'used': False,
                     })
-                    td['table']['header'][-1]['name'] = col['value']
-                if invalid_table:
-                    continue
-                # extract column type and value
-                for col_idx, col in enumerate(td['table']['header']):
-                    if col_idx in col2rows:  # highlight column
-                        ''' see 3182391131405542101 for an example
-                        if 0 in col2rows:  # highlight column is impossible, which mean the header is fake
-                            invalid_table = True
-                            break
-                        '''
-                        row_idx = random.choice(list(col2rows[col_idx]))  # skip the header row
-                        col['used'] = True
+                    td['table']['header'][-1]['name'] = cell['value']
 
-                    else:
-                        row_idx = random.randint(1, len(table) - 1)  # assume the first row is header
-                    cell = table[row_idx][col_idx]
-                    col['type'] = 'real' if Totto.is_number(cell['value']) else 'text'
-                    col['sample_value']['value'] = cell['value']
-                if invalid_table:
-                    continue
-                for row in td['table']['data']:
-                    if len(row) != len(td['table']['header']):
-                        invalid_table = True
-                        break
-                if invalid_table:
-                    continue
-                # add fake header in data if row 0 is highlighted
-                if 0 in row2count:
-                    td['table']['data'].insert(0, [c['name'] for c in td['table']['header']])
+                # extract column type, value, and used
+                for col_idx, header in enumerate(td['table']['header']):
+                    if col_idx in col2rows:  # highlight column
+                        row_idx = random.choice(list(col2rows[col_idx]))
+                        header['used'] = True
+                    else:  # sample from all data
+                        row_idx = random.randint(0 if fake_header else num_hr, len(expand_table) - 1)
+                    cell = expand_table[row_idx][col_idx]
+                    header['type'] = 'real' if Totto.is_number(cell['value']) else 'text'
+                    header['sample_value']['value'] = cell['value']
+
+                # write
                 fout.write(json.dumps(td) + '\n')
                 count += 1
         print('total count {}, used rows {}/{}, used columns {}/{}'.format(
             count, num_used_rows, num_rows, num_used_cols, num_cols))
+        print('out of {}, {}'.format(len(data), cases))

@@ -56,6 +56,10 @@ class TableBertModel(nn.Module):
         """Return the underlying base BERT model"""
         return getattr(self, 'bert_{}'.format(self.config.model_type.value))()
 
+    @property
+    def bert_all(self):
+        return getattr(self, 'bert_all_{}'.format(self.config.model_type.value))()
+
     def bert_bert(self):
         if not hasattr(self, '_bert_model') or getattr(self, '_bert_model') is None:
             raise ValueError('This instance does not have a base BERT model.')
@@ -64,18 +68,27 @@ class TableBertModel(nn.Module):
         else:
             return self._bert_model
 
-    def bert_electra(self):
+    def bert_all_bert(self):
+        return self.bert_bert()
+
+    def bert_electra(self, return_all: bool = False):
         def _forward(*args, **kwargs):
             if 'output_all_encoded_layers' in kwargs:
                 del kwargs['output_all_encoded_layers']
             if 'return_dict' in kwargs:
                 del kwargs['return_dict']
-            kwargs['output_hidden_states'] = True
-            outputs = self._electra.discriminator(*args, **kwargs, return_dict=True).hidden_states[-1]
-            return outputs, None
+            if return_all:
+                return self._electra.discriminator(*args, **kwargs, return_dict=True)
+            else:
+                kwargs['output_hidden_states'] = True
+                outputs = self._electra.discriminator(*args, **kwargs, return_dict=True).hidden_states[-1]
+                return outputs, None
         return _forward
 
-    def bert_roberta(self):
+    def bert_all_electra(self):
+        return self.bert_electra(return_all=True)
+
+    def bert_roberta(self, return_all: bool = False):
         def _forward(*args, **kwargs):
             if 'output_all_encoded_layers' in kwargs:
                 del kwargs['output_all_encoded_layers']
@@ -83,10 +96,16 @@ class TableBertModel(nn.Module):
                 del kwargs['return_dict']
             if 'token_type_ids' in kwargs:
                 del kwargs['token_type_ids']
-            kwargs['output_hidden_states'] = True
-            outputs = self._roberta(*args, **kwargs, return_dict=True).hidden_states[-1]
-            return outputs, None
+            if return_all:
+                return self._roberta(*args, **kwargs, return_dict=True)
+            else:
+                kwargs['output_hidden_states'] = True
+                outputs = self._roberta(*args, **kwargs, return_dict=True).hidden_states[-1]
+                return outputs, None
         return _forward
+
+    def bert_all_roberta(self):
+        return self.bert_roberta(return_all=True)
 
     @property
     def bert_config(self) -> BertConfig:
@@ -266,7 +285,12 @@ class TableBertModel(nn.Module):
             for old_key, new_key in old_key_to_new_key_names:
                 state_dict[new_key] = state_dict[old_key]
 
-        model.load_state_dict(state_dict, strict=True)
+        try:
+            model.load_state_dict(state_dict, strict=True)
+        except RuntimeError:
+            logging.warning('The state dict is not compatible with the model, '
+                            'please check manually to see if this is OK.')
+            model.load_state_dict(state_dict, strict=False)
 
         return model
 

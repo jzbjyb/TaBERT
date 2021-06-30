@@ -9,6 +9,7 @@ from typing import List
 import logging
 from enum import Enum
 import numpy as np
+import os
 
 
 class TransformerVersion(Enum):
@@ -20,6 +21,9 @@ TRANSFORMER_VERSION = None
 
 
 try:
+    if 'USE_TRANSFORMER' in os.environ:
+        logging.warning('force to use the new version')
+        raise ImportError
     from pytorch_pretrained_bert.modeling import (
         BertForMaskedLM, BertForPreTraining, BertModel,
         BertConfig,
@@ -36,8 +40,12 @@ except ImportError:
     from transformers.modeling_bert import (    # noqa
         BertForMaskedLM, BertForPreTraining, BertModel,
         BertSelfOutput, BertIntermediate, BertOutput,
-        BertLMPredictionHead, BertLayerNorm, gelu
+        BertLMPredictionHead
     )
+    try:
+        from transformers.modeling_bert import BertLayerNorm, gelu
+    except ImportError:
+        from pytorch_pretrained_bert.modeling import BertLayerNorm, gelu
     from transformers.configuration_bert import BertConfig  # noqa
 
     hf_flag = 'new'

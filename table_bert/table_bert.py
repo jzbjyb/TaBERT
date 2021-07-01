@@ -107,6 +107,25 @@ class TableBertModel(nn.Module):
     def bert_all_roberta(self):
         return self.bert_roberta(return_all=True)
 
+    def bert_bart(self, return_all: bool = False):
+        def _forward(*args, **kwargs):
+            if 'output_all_encoded_layers' in kwargs:
+                del kwargs['output_all_encoded_layers']
+            if 'return_dict' in kwargs:
+                del kwargs['return_dict']
+            if 'token_type_ids' in kwargs:
+                del kwargs['token_type_ids']
+            if return_all:
+                return self._bart(*args, **kwargs, return_dict=True)
+            else:
+                kwargs['output_hidden_states'] = True
+                outputs = self._bart(*args, **kwargs, return_dict=True).encoder_last_hidden_state
+                return outputs, None
+        return _forward
+
+    def bert_all_bart(self):
+        return self.bert_bart(return_all=True)
+
     @property
     def bert_config(self) -> BertConfig:
         if self.config.model_type == ModelType.BERT:
@@ -115,6 +134,11 @@ class TableBertModel(nn.Module):
             return self._electra.discriminator.config
         elif self.config.model_type == ModelType.RoBERTa:
             return self._roberta.config
+        elif self.config.model_type == ModelType.BART:
+            config = self._bart.config
+            if not hasattr(config, 'initializer_range'):
+                config.initializer_range = config.init_std
+            return config
         else:
             raise NotImplementedError
 

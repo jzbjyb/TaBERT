@@ -18,7 +18,8 @@ from torch.nn import CrossEntropyLoss
 from torch_scatter import scatter_max, scatter_mean
 
 from table_bert.utils import BertForPreTraining, BertForMaskedLM, TRANSFORMER_VERSION, TransformerVersion
-from table_bert.utils import ElectraForPreTraining, ElectraForMaskedLM, RobertaForMaskedLM
+from table_bert.utils import ElectraForPreTraining, ElectraForMaskedLM, RobertaForMaskedLM, \
+    BartForConditionalGeneration, shift_tokens_right
 from table_bert.table_bert import TableBertModel
 from table_bert.config import TableBertConfig, BERT_CONFIGS
 from table_bert.table import Table
@@ -69,6 +70,12 @@ class VanillaTableBert(TableBertModel):
         if 'nsp' in self.config.objective_function:
             raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
+
+    def load_bart(self):
+        for loss_fct in ['nsp', 'contrastive', 'contrast-concat']:
+            if loss_fct in self.config.objective_function:
+                raise NotImplementedError
+        self._bart = BartForConditionalGeneration.from_pretrained(self.config.base_model_name)
 
     def forward(self, *args, **kwargs):
         return getattr(self, 'forward_{}'.format(self.config.model_type.value))(*args, **kwargs)
@@ -178,6 +185,40 @@ class VanillaTableBert(TableBertModel):
             table_repr = concat_repr[kwargs['table_mask'], :]
             contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
             total_loss += contrastive_loss
+
+        total_loss = total_loss * sample_size
+        logging_output = {
+            'sample_size': sample_size,
+            'loss': total_loss.item()
+        }
+        return total_loss, logging_output
+
+    def forward_bart(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
+        total_loss: torch.Tensor = 0.0
+        sample_size = 0
+        if 'mlm' in self.config.objective_function:
+            sequence_logits = self._bart(input_ids, attention_mask=attention_mask, return_dict=True).logits
+            loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
+            masked_lm_loss = loss_fct(sequence_logits.view(-1, sequence_logits.size(-1)), masked_lm_labels.view(-1))
+            sample_size = masked_lm_labels.ne(-1).sum().item()
+            total_loss += masked_lm_loss
+
+        for obj in ['text2table', 'table2text']:
+            if obj not in self.config.objective_function:
+                continue
+            # get src, tgt
+            if obj == 'text2table':
+                src_ids, src_mask = kwargs['context_input_ids'], kwargs['context_attention_mask']
+                tgt_ids = kwargs['table_input_ids']
+            elif obj == 'table2text':
+                src_ids, src_mask = kwargs['table_input_ids'], kwargs['table_attention_mask']
+                tgt_ids = kwargs['context_input_ids']
+            # compute loss
+            decoder_input_ids = shift_tokens_right(tgt_ids, self.config.pad_id)
+            logits = self._bart(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids, use_cache=False, return_dict=True).logits
+            loss_fct = CrossEntropyLoss(ignore_index=self.config.pad_id, reduction='mean')
+            seq2seq_loss = loss_fct(logits.view(-1, logits.size(-1)), tgt_ids.view(-1))
+            total_loss += seq2seq_loss
 
         total_loss = total_loss * sample_size
         logging_output = {

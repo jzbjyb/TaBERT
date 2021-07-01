@@ -55,8 +55,20 @@ except ImportError:
 from transformers import ElectraConfig, ElectraTokenizer, ElectraForMaskedLM, ElectraForPreTraining
 
 # RoBERTa
+# TODO: set add_prefix_space to True?
 from transformers import RobertaConfig, RobertaTokenizer, RobertaForMaskedLM
+
+# BART
+from transformers import BartConfig, BartTokenizer, BartForConditionalGeneration
+from transformers.modeling_bart import shift_tokens_right
 
 
 def compute_mrr(scores: List[float], labels: List[int]):
     return np.mean([1 / (i + 1) for i, (s, r) in enumerate(sorted(zip(scores, labels), key=lambda x: -x[0])) if r])
+
+
+class BartTokenizerWrapper(BartTokenizer):
+    def tokenize(self, *args, **kwargs):
+        if 'add_prefix_space' in kwargs:
+            del kwargs['add_prefix_space']
+        return super(BartTokenizerWrapper, self).tokenize(*args, **kwargs, add_prefix_space=True)  # always add space

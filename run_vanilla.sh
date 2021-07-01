@@ -3,9 +3,10 @@
 input_dir=$1  # data/train_data/vanilla_tabert
 output_dir=$2  # data/runs/vanilla_tabert
 mkdir -p ${output_dir}
-batchsize=$3
+loss=$3
+batchsize=$4
+epochs=$5
 gradac=1
-epochs=$4
 
 # activate env if needed
 if [[ "$PATH" == *"tabert"* ]]; then
@@ -30,7 +31,7 @@ python train.py \
     --task vanilla \
     --data-dir ${input_dir} \
     --output-dir ${output_dir} \
-    --table-bert-extra-config '{}' \
+    --table-bert-extra-config '{"objective_function": "'${loss}'"}' \
     --train-batch-size ${batchsize} \
     --gradient-accumulation-steps ${gradac} \
     --learning-rate 2e-5 \

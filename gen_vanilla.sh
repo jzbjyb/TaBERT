@@ -11,7 +11,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name bert-base-uncased \
     --do_lower_case \
-    --epochs_to_generate 10 \
+    --epochs_to_generate 20 \
     --max_context_len 128 \
     --max_column_len 15 \
     --max_cell_len 15 \
@@ -20,7 +20,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --masked_column_prob 0.2 \
     --masked_context_prob 0.15 \
     --max_predictions_per_seq 200 \
-    --cell_input_template 'column|type|value' \
+    --cell_input_template 'column | type | value' \
     --column_delimiter "[SEP]" \
     --world_size ${worldsize} \
     --additional_row_count ${additional_row_count} \
@@ -28,6 +28,6 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value \
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
-    --global_rank $i
+    --global_rank $i &
 done
 wait

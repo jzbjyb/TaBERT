@@ -16,7 +16,8 @@ from types import SimpleNamespace
 from typing import Dict, Union, Set
 from enum import Enum
 
-from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig, RobertaTokenizer, RobertaConfig
+from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig, \
+    RobertaTokenizer, RobertaConfig, BartConfig, BartTokenizerWrapper
 
 
 BERT_CONFIGS = {
@@ -76,39 +77,45 @@ class ModelType(Enum):
     BERT = 'bert'
     ELECTRA = 'electra'
     RoBERTa = 'roberta'
+    BART = 'bart'
 
 
 MODEL2TOKENIZER = {
     ModelType.BERT: BertTokenizer,
     ModelType.ELECTRA: ElectraTokenizer,
-    ModelType.RoBERTa: RobertaTokenizer
+    ModelType.RoBERTa: RobertaTokenizer,
+    ModelType.BART: BartTokenizerWrapper,
 }
 
 MODEL2SEP = {
     ModelType.BERT: '[SEP]',
     ModelType.ELECTRA: '[SEP]',
-    ModelType.RoBERTa: '</s>'
+    ModelType.RoBERTa: '</s>',
+    ModelType.BART: '</s>',
 }
 
 
 MODEL2CLS = {
     ModelType.BERT: '[CLS]',
     ModelType.ELECTRA: '[CLS]',
-    ModelType.RoBERTa: '<s>'
+    ModelType.RoBERTa: '<s>',
+    ModelType.BART: '<s>',
 }
 
 
 MODEL2MASK = {
     ModelType.BERT: '[MASK]',
     ModelType.ELECTRA: '[MASK]',
-    ModelType.RoBERTa: '<mask>'
+    ModelType.RoBERTa: '<mask>',
+    ModelType.BART: '<mask>',
 }
 
 
 MODEL2PADID = {
     ModelType.BERT: 0,
     ModelType.ELECTRA: 0,
-    ModelType.RoBERTa: 1
+    ModelType.RoBERTa: 1,
+    ModelType.BART: 1,
 }
 
 
@@ -155,7 +162,10 @@ class TableBertConfig(SimpleNamespace):
         self.context_first = context_first
         self.column_representation = column_representation
         self.objective_function = objective_function
-        assert objective_function in {'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm'}
+        assert objective_function in {
+            'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm',
+            'table2text_mlm', 'text2table_mlm', 'table2text_text2table_mlm',
+        }
         self.contrastive_emb_size = contrastive_emb_size
 
         self.max_cell_len = max_cell_len  # for cell value
@@ -171,9 +181,11 @@ class TableBertConfig(SimpleNamespace):
             if ' ' in cell_input_template:
                 cell_input_template = cell_input_template.split(' ')
             else:
-                print(f'WARNING: cell_input_template is outdated: {cell_input_template}', file=sys.stderr)
-                cell_input_template = \
-                    self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(cell_input_template)
+                raise Exception(
+                    f'WARNING: cell_input_template is outdated: {cell_input_template}, '
+                    f'tokenizing this template using transformers tokenizers might have unexpected behaviors')
+                #cell_input_template = \
+                #    self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(cell_input_template)
 
         self.cell_input_template = cell_input_template
 
@@ -207,6 +219,8 @@ class TableBertConfig(SimpleNamespace):
                 self.gen_config.intermediate_size = self.disc_config.intermediate_size // divisor
             elif self.model_type == ModelType.RoBERTa:
                 self.roberta_config = RobertaConfig.from_pretrained(self.base_model_name)
+            elif self.model_type == ModelType.BART:
+                self.bart_config = BartConfig.from_pretrained(self.base_model_name)
             else:
                 raise NotImplementedError
 
@@ -292,6 +306,8 @@ class TableBertConfig(SimpleNamespace):
             return ModelType.ELECTRA
         if 'roberta' in model_name:
             return ModelType.RoBERTa
+        if 'bart' in model_name:
+            return ModelType.BART
         return ModelType.BERT
 
     def with_new_args(self, **updated_args):

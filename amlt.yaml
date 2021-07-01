@@ -27,7 +27,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_electra_quarter
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_contrastive_concat_quarter_ep5_fast 32 5
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_contrastive_concat_quarter_ep5_fast contrast-concat_mlm 32 5
 - name: tabert_2row
   sku: G8
   sku_count: 2
@@ -37,7 +37,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_2row
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_2row_ep5 32 5
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_2row_ep5 mlm 32 5
 - name: tabert_electra_2row
   sku: G8
   sku_count: 2
@@ -47,7 +47,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_electra_2row
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_2row_ep5 32 5
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_electra_2row_ep5 mlm 32 5
 - name: tabert_totto_maskvalue
   sku: G8
   sku_count: 1
@@ -57,7 +57,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskvalue
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_ep5 32 5
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_ep5 mlm 32 5
 - name: tabert_totto_maskvalue_samplevalue
   sku: G8
   sku_count: 1
@@ -67,7 +67,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskvalue_samplevalue
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_ep5 32 5
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_ep5 mlm 32 5
 - name: tabert_totto_maskvalue_samplevalue_maskusedcolumn
   sku: G8
   sku_count: 1
@@ -77,7 +77,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskvalue_samplevalue_maskusedcolumn
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_maskusedcolumn_ep5 32 5
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskvalue_samplevalue_maskusedcolumn_ep5 mlm 32 5
 - name: tabert_totto_maskseparate
   sku: G8
   sku_count: 1
@@ -87,7 +87,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_ep10 32 10
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_ep10 mlm 32 10
 - name: tabert_totto_maskseparate_ep20
   sku: G8
   sku_count: 1
@@ -97,7 +97,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_ep20 32 20
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_ep20 mlm 32 20
 - name: tabert_totto_maskwhole
   sku: G8
   sku_count: 1
@@ -107,7 +107,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskwhole
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskwhole_ep10 32 10
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskwhole_ep10 mlm 32 10
 - name: tabert_totto_maskseparate_nsp
   sku: G8
   sku_count: 1
@@ -117,7 +117,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_nsp_ep10 5 10
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_nsp_ep10 mlm 5 10
 - name: tabert_totto_maskseparate_nsp_ep20
   sku: G8
   sku_count: 1
@@ -127,7 +127,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_nsp_ep20 5 20
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_nsp_ep20 mlm 5 20
 - name: tabert_totto_maskseparate_contrastive_concat
   sku: G8
   sku_count: 1
@@ -137,4 +137,24 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
-    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_contrastive_concat_ep10 5 10
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_contrastive_concat_ep10 mlm 5 10
+- name: tabert_totto_maskseparate_bart_all
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
+    /mnt/root/TaBERT/data/run/vanilla_tabert_totto_maskseparate_bart_all_ep20 table2text_text2table_mlm 12 20
+- name: tabert_totto_maskseparate_bart_mlm
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
+    /mnt/root/TaBERT/data/run/vanilla_tabert_totto_maskseparate_bart_mlm_ep20 mlm 32 20

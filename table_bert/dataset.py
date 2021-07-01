@@ -14,6 +14,7 @@ import logging
 import math
 import multiprocessing
 import sys
+import copy
 import time
 from pathlib import Path
 from typing import Dict, Optional, Iterator, Set, Union
@@ -190,7 +191,7 @@ class TableDataset(Dataset):
             'total_size': cum_size
         }
 
-    def add_for_contrastive(self, example: Dict, concat: bool = False):
+    def add_for_contrastive(self, example: Dict, concat: bool = False, same_first_token: bool = False):
         if not self.config.context_first:
             raise NotImplementedError
         al = example['sequence_a_length']
@@ -200,11 +201,14 @@ class TableDataset(Dataset):
         raw_input_ids[masked_lm_positions] = masked_lm_label_ids
         if not concat:
             # assume there is a sep in between and make sure that the sep is included in both
-            context, table = raw_input_ids[:al], raw_input_ids[al - 1:]
+            # use deepcopy because they have overlappings
+            context, table = copy.deepcopy(raw_input_ids[:al]), copy.deepcopy(raw_input_ids[al - 1:])
         else:
             # assume there is a sep in between and make sure that the sep is included in context
             context, table = raw_input_ids[:al], raw_input_ids[al:]
             example['contrastive_concat'] = True
+        if same_first_token:
+            table[0] = context[0]
         example['context_token_ids'] = context
         example['table_token_ids'] = table
         assert len(example['context_token_ids']) == al, 'context length inconsistent with sequence_a_length'
@@ -247,9 +251,11 @@ class TableDataset(Dataset):
                 example['masked_lm_positions'] = masked_lm_positions[tgt_begin: tgt_end]
                 example['masked_lm_label_ids'] = masked_lm_label_ids[tgt_begin: tgt_end]
 
-                if 'contrastive' in self.config.objective_function:
-                    self.add_for_contrastive(example)
-                elif 'contrast-concat' in self.config.objective_function or 'nsp' in self.config.objective_function:
+                obj = self.config.objective_function
+                if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj:
+                    # use cls for the first position for seq2seq objective
+                    self.add_for_contrastive(example, same_first_token='2' in obj)
+                elif 'contrast-concat' in obj or 'nsp' in obj:
                     self.add_for_contrastive(example, concat=True)
 
                 examples.append(example)

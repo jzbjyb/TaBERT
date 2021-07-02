@@ -39,25 +39,26 @@ class VanillaTableBert(TableBertModel):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
         getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
-        if 'contrastive' in self.config.objective_function:
+        obj = self.config.objective_function
+        if 'contrastive' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
-        elif 'contrast-concat' in self.config.objective_function:
+        elif 'contrast-concat' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
-        elif 'nsp' in self.config.objective_function:
+        elif 'nsp' in obj or 'binary' is obj:
             self.nsp_loss = CrossEntropyLoss(ignore_index=-1, reduction='mean')
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
-        if 'nsp' in self.config.objective_function:
+        obj = self.config.objective_function
+        if 'nsp' in obj or 'binary' in obj:
             self._bert_model = BertForPreTraining.from_pretrained(self.config.base_model_name)
         else:
             self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_electra(self):
-        # from scratch
-        #generator = ElectraForMaskedLM(self.config.gen_config)
-        #discriminator = ElectraForPreTraining(self.config.disc_config)
-        # from pre-trained
+        for loss_fct in ['nsp', 'binary']:
+            if loss_fct in self.config.objective_function:
+                raise NotImplementedError
         generator = ElectraForMaskedLM.from_pretrained(self.config.base_model_name)
         discriminator = ElectraForPreTraining.from_pretrained(
             self.config.base_model_name.replace('generator', 'discriminator'))
@@ -67,12 +68,13 @@ class VanillaTableBert(TableBertModel):
         self._electra_loss = ELECTRALoss()
 
     def load_roberta(self):
-        if 'nsp' in self.config.objective_function:
-            raise NotImplementedError
+        for loss_fct in ['nsp', 'binary']:
+            if loss_fct in self.config.objective_function:
+                raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_bart(self):
-        for loss_fct in ['nsp', 'contrastive', 'contrast-concat']:
+        for loss_fct in ['nsp', 'binary', 'contrastive', 'contrast-concat']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._bart = BartForConditionalGeneration.from_pretrained(self.config.base_model_name)
@@ -82,18 +84,23 @@ class VanillaTableBert(TableBertModel):
 
     def forward_bert(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
-        sample_size = 0
-        if 'mlm' in self.config.objective_function:
+        sample_size = masked_lm_labels.ne(-1).sum().item()
+        obj = self.config.objective_function
+        if 'mlm' in obj or 'binary' in obj:
             sequence_output, pooled_output = self._bert_model.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
             if type(self._bert_model) is BertForMaskedLM:
                 prediction_scores = self._bert_model.cls(sequence_output)
             elif type(self._bert_model) is BertForPreTraining:
-                prediction_scores, _ = self._bert_model.cls(sequence_output, pooled_output)
-            loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
-            masked_lm_loss = loss_fct(prediction_scores.view(-1, prediction_scores.size(-1)), masked_lm_labels.view(-1))
-            sample_size = masked_lm_labels.ne(-1).sum().item()
-            total_loss += masked_lm_loss
-        if 'contrastive' in self.config.objective_function:
+                prediction_scores, seq_relationship_score = self._bert_model.cls(sequence_output, pooled_output)
+            if 'mlm' in obj:
+                loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
+                masked_lm_loss = loss_fct(prediction_scores.view(-1, prediction_scores.size(-1)), masked_lm_labels.view(-1))
+                total_loss += masked_lm_loss
+            if 'binary' in obj:
+                binary_label = 1 - kwargs['is_positives']  # 0 => next sentence is the continuation, 1 => next sentence is a random sentence
+                binary_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), binary_label.view(-1))
+                total_loss += binary_loss
+        if 'contrastive' in obj:
             # use the representation corresponding to the first token (cls or sep)
             context_repr = self._bert_model.bert(
                 kwargs['context_input_ids'], kwargs['context_token_type_ids'], kwargs['context_attention_mask'],
@@ -103,7 +110,7 @@ class VanillaTableBert(TableBertModel):
                 output_all_encoded_layers=False)[0][:, 0, :]
             contrastive_loss = self.contrastive_loss(context_repr, table_repr)
             total_loss += contrastive_loss
-        if 'contrast-concat' in self.config.objective_function:
+        if 'contrast-concat' in obj:
             # use the representation corresponding to the first token (cls or sep)
             concat_repr, _ = self._bert_model.bert(
                 kwargs['concat_input_ids'], kwargs['concat_token_type_ids'], kwargs['concat_attention_mask'], output_all_encoded_layers=False)
@@ -112,7 +119,7 @@ class VanillaTableBert(TableBertModel):
             l, binary_label = CLIPLoss.get_diag_label(context_repr, binary=True)
             contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=binary_label)
             total_loss += contrastive_loss
-        if 'nsp' in self.config.objective_function:
+        if 'nsp' in obj:
             # only use cls
             sequence_output, pooled_output = self._bert_model.bert(
                 kwargs['concat_input_ids'], kwargs['concat_token_type_ids'], kwargs['concat_attention_mask'], output_all_encoded_layers=False)

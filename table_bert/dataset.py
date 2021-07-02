@@ -230,6 +230,7 @@ class TableDataset(Dataset):
             masked_lm_positions = data['masked_lm_positions']
             masked_lm_label_ids = data['masked_lm_label_ids']
             masked_lm_offsets = data['masked_lm_offsets']
+            is_positives = data['is_positives'] if 'is_positives' in data else None
 
             shard_size = len(segment_a_lengths)
 
@@ -250,6 +251,8 @@ class TableDataset(Dataset):
                 tgt_begin, tgt_end = masked_lm_offsets[i]
                 example['masked_lm_positions'] = masked_lm_positions[tgt_begin: tgt_end]
                 example['masked_lm_label_ids'] = masked_lm_label_ids[tgt_begin: tgt_end]
+
+                example['is_positive'] = is_positives[i] if is_positives is not None else 1  # default to 1
 
                 obj = self.config.objective_function
                 if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj:
@@ -277,11 +280,14 @@ class TableDataset(Dataset):
         max_len = max(len(e['token_ids']) for e in examples)
         has_contrastive = False
         has_contrastive_concat = False
+        has_is_positive = False
         for e in examples:  # use the first one to check
             if 'context_token_ids' in e and 'contrastive_concat' not in e:
                 has_contrastive = True
             if 'context_token_ids' in e and 'contrastive_concat' in e:
                 has_contrastive_concat = True
+            if 'is_positive' in e:
+                has_is_positive = True
             break
         if has_contrastive or has_contrastive_concat:
             max_context_len = max(len(e['context_token_ids']) for e in examples)
@@ -320,7 +326,8 @@ class TableDataset(Dataset):
             input_array[e_id, :len(token_ids)] = token_ids
             mask_array[e_id, :len(token_ids)] = 1
             segment_array[e_id, example['sequence_a_length']:] = 1
-            lm_label_array[e_id, masked_lm_positions] = masked_label_ids
+            if not has_is_positive or example['is_positive']:  # only generate mlm labels for positive examples
+                lm_label_array[e_id, masked_lm_positions] = masked_label_ids
 
             if has_contrastive:
                 context_token_ids = example['context_token_ids']
@@ -366,15 +373,18 @@ class TableDataset(Dataset):
             result['context_mask'] = torch.tensor(context_mask_array)
             result['table_mask'] = torch.tensor(table_mask_array)
             result['concat_labels'] = torch.tensor(concat_labels.astype(np.int64))
+        if has_is_positive:
+            result['is_positives'] = torch.tensor([e['is_positive'] for e in examples])
         return result
 
 
 class Example(object):
-    def __init__(self, uuid, header, context, column_data=None, **kwargs):
+    def __init__(self, uuid, header, context, column_data=None, is_positive=True, **kwargs):
         self.uuid = uuid
         self.header = header
         self.context = context
         self.column_data = column_data
+        self.is_positive = is_positive
 
         for key, val in kwargs.items():
             setattr(self, key, val)
@@ -385,6 +395,7 @@ class Example(object):
             'source': self.source,
             'context': self.context,
             'column_data': self.column_data,
+            'is_positive': self.is_positive,
             'header': [x.to_dict() for x in self.header]
         }
 
@@ -478,11 +489,13 @@ class Example(object):
                 context_after.append(sent)
 
         uuid = entry['uuid']
+        is_positive = entry['is_positive'] if 'is_positive' in entry else True
 
         return cls(uuid, header,
                    [context_before, context_after],
                    column_data=column_data,
-                   source=source)
+                   source=source,
+                   is_positive=is_positive)
 
 
 class TableDatabase:

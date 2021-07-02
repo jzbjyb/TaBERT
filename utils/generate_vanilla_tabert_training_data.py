@@ -56,6 +56,7 @@ def generate_for_epoch(table_db: TableDatabase,
     masked_lm_positions = []
     masked_lm_label_ids = []
     masked_lm_offsets = []
+    is_positives = []
 
     def _save_shard():
         data = {
@@ -64,7 +65,8 @@ def generate_for_epoch(table_db: TableDatabase,
             'sequence_offsets': np.uint64(sequence_offsets),
             'masked_lm_positions': np.uint16(masked_lm_positions),
             'masked_lm_label_ids': np.uint16(masked_lm_label_ids),
-            'masked_lm_offsets': np.uint64(masked_lm_offsets)
+            'masked_lm_offsets': np.uint64(masked_lm_offsets),
+            'is_positives': np.uint16(is_positives),
         }
 
         with h5py.File(str(epoch_file), 'w') as f:
@@ -77,6 +79,7 @@ def generate_for_epoch(table_db: TableDatabase,
         del masked_lm_positions[:]
         del masked_lm_label_ids[:]
         del masked_lm_offsets[:]
+        del is_positives[:]
 
     for example_idx in tqdm(indices, desc=f"Generating dataset {epoch_file}", file=sys.stdout):
         example = table_db[example_idx]
@@ -100,6 +103,7 @@ def generate_for_epoch(table_db: TableDatabase,
                 masked_lm_positions.extend(instance['masked_lm_positions'])
                 masked_lm_label_ids.extend(instance['masked_lm_label_ids'])
                 masked_lm_offsets.append([cur_pos, cur_pos + lm_mask_len])
+                is_positives.append(int(example.is_positive))
         except KeyboardInterrupt as e:
             raise e
         except:

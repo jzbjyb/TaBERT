@@ -1,8 +1,8 @@
-output_dir=~/mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_maskseparate
-input_dir=data/totto_data/train/preprocessed.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_hardneg_maskseparate
+input_dir=/mnt/root/TaBERT/data/totto_data/train/preprocessed_hardneg.jsonl
 additional_row_count=0
 mkdir -p ${output_dir}
-worldsize=1
+worldsize=10
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}

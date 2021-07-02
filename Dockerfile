@@ -1,5 +1,6 @@
 FROM pytorch/pytorch:1.7.1-cuda11.0-cudnn8-devel
 
+RUN echo 1
 # essential tools
 RUN apt-get update
 RUN apt-get -y install openssh-client vim tmux sudo apt-transport-https apt-utils curl \
@@ -35,8 +36,3 @@ RUN apt-get -y install pdsh
 
 # ELECTRA
 RUN pip install -r /tmp/scripts/requirements_electra.txt
-
-# TaBERT
-WORKDIR '/app'
-COPY . .
-RUN pip install --editable .

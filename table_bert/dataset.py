@@ -374,7 +374,7 @@ class TableDataset(Dataset):
             result['table_mask'] = torch.tensor(table_mask_array)
             result['concat_labels'] = torch.tensor(concat_labels.astype(np.int64))
         if has_is_positive:
-            result['is_positives'] = torch.tensor([e['is_positive'] for e in examples])
+            result['is_positives'] = torch.tensor([int(e['is_positive']) for e in examples])
         return result
 
 

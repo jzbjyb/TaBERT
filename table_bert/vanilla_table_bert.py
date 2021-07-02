@@ -44,7 +44,7 @@ class VanillaTableBert(TableBertModel):
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
         elif 'contrast-concat' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
-        elif 'nsp' in obj or 'binary' is obj:
+        elif 'nsp' in obj or 'binary' in obj:
             self.nsp_loss = CrossEntropyLoss(ignore_index=-1, reduction='mean')
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
@@ -129,7 +129,7 @@ class VanillaTableBert(TableBertModel):
             nsp_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), nsp_label.view(-1))
             total_loss += nsp_loss
 
-        total_loss = total_loss * sample_size
+        total_loss = total_loss * (sample_size or 1)
         logging_output = {
             'sample_size': sample_size,
             'loss': total_loss.item()

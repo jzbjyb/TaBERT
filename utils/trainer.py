@@ -133,7 +133,7 @@ class Trainer(object):
                 sample_size = int(sample['sample_size'])
                 total_loss, logging_output = self.model(**sample)
 
-                avg_loss = total_loss / sample_size
+                avg_loss = total_loss / (sample_size or 1)
                 self.optimizer.backward(avg_loss)
 
                 # logging_output = {

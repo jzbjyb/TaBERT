@@ -195,12 +195,11 @@ class VanillaTableBert(TableBertModel):
 
     def forward_bart(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
-        sample_size = 0
+        sample_size = masked_lm_labels.ne(-1).sum().item()
         if 'mlm' in self.config.objective_function:
             sequence_logits = self._bart(input_ids, attention_mask=attention_mask, return_dict=True).logits
             loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
             masked_lm_loss = loss_fct(sequence_logits.view(-1, sequence_logits.size(-1)), masked_lm_labels.view(-1))
-            sample_size = masked_lm_labels.ne(-1).sum().item()
             total_loss += masked_lm_loss
 
         for obj in ['text2table', 'table2text']:

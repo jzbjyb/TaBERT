@@ -147,7 +147,7 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
-    /mnt/root/TaBERT/data/run/vanilla_tabert_totto_maskseparate_bart_all_ep20 table2text_text2table_mlm 12 20
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_all_ep20 table2text_text2table_mlm 10 20
 - name: tabert_totto_maskseparate_bart_mlm
   sku: G8
   sku_count: 1
@@ -157,4 +157,34 @@ jobs:
   command:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
-    /mnt/root/TaBERT/data/run/vanilla_tabert_totto_maskseparate_bart_mlm_ep20 mlm 32 20
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20 mlm 24 20
+- name: tabert_totto_maskseparate_bart_table2texttext2table
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_table2texttext2table_ep20 table2text_text2table 10 20
+- name: tabert_totto_maskseparate_bart_table2textmlm
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_table2textmlm_ep20 table2text_mlm 10 20
+- name: tabert_totto_maskseparate_bart_text2tablemlm
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_totto_maskseparate
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_text2tablemlm_ep20 text2table_mlm 10 20

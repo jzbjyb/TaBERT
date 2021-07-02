@@ -65,6 +65,7 @@ def parse_train_arg():
     parser.add_argument("--cpu",
                         action='store_true',
                         help="Whether not to use CUDA when available")
+    parser.add_argument('--save-init', action='store_true', help='save the initial checkpoint')
 
     parser.add_argument('--data-dir', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
@@ -232,6 +233,11 @@ def main():
         model_ptr = model.module
     else:
         model_ptr = model
+
+    if args.save_init:
+        logger.info('save init checkpoint')
+        torch.save(model_ptr.state_dict(), str(args.output_dir / 'model.bin'))
+        exit()
 
     # set up update parameters for LR scheduler
     dataset_cls = task['dataset']

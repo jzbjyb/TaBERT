@@ -10,6 +10,7 @@ import sys
 from argparse import ArgumentParser
 from pathlib import Path
 from functools import partial
+import wandb
 
 import torch
 import random
@@ -79,6 +80,10 @@ def parse_train_arg():
     # parser.add_argument('--config-file', type=Path, help='table_bert config file if do not use pre-trained BERT table_bert.')
     parser.add_argument('--objective-function', type=str, default='mlm')
 
+    # wandb
+    parser.add_argument('--entity', type=str, default='jzbjyb')
+    parser.add_argument('--project', type=str, default='test')
+
     # distributed training
     parser.add_argument("--ddp-backend", type=str, default='pytorch', choices=['pytorch', 'apex'])
     parser.add_argument("--local_rank", "--local-rank",
@@ -111,6 +116,7 @@ def parse_train_arg():
     parser.add_argument('--empty-cache-freq', default=0, type=int,
                         help='how often to clear the PyTorch CUDA cache (0 to disable)')
     parser.add_argument('--save-checkpoint-every-niter', default=10000, type=int)
+    parser.add_argument('--log-every-niter', default=100, type=int)
 
     FairseqAdam.add_args(parser)
     PolynomialDecaySchedule.add_args(parser)
@@ -173,6 +179,10 @@ def main():
         # shutil.copy(args.data_dir / 'config.json', args.output_dir / 'tb_config.json')
         # save table BERT config
         table_bert_config.save(args.output_dir / 'tb_config.json')
+
+    wandb_run = None
+    if args.is_master:
+        wandb_run = wandb.init(entity=args.entity, project=args.project)
 
     assert args.data_dir.is_dir(), \
         "--data_dir should point to the folder of files made by pregenerate_training_data.py!"
@@ -301,6 +311,13 @@ def main():
 
                 pbar.update(1)
                 pbar.set_postfix_str(', '.join(f"{k}: {v:.4f}" for k, v in logging_output.items()))
+                if (
+                    wandb_run is not None and args.is_master and
+                    0 < trainer.num_updates and
+                    trainer.num_updates % args.log_every_niter == 0
+                ):
+                    logging_output['num_updates'] = trainer.num_updates
+                    wandb_run.log(logging_output)
 
                 if (
                     0 < trainer.num_updates and
@@ -327,6 +344,10 @@ def main():
             if args.is_master:
                 logger.info('** ** * Validation Results ** ** * ')
                 logger.info(f'Epoch {epoch} Validation Results: {dev_results}')
+                if wandb_run is not None:
+                    dev_results['epoch'] = epoch
+                    dev_results = {f'dev-{k}': v for k, v in dev_results.items()}
+                    wandb_run.log(dev_results)
 
             # flush logging information to disk
             sys.stderr.flush()

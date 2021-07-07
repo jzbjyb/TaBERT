@@ -191,6 +191,23 @@ class TableDataset(Dataset):
             'total_size': cum_size
         }
 
+    def only_table(self, example: Dict):
+        if not self.config.context_first:
+            raise NotImplementedError
+        al = example['sequence_a_length']
+        input_ids = np.copy(example['token_ids'])
+        # split
+        context, table = copy.deepcopy(input_ids[:al]), copy.deepcopy(input_ids[al - 1:])
+        table[0] = context[0]
+        # adjust masked
+        only_keep = [i >= al - 1 for i in example['masked_lm_positions']]
+        masked_lm_positions = [example['masked_lm_positions'][i] - al + 1 for i in range(len(only_keep)) if only_keep[i]]
+        masked_lm_label_ids = [example['masked_lm_label_ids'][i] for i in range(len(only_keep)) if only_keep[i]]
+        example['sequence_a_length'] = len(table)
+        example['token_ids'] = table
+        example['masked_lm_positions'] = masked_lm_positions
+        example['masked_lm_label_ids'] = masked_lm_label_ids
+
     def add_for_contrastive(self, example: Dict, concat: bool = False, same_first_token: bool = False):
         if not self.config.context_first:
             raise NotImplementedError
@@ -253,6 +270,9 @@ class TableDataset(Dataset):
                 example['masked_lm_label_ids'] = masked_lm_label_ids[tgt_begin: tgt_end]
 
                 example['is_positive'] = is_positives[i] if is_positives is not None else 1  # default to 1
+
+                if self.config.only_table:
+                    self.only_table(example)
 
                 obj = self.config.objective_function
                 if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj:

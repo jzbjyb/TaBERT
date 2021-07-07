@@ -208,3 +208,24 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_randneg_maskseparate
     /mnt/root/TaBERT/data/runs/vanilla_tabert_totto_randneg_maskseparate_binary_ep20 binary_mlm 32 20
+
+- name: tabert_onlytable
+  sku: G8
+  sku_count: 6
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_onlytable_ep5 mlm 32 5
+- name: tabert_bart_onlytable_maskseparate
+  sku: G8
+  sku_count: 6
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_maskseparate
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_bart_onlytable_maskseparate_ep5 mlm 24 5

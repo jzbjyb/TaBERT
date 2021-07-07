@@ -145,6 +145,7 @@ class TableBertConfig(SimpleNamespace):
         mask_value_column_separate: bool = False,
         max_column_len: int = None,
         skip_column_name_longer_than: int = None,
+        only_table: bool = False,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -182,11 +183,13 @@ class TableBertConfig(SimpleNamespace):
             if ' ' in cell_input_template:
                 cell_input_template = cell_input_template.split(' ')
             else:
-                raise Exception(
-                    f'WARNING: cell_input_template is outdated: {cell_input_template}, '
-                    f'tokenizing this template using transformers tokenizers might have unexpected behaviors')
-                #cell_input_template = \
-                #    self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(cell_input_template)
+                if self.model_type not in {ModelType.BERT, ModelType.ELECTRA, ModelType.RoBERTa}:
+                    raise Exception(
+                        f'WARNING: cell_input_template is outdated: {cell_input_template}, '
+                        f'tokenizing this template using transformers tokenizers might have unexpected behaviors')
+                else:
+                    cell_input_template = \
+                        self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(cell_input_template)
 
         self.cell_input_template = cell_input_template
 
@@ -203,6 +206,7 @@ class TableBertConfig(SimpleNamespace):
         self.mask_value_column_separate = mask_value_column_separate
         self.mask_value = mask_value or additional_row_count > 0 or mask_value_column_separate
         self.skip_column_name_longer_than = skip_column_name_longer_than
+        self.only_table = only_table
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
             if self.model_type == ModelType.BERT:

@@ -6,6 +6,8 @@ mkdir -p ${output_dir}
 loss=$3
 batchsize=$4
 epochs=$5
+project="$(basename -- $output_dir)"
+echo '==========' ${project} '=========='
 gradac=1
 
 # activate env if needed
@@ -17,6 +19,9 @@ else
   source ${conda_base}/etc/profile.d/conda.sh
   conda activate tabert
 fi
+
+# wandb
+export WANDB_API_KEY=9caada2c257feff1b6e6a519ad378be3994bc06a
 
 # (1) single node w/o deepspeed
 # export NGPU=8; python -m torch.distributed.launch --nproc_per_node=$NGPU train.py
@@ -40,4 +45,5 @@ python train.py \
     --weight-decay 0.0 \
     --fp16 \
     --clip-norm 1.0 \
-    --empty-cache-freq 128
+    --empty-cache-freq 128 \
+    --project ${project}

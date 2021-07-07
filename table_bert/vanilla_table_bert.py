@@ -129,11 +129,11 @@ class VanillaTableBert(TableBertModel):
             nsp_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), nsp_label.view(-1))
             total_loss += nsp_loss
 
-        total_loss = total_loss * (sample_size or 1)
         logging_output = {
             'sample_size': sample_size,
             'loss': total_loss.item()
         }
+        total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
 
     def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
@@ -163,11 +163,11 @@ class VanillaTableBert(TableBertModel):
             contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
             total_loss += contrastive_loss
 
-        total_loss = total_loss * sample_size
         logging_output = {
             'sample_size': sample_size,
             'loss': total_loss.item()
         }
+        total_loss = total_loss * sample_size
         return total_loss, logging_output
 
     def forward_roberta(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
@@ -193,11 +193,11 @@ class VanillaTableBert(TableBertModel):
             contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=None)
             total_loss += contrastive_loss
 
-        total_loss = total_loss * sample_size
         logging_output = {
             'sample_size': sample_size,
             'loss': total_loss.item()
         }
+        total_loss = total_loss * sample_size
         return total_loss, logging_output
 
     def forward_bart(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
@@ -226,11 +226,11 @@ class VanillaTableBert(TableBertModel):
             seq2seq_loss = loss_fct(logits.view(-1, logits.size(-1)), tgt_ids.view(-1))
             total_loss += seq2seq_loss
 
-        total_loss = total_loss * sample_size
         logging_output = {
             'sample_size': sample_size,
             'loss': total_loss.item()
         }
+        total_loss = total_loss * sample_size
         return total_loss, logging_output
 
     def encode_context_and_table(
@@ -451,36 +451,28 @@ class VanillaTableBert(TableBertModel):
         was_training = self.training
         self.eval()
 
-        keys = ['loss', 'sample_size']
-
         logging_info_list = []
         with torch.no_grad():
             with tqdm(total=len(data_loader), desc=f"Evaluation", file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
-                    loss_sum, logging_info = self(**batch)
-                    logging_info = {k: logging_info[k] for k in keys}
+                    _, logging_info = self(**batch)
                     logging_info_list.append(logging_info)
-
                     pbar.update(1)
 
         if was_training:
             self.train()
 
         stats = {
-            k: sum(x[k] for x in logging_info_list)
-            for k in keys
-        }
+            k: np.average([x[k] for x in logging_info_list])
+            for k in logging_info_list[0]
+        } if len(logging_info_list) > 0 else {}
 
         # handel distributed evaluation
         if args.multi_gpu:
             stats = distributed_utils.all_gather_list(stats)
             stats = {
-                k: sum(x[k] for x in stats)
-                for k in keys
-            }
+                k: np.average([x[k] for x in stats])
+                for k in stats[0]
+            } if len(stats) > 0 else {}
 
-        valid_result = {
-            'ppl': math.exp(stats['loss'] / stats['sample_size'])
-        }
-
-        return valid_result
+        return stats

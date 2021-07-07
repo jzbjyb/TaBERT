@@ -17,6 +17,9 @@ else
   conda activate tabert
 fi
 
+# wandb
+export WANDB_API_KEY=9caada2c257feff1b6e6a519ad378be3994bc06a
+
 #export NGPU=2; export NCCL_DEBUG=INFO; python -m torch.distributed.launch --nproc_per_node=$NGPU utils/rank.py \
 python -m utils.rank \
     --sample_file ${input_dir}/samples.tsv \

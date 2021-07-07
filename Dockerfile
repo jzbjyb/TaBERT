@@ -36,3 +36,6 @@ RUN apt-get -y install pdsh
 
 # ELECTRA
 RUN pip install -r /tmp/scripts/requirements_electra.txt
+
+# wandb
+RUN pip install wandb==0.10.33

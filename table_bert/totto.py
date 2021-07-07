@@ -11,7 +11,7 @@ import numpy as np
 class Totto(object):
     def __init__(self, root_dir: Path):
         self.train_data = self.load(root_dir / 'totto_train_data.jsonl')
-        self.dev_daat = self.load(root_dir / 'totto_dev_data.jsonl')
+        self.dev_data = self.load(root_dir / 'totto_dev_data.jsonl')
 
     def load(self, filename: Path):
         data: List[Dict] = []

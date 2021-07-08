@@ -1,8 +1,8 @@
-output_dir=/mnt/root/TaBERT/data/train_data/vanilla_tabert_3merge_seq2seq_maskseparate
+output_dir=/mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_3merge_seq2seq_maskseparate
 input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_preprocessed.jsonl
 additional_row_count=0
 mkdir -p ${output_dir}
-worldsize=10
+worldsize=5
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}

@@ -39,6 +39,10 @@ class VanillaTableBert(TableBertModel):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
         getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
+        if config.load_model_from is not None:
+            print('init from {}'.format(config.load_model_from))
+            state_dict = torch.load(config.load_model_from, map_location='cpu')
+            self.load_state_dict(state_dict, strict=True)
         obj = self.config.objective_function
         if 'contrastive' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
@@ -50,13 +54,16 @@ class VanillaTableBert(TableBertModel):
 
     def load_bert(self):
         obj = self.config.objective_function
+        for loss_fct in ['seq2seq']:
+            if loss_fct in obj:
+                raise NotImplementedError
         if 'nsp' in obj or 'binary' in obj:
             self._bert_model = BertForPreTraining.from_pretrained(self.config.base_model_name)
         else:
             self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_electra(self):
-        for loss_fct in ['nsp', 'binary']:
+        for loss_fct in ['nsp', 'binary', 'seq2seq']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         generator = ElectraForMaskedLM.from_pretrained(self.config.base_model_name)
@@ -68,7 +75,7 @@ class VanillaTableBert(TableBertModel):
         self._electra_loss = ELECTRALoss()
 
     def load_roberta(self):
-        for loss_fct in ['nsp', 'binary']:
+        for loss_fct in ['nsp', 'binary', 'seq2seq']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
@@ -167,7 +174,7 @@ class VanillaTableBert(TableBertModel):
             'sample_size': sample_size,
             'loss': total_loss.item()
         }
-        total_loss = total_loss * sample_size
+        total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
 
     def forward_roberta(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
@@ -197,12 +204,14 @@ class VanillaTableBert(TableBertModel):
             'sample_size': sample_size,
             'loss': total_loss.item()
         }
-        total_loss = total_loss * sample_size
+        total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
 
     def forward_bart(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
         sample_size = masked_lm_labels.ne(-1).sum().item()
+        logging_output = {'sample_size': sample_size}
+
         if 'mlm' in self.config.objective_function:
             sequence_logits = self._bart(input_ids, attention_mask=attention_mask, return_dict=True).logits
             loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
@@ -226,11 +235,27 @@ class VanillaTableBert(TableBertModel):
             seq2seq_loss = loss_fct(logits.view(-1, logits.size(-1)), tgt_ids.view(-1))
             total_loss += seq2seq_loss
 
-        logging_output = {
-            'sample_size': sample_size,
-            'loss': total_loss.item()
-        }
-        total_loss = total_loss * sample_size
+        if 'seq2seq' in self.config.objective_function:
+            src_ids, src_mask = input_ids, attention_mask
+            tgt_ids = kwargs['target_input_ids']
+            bs = src_ids.size(0)
+            decoder_input_ids = shift_tokens_right(tgt_ids, self.config.pad_id)
+            logits = self._bart(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids, use_cache=False, return_dict=True).logits
+
+            loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='none')
+            # masked_lm_labels is a combination of real mlm and seq2seq targets
+            combined_loss = loss_fct(logits.view(-1, logits.size(-1)), masked_lm_labels.view(-1)).view(bs, -1)  # (bs, seq_len)
+            combined_loss_avg = combined_loss.sum() / (masked_lm_labels.ne(-1).sum() or 1.0)
+            total_loss += combined_loss_avg  # loss is proportional to the number of tokens of each type (mlm or seq2seq)
+            # separate mlm and seq2seq loss for logging
+            is_mlm = kwargs['is_mlm']  # (bs, )
+            mlm_loss_avg = combined_loss[is_mlm].sum() / (masked_lm_labels[is_mlm].ne(-1).sum() or 1.0)
+            seq2seq_loss_avg = combined_loss[~is_mlm].sum() / (masked_lm_labels[~is_mlm].ne(-1).sum() or 1.0)
+            logging_output['mlm_loss'] = mlm_loss_avg.item()
+            logging_output['seq2seq_loss'] = seq2seq_loss_avg.item()
+
+        logging_output['loss'] = total_loss.item()
+        total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
 
     def encode_context_and_table(

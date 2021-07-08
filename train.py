@@ -82,7 +82,8 @@ def parse_train_arg():
 
     # wandb
     parser.add_argument('--entity', type=str, default='jzbjyb')
-    parser.add_argument('--project', type=str, default='test')
+    parser.add_argument('--project', type=str, default='structured-pretrain')
+    parser.add_argument('--name', type=str, default='test')
 
     # distributed training
     parser.add_argument("--ddp-backend", type=str, default='pytorch', choices=['pytorch', 'apex'])
@@ -182,7 +183,7 @@ def main():
 
     wandb_run = None
     if args.is_master:
-        wandb_run = wandb.init(entity=args.entity, project=args.project)
+        wandb_run = wandb.init(entity=args.entity, project=args.project, name=args.name)
 
     assert args.data_dir.is_dir(), \
         "--data_dir should point to the folder of files made by pregenerate_training_data.py!"

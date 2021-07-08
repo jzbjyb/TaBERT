@@ -229,3 +229,25 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_maskseparate
     /mnt/root/TaBERT/data/runs/vanilla_tabert_bart_onlytable_maskseparate_ep5 mlm 24 5
+
+# seq2seq pretrain
+- name: tabert_bart_3merge_seq2seq
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_3merge_seq2seq_maskseparate
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_ep5 seq2seq 24 5
+- name: tabert_bart_3merge_seq2seq_nomlm
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_3merge_seq2seq_nomlm_maskseparate
+    /mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_nomlm_ep5 seq2seq 24 5

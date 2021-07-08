@@ -6,8 +6,8 @@ mkdir -p ${output_dir}
 loss=$3
 batchsize=$4
 epochs=$5
-project="$(basename -- $output_dir)"
-echo '==========' ${project} '=========='
+name="$(basename -- $output_dir)"
+echo '==========' ${name} '=========='
 gradac=1
 
 # activate env if needed
@@ -46,4 +46,4 @@ python train.py \
     --fp16 \
     --clip-norm 1.0 \
     --empty-cache-freq 128 \
-    --project ${project}
+    --name ${name}

@@ -248,6 +248,8 @@ class TableDataset(Dataset):
             masked_lm_label_ids = data['masked_lm_label_ids']
             masked_lm_offsets = data['masked_lm_offsets']
             is_positives = data['is_positives'] if 'is_positives' in data else None
+            target_sequences = data['target_sequences'] if 'target_sequences' in data else None
+            target_sequence_offsets = data['target_sequence_offsets'] if 'target_sequence_offsets' in data else None
 
             shard_size = len(segment_a_lengths)
 
@@ -261,6 +263,9 @@ class TableDataset(Dataset):
 
                 seq_begin, seq_end = sequence_offsets[i]
                 example['token_ids'] = sequences[seq_begin: seq_end]
+                if target_sequence_offsets is not None:
+                    t_seq_begin, t_seq_end = target_sequence_offsets[i]
+                    example['target_token_ids'] = target_sequences[t_seq_begin: t_seq_end]
 
                 seq_a_length = segment_a_lengths[i]
                 example['sequence_a_length'] = seq_a_length
@@ -301,6 +306,7 @@ class TableDataset(Dataset):
         has_contrastive = False
         has_contrastive_concat = False
         has_is_positive = False
+        has_target = False
         for e in examples:  # use the first one to check
             if 'context_token_ids' in e and 'contrastive_concat' not in e:
                 has_contrastive = True
@@ -308,7 +314,11 @@ class TableDataset(Dataset):
                 has_contrastive_concat = True
             if 'is_positive' in e:
                 has_is_positive = True
+            if 'target_token_ids' in e:
+                has_target = True
             break
+        if has_target:
+            max_target_len = max(len(e['target_token_ids']) for e in examples)
         if has_contrastive or has_contrastive_concat:
             max_context_len = max(len(e['context_token_ids']) for e in examples)
             max_table_len = max(len(e['table_token_ids']) for e in examples)
@@ -316,7 +326,12 @@ class TableDataset(Dataset):
         input_array = np.full((batch_size, max_len), dtype=np.int, fill_value=pad_id)
         mask_array = np.zeros((batch_size, max_len), dtype=np.bool)
         segment_array = np.zeros((batch_size, max_len), dtype=np.bool)
-        lm_label_array = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
+        if has_target:
+            lm_label_array = np.full((batch_size, max_target_len), dtype=np.int, fill_value=-1)
+            target_input_array = np.full((batch_size, max_target_len), dtype=np.int, fill_value=pad_id)
+            is_mlm_array = np.full((batch_size,), dtype=np.bool, fill_value=True)
+        else:
+            lm_label_array = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
         if has_contrastive:
             context_input_array = np.full((batch_size, max_context_len), dtype=np.int, fill_value=pad_id)
             table_input_array = np.full((batch_size, max_table_len), dtype=np.int, fill_value=pad_id)
@@ -347,8 +362,14 @@ class TableDataset(Dataset):
             mask_array[e_id, :len(token_ids)] = 1
             segment_array[e_id, example['sequence_a_length']:] = 1
             if not has_is_positive or example['is_positive']:  # only generate mlm labels for positive examples
-                lm_label_array[e_id, masked_lm_positions] = masked_label_ids
+                if not has_target or len(masked_lm_positions) > 0:
+                    lm_label_array[e_id, masked_lm_positions] = masked_label_ids  # masked tokens as labels
+                else:
+                    lm_label_array[e_id, :len(example['target_token_ids'])] = example['target_token_ids']  # target as labels
+                    is_mlm_array[e_id] = False
 
+            if has_target:
+                target_input_array[e_id, :len(example['target_token_ids'])] = example['target_token_ids']
             if has_contrastive:
                 context_token_ids = example['context_token_ids']
                 table_token_ids = example['table_token_ids']
@@ -379,6 +400,10 @@ class TableDataset(Dataset):
             'masked_lm_labels': torch.tensor(lm_label_array.astype(np.int64)),
             'sample_size': (lm_label_array != -1).sum()
         }
+        if has_target:
+            result['target_input_ids'] = torch.tensor(target_input_array.astype(np.int64))
+            result['is_mlm'] = torch.tensor(is_mlm_array)
+
         if has_contrastive:
             result['context_input_ids'] = torch.tensor(context_input_array.astype(np.int64))
             result['table_input_ids'] = torch.tensor(table_input_array.astype(np.int64))

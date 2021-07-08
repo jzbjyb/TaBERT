@@ -123,6 +123,7 @@ class TableBertConfig(SimpleNamespace):
     def __init__(
         self,
         base_model_name: str = 'bert-base-uncased',
+        load_model_from: str = None,
         column_delimiter: str = '[SEP]',
         context_first: bool = True,
         cell_input_template: str = 'column | type | value',
@@ -152,6 +153,7 @@ class TableBertConfig(SimpleNamespace):
         super(TableBertConfig, self).__init__()
 
         self.base_model_name = base_model_name
+        self.load_model_from = load_model_from
         self.model_type = self.check_model_type(base_model_name)
         self.use_electra = self.model_type == ModelType.ELECTRA
         self.column_delimiter = column_delimiter
@@ -166,8 +168,9 @@ class TableBertConfig(SimpleNamespace):
         self.objective_function = objective_function
         assert objective_function in {
             'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm',
-            'table2text_mlm', 'text2table_mlm', 'table2text_text2table', 'table2text_text2table_mlm',
+            'table2text_mlm', 'text2table_mlm', 'table2text_text2table', 'table2text_text2table_mlm',  # bart
             'binary_mlm',
+            'seq2seq',  # bart
         }
         self.contrastive_emb_size = contrastive_emb_size
 

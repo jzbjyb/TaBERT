@@ -57,6 +57,8 @@ def generate_for_epoch(table_db: TableDatabase,
     masked_lm_label_ids = []
     masked_lm_offsets = []
     is_positives = []
+    target_sequences = []
+    target_sequence_offsets = []
 
     def _save_shard():
         data = {
@@ -68,6 +70,9 @@ def generate_for_epoch(table_db: TableDatabase,
             'masked_lm_offsets': np.uint64(masked_lm_offsets),
             'is_positives': np.uint16(is_positives),
         }
+        if len(target_sequences) > 0:  # has target
+            data['target_sequences'] = np.uint16(target_sequences)
+            data['target_sequence_offsets'] = np.uint64(target_sequence_offsets)
 
         with h5py.File(str(epoch_file), 'w') as f:
             for key, val in data.items():
@@ -80,6 +85,8 @@ def generate_for_epoch(table_db: TableDatabase,
         del masked_lm_label_ids[:]
         del masked_lm_offsets[:]
         del is_positives[:]
+        del target_sequences[:]
+        del target_sequence_offsets[:]
 
     for example_idx in tqdm(indices, desc=f"Generating dataset {epoch_file}", file=sys.stdout):
         example = table_db[example_idx]
@@ -98,6 +105,11 @@ def generate_for_epoch(table_db: TableDatabase,
                 segment_a_lengths.append(instance['segment_a_length'])
                 sequence_offsets.append([cur_pos, cur_pos + sequence_len])
 
+                if 'target_token_ids' in instance:
+                    target_sequence_offsets.append(
+                        [len(target_sequences), len(target_sequences) + len(instance['target_token_ids'])])
+                    target_sequences.extend(instance['target_token_ids'])
+
                 cur_pos = len(masked_lm_positions)
                 lm_mask_len = len(instance['masked_lm_positions'])
                 masked_lm_positions.extend(instance['masked_lm_positions'])
@@ -106,7 +118,7 @@ def generate_for_epoch(table_db: TableDatabase,
                 is_positives.append(int(example.is_positive))
         except KeyboardInterrupt as e:
             raise e
-        except:
+        except Exception as e:
             # raise
             typ, value, tb = sys.exc_info()
             print('*' * 50 + 'Exception' + '*' * 50, file=sys.stderr)
@@ -117,6 +129,7 @@ def generate_for_epoch(table_db: TableDatabase,
 
             sys.stderr.flush()
 
+    print('total count {}'.format(len(sequence_offsets)))
     _save_shard()
 
 

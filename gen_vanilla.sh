@@ -1,5 +1,5 @@
-output_dir=/mnt/root/TaBERT/data/train_data/vanilla_tabert_totto_hardneg_maskseparate
-input_dir=/mnt/root/TaBERT/data/totto_data/train/preprocessed_hardneg.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/vanilla_tabert_3merge_seq2seq_maskseparate
+input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_preprocessed.jsonl
 additional_row_count=0
 mkdir -p ${output_dir}
 worldsize=10
@@ -9,7 +9,7 @@ for (( i=0; i<${worldsize}; ++i)); do
   python -m utils.generate_vanilla_tabert_training_data \
     --output_dir ${output_dir} \
     --train_corpus ${input_dir} \
-    --base_model_name bert-base-uncased \
+    --base_model_name facebook/bart-base \
     --do_lower_case \
     --epochs_to_generate 20 \
     --max_context_len 128 \
@@ -28,6 +28,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value \
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
+    --seq2seq_format mlm_single-c2v_single-v2c \
     --global_rank $i &
 done
 wait

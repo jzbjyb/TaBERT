@@ -24,6 +24,7 @@ from table_bert.config import TableBertConfig, ModelType
 
 
 MAX_BERT_INPUT_LENGTH = 512
+MAX_TARGET_LENGTH = 512
 NEGATIVE_NUMBER = -1e8
 CONFIG_NAME = 'bert_config.json'
 WEIGHTS_NAME = 'pytorch_model.bin'

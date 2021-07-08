@@ -146,6 +146,7 @@ class TableBertConfig(SimpleNamespace):
         max_column_len: int = None,
         skip_column_name_longer_than: int = None,
         only_table: bool = False,
+        seq2seq_format: str = None,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -207,6 +208,7 @@ class TableBertConfig(SimpleNamespace):
         self.mask_value = mask_value or additional_row_count > 0 or mask_value_column_separate
         self.skip_column_name_longer_than = skip_column_name_longer_than
         self.only_table = only_table
+        self.seq2seq_format = seq2seq_format
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
             if self.model_type == ModelType.BERT:
@@ -264,6 +266,9 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--mask_used_column_prob', type=float, default=0.0, help='probability of only masking used columns')
         parser.add_argument('--mask_value', action='store_true')
         parser.add_argument('--mask_value_column_separate', action='store_true')
+        parser.add_argument('--seq2seq_format', type=str,
+                            choices=[None, 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c'],
+                            help='seq2seq examples for BART-like models')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)
 

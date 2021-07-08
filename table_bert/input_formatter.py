@@ -7,10 +7,10 @@
 
 from math import ceil
 from random import choice, shuffle, sample, random
-from typing import List, Callable, Dict, Any
+from typing import List, Callable, Dict, Any, Union
 
 from table_bert.utils import BertTokenizer
-from table_bert.table_bert import MAX_BERT_INPUT_LENGTH
+from table_bert.table_bert import MAX_BERT_INPUT_LENGTH, MAX_TARGET_LENGTH
 from table_bert.config import TableBertConfig
 from table_bert.dataset import Example
 from table_bert.table import Column, Table
@@ -38,14 +38,16 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         self,
         column: Column,
         cell_value: List[str],
-        token_offset: int
+        token_offset: int = 0,
+        cell_input_template: List[str] = None,
     ):
         input = []
         span_map = {
             'first_token': (token_offset, token_offset + 1)
         }
+        cell_input_template = cell_input_template or self.config.cell_input_template
 
-        for token in self.config.cell_input_template:
+        for token in cell_input_template:
             start_token_abs_position = len(input) + token_offset
             if token == 'column':
                 name_tokens = column.name_tokens if self.config.max_column_len is None else column.name_tokens[:self.config.max_column_len]
@@ -68,7 +70,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return input, span_map
 
-    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [], trim_long_table=False):
+    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0):
         row_data = [
             column.sample_value_tokens
             for column in table.header
@@ -76,15 +78,16 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return self.get_row_input(context, table.header, row_data, additional_rows, trim_long_table=trim_long_table)
 
-    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table=False):
+    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0):  # none means not trim
+        max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
             # account for cls and sep, and the ending sep
-            max_table_token_length = MAX_BERT_INPUT_LENGTH - len(context) - 2 - 1
+            max_table_token_length = max_total_len - len(context) - 2 - 1
         else:
             table_tokens_start_idx = 1  # account for starting cls
             # account for cls and sep, and the ending sep
-            max_table_token_length = MAX_BERT_INPUT_LENGTH - len(context) - 2 - 1
+            max_table_token_length = max_total_len - len(context) - 2 - 1
 
         # generate table tokens
         row_input_tokens = []
@@ -106,7 +109,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             column_input_tokens.append(self.config.column_delimiter)
 
             early_stop = False
-            if trim_long_table:
+            if trim_long_table is not None:
                 trim_count['total'] += 1
                 if len(row_input_tokens) + len(column_input_tokens) > max_table_token_length:
                     trim_count['trim'] += 1
@@ -238,16 +241,74 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
                     column.sample_value_tokens = sampled_value_tokens
 
-            instance = self.create_pretraining_instance(context, example.header, additional_rows)
-            instance['source'] = example.source
+            if self.config.seq2seq_format is None:
+                instance = self.create_pretraining_instance(context, example.header, additional_rows)
+                instance['source'] = example.source
+                instances.append(instance)
+            else:
+                if 'mlm' in self.config.seq2seq_format:  # added a dummy target which is identical to the masked sequence
+                    instance = self.create_pretraining_instance(context, example.header, additional_rows)
+                    instance['source'] = example.source
+                    instance['target_token_ids'] = instance['token_ids']
+                    instances.append(instance)
+                if 'single' in self.config.seq2seq_format:
+                    instances.extend(self.create_seq2seq_instances(context, example.header))
 
-            instances.append(instance)
+        return instances
 
+    def _add_single_head(self, raw_tokens: List[str], toadd: List[str], target: List[str], seq_a_len: int):
+        need_to_remove = len(raw_tokens) + len(toadd) + 1 - MAX_BERT_INPUT_LENGTH  # sep token
+        if need_to_remove > 0:  # overflow
+            assert len(raw_tokens) >= need_to_remove + 2, 'the raw input is too short to be removed'  # sep and cls token
+            tokens = raw_tokens[:-(need_to_remove + 1)]  # also remove the last sep token
+            if tokens[-1] != self.config.sep_token:
+                tokens.append(self.config.sep_token)
+            tokens = tokens + toadd + [self.config.sep_token]
+        else:
+            tokens = raw_tokens + toadd + [self.config.sep_token]
+        instance = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_token': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return instance
+
+    def create_seq2seq_instances(self, context, header: List[Column]):
+        instances = []
+        seq2seqf = self.config.seq2seq_format
+        for hi, single_head in enumerate(header):
+            if not single_head.used and not single_head.value_used:
+                continue
+            if len(header) > 1:  # has remain headers
+                remain_table = Table('fake_table', header[:hi] + header[hi + 1:])
+                input_instance = self.get_input(context, remain_table)
+                raw_tokens = input_instance['tokens']
+                seq_a_len = input_instance['segment_a_length']
+            else:
+                raw_tokens = [self.config.cls_token] + context + [self.config.sep_token]
+                seq_a_len = len(context) + 2
+            if 'single-c2v' in seq2seqf and single_head.value_used:
+                cell_value = single_head.sample_value_tokens[:self.config.max_cell_len]
+                target_tokens = [self.config.cls_token] + cell_value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+                ctokens = self.get_cell_input(single_head, cell_value, cell_input_template=['column', '|', 'type', '|'])[0]
+                instances.append(self._add_single_head(raw_tokens, ctokens, target_tokens, seq_a_len))
+            if 'single-v2c' in seq2seqf and single_head.used:
+                cell_value = single_head.sample_value_tokens[:self.config.max_cell_len]
+                vtokens = self.get_cell_input(single_head, cell_value, cell_input_template=['|', 'value'])[0]
+                ctokens = self.get_cell_input(single_head, cell_value, cell_input_template=['column', '|', 'type'])[0]
+                target_tokens = [self.config.cls_token] + ctokens[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+                instances.append(self._add_single_head(raw_tokens, vtokens, target_tokens, seq_a_len))
         return instances
 
     def create_pretraining_instance(self, context, header, additional_rows: List[List[Any]] = []):
         table = Table('fake_table', header)
-        input_instance = self.get_input(context, table, additional_rows, trim_long_table=True)  # core format function
+        input_instance = self.get_input(context, table, additional_rows)  # core format function
         column_spans = input_instance['column_spans']
 
         column_candidate_indices = [
@@ -406,7 +467,6 @@ if __name__ == '__main__':
         input_formatter.get_row_input(
             context='12 213 5 345 23 234'.split(),
             header=header,
-            row_data=[col.sample_value_tokens for col in header],
-            trim_long_table=True
+            row_data=[col.sample_value_tokens for col in header]
         )
     )

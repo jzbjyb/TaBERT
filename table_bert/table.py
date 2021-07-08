@@ -22,6 +22,7 @@ class Column(object):
         name_tokens: List[str] = None,
         sample_value_tokens: List[str] = None,
         used: bool = False,
+        value_used: bool = False,
         **kwargs
     ):
         self.name = name
@@ -32,6 +33,7 @@ class Column(object):
         self.foreign_key: Column = foreign_key
         self.is_primary_key = is_primary_key
         self.used = used
+        self.value_used = value_used
 
         self.fields = []
         for key, val in kwargs.items():
@@ -53,6 +55,7 @@ class Column(object):
             'is_primary_key': self.is_primary_key,
             'foreign_key': self.foreign_key,
             'used': self.used,
+            'value_used': self.value_used,
         }
 
         for key in self.fields:

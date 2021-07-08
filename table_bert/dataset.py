@@ -444,8 +444,8 @@ class Example(object):
         def _get_data_source():
             if 'wiki' in entry['uuid']:
                 return 'wiki'
-            if entry['uuid'].startswith('totto_'):
-                return 'totto'
+            if entry['uuid'].startswith('totto_') or entry['uuid'].startswith('wsql_') or entry['uuid'].startswith('tablefact_'):
+                return 'grappa'
             return 'common_crawl'
 
         source = _get_data_source()
@@ -458,11 +458,14 @@ class Example(object):
             if tokenizer:
                 name_tokens = tokenizer.tokenize(col['name'])
             else: name_tokens = None
+            used = col['used'] if 'used' in col else False
+            value_used = col['value_used'] if 'value_used' in col else used  # fall back to used if not exist
             column = Column(col['name'],
                             col['type'],
                             sample_value,
                             name_tokens=name_tokens,
-                            used=col['used'] if 'used' in col else False)
+                            used=used,
+                            value_used=value_used)
             header.append(column)
 
         if source == 'wiki':

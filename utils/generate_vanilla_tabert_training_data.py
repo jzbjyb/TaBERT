@@ -129,7 +129,7 @@ def generate_for_epoch(table_db: TableDatabase,
 
             sys.stderr.flush()
 
-    print('total count {}'.format(len(sequence_offsets)))
+    print('\ntotal count {}\n'.format(len(sequence_offsets)))
     _save_shard()
 
 
@@ -142,6 +142,7 @@ def main():
     parser.add_argument('--no_wiki_tables_from_common_crawl', action='store_true', default=False)
     parser.add_argument('--global_rank', type=int, default=os.environ.get('SLURM_PROCID', 0))
     parser.add_argument('--world_size', type=int, default=os.environ.get('SLURM_NTASKS', 1))
+    parser.add_argument('--dev_num', type=int, default=None, help='number of examples used for validation')
 
     TableBertConfig.add_args(parser)
 
@@ -161,7 +162,7 @@ def main():
     input_formatter = VanillaTableBertInputFormatter(table_bert_config, tokenizer)
 
     total_tables_num = int(subprocess.check_output(f"wc -l {args.train_corpus}", shell=True).split()[0])
-    dev_table_num = min(int(total_tables_num * 0.1), 100000)
+    dev_table_num = min(int(total_tables_num * 0.1), 100000) if args.dev_num is None else args.dev_num
     train_table_num = total_tables_num - dev_table_num
 
     # seed the RNG to make sure each process follows the same spliting

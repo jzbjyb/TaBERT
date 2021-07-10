@@ -270,7 +270,9 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--mask_value', action='store_true')
         parser.add_argument('--mask_value_column_separate', action='store_true')
         parser.add_argument('--seq2seq_format', type=str,
-                            choices=[None, 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c'],
+                            choices=[None, 'mlm_single-c2v', 'mlm_single-v2c',
+                                     'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
+                                     'qa_firstansrow'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)

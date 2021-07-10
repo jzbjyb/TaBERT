@@ -162,6 +162,7 @@ def main():
 
     train_data_dir = args.data_dir / 'train'
     dev_data_dir = args.data_dir / 'dev'
+    test_data_dir = args.data_dir / 'test'
     if args.multi_gpu and args.local_rank != 0:  # load tokenizer needs barrier
         torch.distributed.barrier()
     table_bert_config = task['config'].from_file(
@@ -274,10 +275,12 @@ def main():
     model.train()
 
     # we also partitation the dev set for every local process
-    logger.info('Loading dev set...')
+    logger.info('Loading dev/test (optional) set...')
     sys.stdout.flush()
     dev_set = dataset_cls(epoch=0, training_path=dev_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
                           multi_gpu=args.multi_gpu, debug=args.debug_dataset)
+    test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
+                           multi_gpu=args.multi_gpu, debug=args.debug_dataset) if test_data_dir.exists() else None
 
     logger.info("***** Running training *****")
     logger.info(f"  Current config: {args}")
@@ -341,14 +344,21 @@ def main():
             # perform validation
             logger.info("** ** * Perform validation ** ** * ")
             dev_results = trainer.validate(dev_set)
+            dev_results['epoch'] = epoch
+            dev_results = {f'dev-{k}': v for k, v in dev_results.items()}
+            test_results = {}
+            if test_data_dir.exists():
+                test_results = trainer.validate(test_set)
+                test_results['epoch'] = epoch
+                test_results = {f'test-{k}': v for k, v in test_results.items()}
 
             if args.is_master:
                 logger.info('** ** * Validation Results ** ** * ')
-                logger.info(f'Epoch {epoch} Validation Results: {dev_results}')
+                logger.info(f'Epoch {epoch} Validation Results: {dev_results}, Test Results: {test_results}')
                 if wandb_run is not None:
-                    dev_results['epoch'] = epoch
-                    dev_results = {f'dev-{k}': v for k, v in dev_results.items()}
                     wandb_run.log(dev_results)
+                    if test_data_dir.exists():
+                        wandb_run.log(test_results)
 
             # flush logging information to disk
             sys.stderr.flush()

@@ -1,8 +1,8 @@
-output_dir=/mnt/root/TaBERT/data/train_data/vanilla_tabert_bart_3merge_seq2seq_maskseparate
-input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_preprocessed.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow
+input_dir=data/wikisql/train/preprocessed_with_ans.jsonl
 additional_row_count=0
 mkdir -p ${output_dir}
-worldsize=5
+worldsize=1
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -28,7 +28,8 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value \
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
-    --seq2seq_format mlm_single-c2v_single-v2c \
-    --global_rank $i &
+    --seq2seq_format qa_firstansrow \
+    --dev_num 0 \
+    --global_rank $i
 done
 wait

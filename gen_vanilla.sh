@@ -1,6 +1,6 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow
+output_dir=~/mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add5
 input_dir=data/wikisql/train/preprocessed_with_ans.jsonl
-additional_row_count=0
+additional_row_count=5
 mkdir -p ${output_dir}
 worldsize=1
 

@@ -6,8 +6,8 @@
 # LICENSE file in the root directory of this source tree.
 
 from math import ceil
-from random import choice, shuffle, sample, random
-from typing import List, Callable, Dict, Any, Union
+from random import choice, shuffle, sample, random, randint
+from typing import List, Callable, Dict, Any, Union, Set
 
 from table_bert.utils import BertTokenizer
 from table_bert.table_bert import MAX_BERT_INPUT_LENGTH, MAX_TARGET_LENGTH
@@ -70,15 +70,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return input, span_map
 
-    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0):
+    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0, shuffle: bool = False):
         row_data = [
             column.sample_value_tokens
             for column in table.header
         ]
 
-        return self.get_row_input(context, table.header, row_data, additional_rows, trim_long_table=trim_long_table)
+        return self.get_row_input(context, table.header, row_data, additional_rows, trim_long_table=trim_long_table, shuffle=shuffle)
 
-    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0):  # none means not trim
+    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0, shuffle: bool = False):  # none means not trim
         max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
@@ -95,7 +95,12 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         column_start_idx = table_tokens_start_idx
 
         ext_header = header * (len(additional_rows) + 1)
-        ext_row_data = row_data + [i for r in additional_rows for i in r]
+        if shuffle and len(additional_rows) > 0:
+            # TODO: min 5 means inserted at the top 5 positions. use a param?
+            additional_rows.insert(randint(0, min(5, len(additional_rows))), row_data)
+            ext_row_data = [i for r in additional_rows for i in r]
+        else:
+            ext_row_data = row_data + [i for r in additional_rows for i in r]
 
         for col_id, column in enumerate(ext_header):
             value_tokens = ext_row_data[col_id]
@@ -183,60 +188,65 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return instance
 
-    def get_a_row(self, example):
-        success = False
+    def get_additional_rows(self, example, sample_num_rows: int, exclude: Set[int]={}):
         additional_rows = []
-        if self.config.additional_row_count > 0 and len(example.column_data) > 0:
-            num_rows = len(example.column_data[0])
-            # get valid rows
-            valid_rows = []
-            for row_idx in range(num_rows):
-                valid = True
-                for col_idx, column in enumerate(example.header):
-                    val = example.column_data[col_idx][row_idx]
-                    if val is None or len(val) == 0:
-                        valid = False
-                        break
-                if valid:
-                    valid_rows.append(row_idx)
-            # sample additional_row_count + 1 rows
-            sampled_rows = sample(valid_rows, min(len(valid_rows), self.config.additional_row_count + 1))
-            if len(sampled_rows) > 0:
-                success = True
-                # the first sampled row is the main row to be masked
-                # the other rows are additional rows used as context
-                additional_rows = [[] for _ in range(len(sampled_rows) - 1)]
-                for col_idx, column in enumerate(example.header):
-                    sampled_value = example.column_data[col_idx][sampled_rows[0]]
-                    sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
-                    column.sample_value_tokens = sampled_value_tokens
-                    for i, row_idx in enumerate(sampled_rows[1:]):
-                        additional_rows[i].append(self.tokenizer.tokenize(example.column_data[col_idx][row_idx]))
+        if len(example.column_data) <= 0 or sample_num_rows <= 0:  # no data or no sample
+            return additional_rows
 
-        answer = None
-        if not success:
-            if 'firstansrow' in self.config.seq2seq_format:  # use the first answer
-                answer = example.answers[0]
-                ans_coord = example.answer_coordinates[0] if len(example.answer_coordinates) > 0 else None
+        # get valid rows
+        num_rows = len(example.column_data[0])
+        valid_rows = []
+        for row_idx in range(num_rows):
+            if row_idx in exclude:
+                continue
+            valid = True
             for col_idx, column in enumerate(example.header):
-                if 'firstansrow' in self.config.seq2seq_format and ans_coord is not None:
-                    # use the row that contains the first answer
-                    # if ans_coord does not exist, go to the following conditions
-                    sampled_value = example.column_data[col_idx][ans_coord[0]]
-                elif self.config.use_sampled_value:
-                    sampled_value = column.sample_value
-                else:
-                    col_values = example.column_data[col_idx]
-                    col_values = [val for val in col_values if val is not None and len(val) > 0]
-                    sampled_value = choice(col_values) if len(col_values) > 0 else ''
+                val = example.column_data[col_idx][row_idx]
+                if val is None or len(val) == 0:
+                    valid = False
+                    break
+            if valid:
+                valid_rows.append(row_idx)
 
-                if sampled_value is None or len(sampled_value) <= 0:
-                    # use a special symbol if this column is empty
-                    sampled_value = '-'
+        # sample sample_num_rows rows
+        sampled_rows = sample(valid_rows, min(len(valid_rows), sample_num_rows))
+        additional_rows = [[] for _ in range(len(sampled_rows))]
+        for col_idx, column in enumerate(example.header):
+            for i, row_idx in enumerate(sampled_rows):
+                additional_rows[i].append(self.tokenizer.tokenize(example.column_data[col_idx][row_idx]))
+        return additional_rows
 
-                # print('chosen value', sampled_value)
-                sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
-                column.sample_value_tokens = sampled_value_tokens
+    def get_a_row(self, example):
+        additional_rows = []
+        answer = None
+        if 'firstansrow' in self.config.seq2seq_format:  # use the first answer
+            answer = example.answers[0]
+            ans_coord = example.answer_coordinates[0] if len(example.answer_coordinates) > 0 else None
+            exclude = {} if ans_coord is None else {ans_coord[0]}
+            if self.config.additional_row_count:
+                additional_rows = self.get_additional_rows(example, self.config.additional_row_count, exclude=exclude)
+        elif self.config.additional_row_count:
+            raise NotImplementedError
+
+        for col_idx, column in enumerate(example.header):
+            if 'firstansrow' in self.config.seq2seq_format and ans_coord is not None:
+                # use the row that contains the first answer
+                # if ans_coord does not exist, go to the following conditions
+                sampled_value = example.column_data[col_idx][ans_coord[0]]
+            elif self.config.use_sampled_value:
+                sampled_value = column.sample_value
+            else:
+                col_values = example.column_data[col_idx]
+                col_values = [val for val in col_values if val is not None and len(val) > 0]
+                sampled_value = choice(col_values) if len(col_values) > 0 else ''
+
+            if sampled_value is None or len(sampled_value) <= 0:
+                # use a special symbol if this column is empty
+                sampled_value = '-'
+
+            # print('chosen value', sampled_value)
+            sampled_value_tokens = self.tokenizer.tokenize(sampled_value)
+            column.sample_value_tokens = sampled_value_tokens
 
         return additional_rows, answer
 
@@ -267,7 +277,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 if 'single' in self.config.seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
                 if 'qa' in self.config.seq2seq_format:
-                    instances.extend(self.create_qa_instances(context, example.header, answer))
+                    instances.extend(self.create_qa_instances(context, example.header, answer, additional_rows))
 
             if 'qa' in self.config.seq2seq_format:  # for qa format, do not iterative over context (i.e., question)
                 break
@@ -324,10 +334,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 instances.append(self._add_single_head(raw_tokens, vtokens, target_tokens, seq_a_len))
         return instances
 
-    def create_qa_instances(self, context, header: List[Column], answer: str):
+    def create_qa_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
         # context + table without mask
         table = Table('fake_table', header)
-        instance = self.get_input(context, table)
+        instance = self.get_input(context, table, additional_rows, shuffle=True)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # answer as target

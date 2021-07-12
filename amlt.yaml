@@ -285,3 +285,13 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow
     /mnt/root/TaBERT/data/runs/bart_wikisql_qa seq2seq 24 10
+- name: bart_wikisql_qa_add5
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add5
+    /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add5 seq2seq 24 10

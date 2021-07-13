@@ -142,6 +142,7 @@ def main():
     parser.add_argument('--no_wiki_tables_from_common_crawl', action='store_true', default=False)
     parser.add_argument('--global_rank', type=int, default=os.environ.get('SLURM_PROCID', 0))
     parser.add_argument('--world_size', type=int, default=os.environ.get('SLURM_NTASKS', 1))
+    parser.add_argument('--no_shuffle', action='store_true')
     parser.add_argument('--dev_num', type=int, default=None, help='number of examples used for validation')
 
     TableBertConfig.add_args(parser)
@@ -169,7 +170,8 @@ def main():
     rng = np.random.RandomState(seed=5783287)
 
     corpus_table_indices = list(range(total_tables_num))
-    rng.shuffle(corpus_table_indices)
+    if not args.no_shuffle:
+        rng.shuffle(corpus_table_indices)
     dev_table_indices = corpus_table_indices[:dev_table_num]
     train_table_indices = corpus_table_indices[dev_table_num:]
 

@@ -118,6 +118,7 @@ def parse_train_arg():
                         help='how often to clear the PyTorch CUDA cache (0 to disable)')
     parser.add_argument('--save-checkpoint-every-niter', default=10000, type=int)
     parser.add_argument('--log-every-niter', default=100, type=int)
+    parser.add_argument('--only_test', action='store_true')
 
     FairseqAdam.add_args(parser)
     PolynomialDecaySchedule.add_args(parser)
@@ -172,18 +173,19 @@ def main():
 
     if args.is_master:
         args.output_dir.mkdir(exist_ok=True, parents=True)
-        with (args.output_dir / 'train_config.json').open('w') as f:
-            json.dump(vars(args), f, indent=2, sort_keys=True, default=str)
+        if not args.only_test:
+            with (args.output_dir / 'train_config.json').open('w') as f:
+                json.dump(vars(args), f, indent=2, sort_keys=True, default=str)
 
-        logger.info(f'Table Bert Config: {table_bert_config.to_log_string()}')
+            logger.info(f'Table Bert Config: {table_bert_config.to_log_string()}')
 
-        # copy the table bert config file to the working directory
-        # shutil.copy(args.data_dir / 'config.json', args.output_dir / 'tb_config.json')
-        # save table BERT config
-        table_bert_config.save(args.output_dir / 'tb_config.json')
+            # copy the table bert config file to the working directory
+            # shutil.copy(args.data_dir / 'config.json', args.output_dir / 'tb_config.json')
+            # save table BERT config
+            table_bert_config.save(args.output_dir / 'tb_config.json')
 
     wandb_run = None
-    if args.is_master:
+    if args.is_master and not args.only_test:
         wandb_run = wandb.init(entity=args.entity, project=args.project, name=args.name)
 
     assert args.data_dir.is_dir(), \
@@ -251,19 +253,21 @@ def main():
         torch.save(model_ptr.state_dict(), str(args.output_dir / 'model.bin'))
         exit()
 
-    # set up update parameters for LR scheduler
     dataset_cls = task['dataset']
 
-    train_set_info = dataset_cls.get_dataset_info(train_data_dir, args.max_epoch)
-    total_num_updates = train_set_info['total_size'] // args.train_batch_size // args.world_size // args.gradient_accumulation_steps
-    args.max_epoch = train_set_info['max_epoch']
-    logger.info(f'Train data size: {train_set_info["total_size"]} for {args.max_epoch} epochs, total num. updates: {total_num_updates}')
+    if not args.only_test:
+        # set up update parameters for LR scheduler
+        train_set_info = dataset_cls.get_dataset_info(train_data_dir, args.max_epoch)
+        total_num_updates = train_set_info['total_size'] // args.train_batch_size // args.world_size // args.gradient_accumulation_steps
+        args.max_epoch = train_set_info['max_epoch']
+        logger.info(f'Train data size: {train_set_info["total_size"]} for {args.max_epoch} epochs, total num. updates: {total_num_updates}')
+        args.total_num_update = total_num_updates
+        args.warmup_updates = int(total_num_updates * 0.1)
+    else:
+        args.total_num_update = args.warmup_updates = 0
 
-    args.total_num_update = total_num_updates
-    args.warmup_updates = int(total_num_updates * 0.1)
-
+    # init trainer
     trainer = Trainer(model, args)
-
     checkpoint_file = args.output_dir / 'model.ckpt.bin'
     is_resumed = False
     # trainer.save_checkpoint(checkpoint_file)
@@ -271,7 +275,6 @@ def main():
         logger.info(f'Logging checkpoint file {checkpoint_file}')
         is_resumed = True
         trainer.load_checkpoint(checkpoint_file)
-
     model.train()
 
     # we also partitation the dev set for every local process
@@ -281,6 +284,10 @@ def main():
                           multi_gpu=args.multi_gpu, debug=args.debug_dataset)
     test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
                            multi_gpu=args.multi_gpu, debug=args.debug_dataset) if test_data_dir.exists() else None
+
+    if args.only_test:
+        trainer.generate(test_set)
+        exit()
 
     logger.info("***** Running training *****")
     logger.info(f"  Current config: {args}")
@@ -300,9 +307,11 @@ def main():
             epoch_dataset = dataset_cls(epoch=trainer.epoch, training_path=train_data_dir, config=table_bert_config,
                                         tokenizer=model_ptr.tokenizer, multi_gpu=args.multi_gpu, debug=args.debug_dataset)
             train_sampler = RandomSampler(epoch_dataset)
-            train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=real_batch_size,
-                                          num_workers=0,
-                                          collate_fn=partial(epoch_dataset.collate, pad_id=table_bert_config.pad_id))
+            train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=real_batch_size, num_workers=0,
+                                          collate_fn=partial(
+                                              epoch_dataset.collate,
+                                              pad_id=table_bert_config.pad_id,
+                                              sep_id=table_bert_config.sep_id))
 
         samples_iter = GroupedIterator(iter(train_dataloader), args.gradient_accumulation_steps)
         trainer.resume_batch_loader(samples_iter)

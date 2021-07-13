@@ -156,10 +156,14 @@ class TableBertConfig(SimpleNamespace):
         self.load_model_from = load_model_from
         self.model_type = self.check_model_type(base_model_name)
         self.use_electra = self.model_type == ModelType.ELECTRA
+
+        self.tokenizer_cls = MODEL2TOKENIZER[self.model_type]
+
         self.column_delimiter = column_delimiter
         if column_delimiter == '[SEP]':  # model-dependent delimiter
             self.column_delimiter = MODEL2SEP[self.model_type]
         self.sep_token = MODEL2SEP[self.model_type]
+        self.sep_id = self.tokenizer_cls.from_pretrained(self.base_model_name).convert_tokens_to_ids([self.sep_token])[0]
         self.cls_token = MODEL2CLS[self.model_type]
         self.mask_token = MODEL2MASK[self.model_type]
         self.pad_id = MODEL2PADID[self.model_type]
@@ -181,8 +185,6 @@ class TableBertConfig(SimpleNamespace):
 
         self.do_lower_case = do_lower_case
 
-        self.tokenizer_cls = MODEL2TOKENIZER[self.model_type]
-        # tokenizer = BertTokenizer.from_pretrained(self.base_model_name)
         if isinstance(cell_input_template, str):
             if ' ' in cell_input_template:
                 cell_input_template = cell_input_template.split(' ')

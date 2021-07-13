@@ -197,20 +197,31 @@ class Trainer(object):
             # exit(0)
 
     def validate(self, dataset):
+        model = self.model.module if isinstance(self.model, nn.parallel.DistributedDataParallel) else self.model
+        config = model.config
         def collate_fn(x):
-            return self.prepare_sample(dataset.collate(x))
-
+            return self.prepare_sample(dataset.collate(x, pad_id=config.pad_id, sep_id=config.sep_id))
         data_loader = DataLoader(
             dataset,
             batch_size=self.args.train_batch_size * 2, sampler=SequentialSampler(dataset),
             collate_fn=collate_fn
         )
-
-        model = self.model.module if isinstance(self.model, nn.parallel.DistributedDataParallel) else self.model
-
         valid_result = model.validate(data_loader, self.args)
 
         return valid_result
+
+    def generate(self, dataset):
+        model = self.model.module if isinstance(self.model, nn.parallel.DistributedDataParallel) else self.model
+        config = model.config
+        def collate_fn(x):
+            return self.prepare_sample(dataset.collate(x, pad_id=config.pad_id, sep_id=config.sep_id))
+        data_loader = DataLoader(
+            dataset,
+            batch_size=self.args.train_batch_size * 2, sampler=SequentialSampler(dataset),
+            collate_fn=collate_fn
+        )
+        gen_result = model.generate(data_loader, self.args)
+        return gen_result
 
     def save_checkpoint(self, ckpt_file: Path):
         if self.args.is_master:

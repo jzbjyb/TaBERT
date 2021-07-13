@@ -9,6 +9,7 @@ epochs=$5
 name="$(basename -- $output_dir)"
 echo '==========' ${name} '=========='
 gradac=1
+load=$6
 
 # activate env if needed
 if [[ "$PATH" == *"tabert"* ]]; then
@@ -36,7 +37,7 @@ python train.py \
     --task vanilla \
     --data-dir ${input_dir} \
     --output-dir ${output_dir} \
-    --table-bert-extra-config '{"objective_function": "'${loss}'"}' \
+    --table-bert-extra-config '{"objective_function": "'${loss}'", "load_model_from": '${load}'}' \
     --train-batch-size ${batchsize} \
     --gradient-accumulation-steps ${gradac} \
     --learning-rate 2e-5 \

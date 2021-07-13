@@ -10,6 +10,9 @@ import csv
 
 
 class WikiSQL(object):
+    AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
+    COND_OPS = ['=', '>', '<', 'OP']
+
     def __init__(self, root_dir: Path):
         for split in ['train', 'dev', 'test']:
             setattr(self, f'{split}_data', self.load(root_dir / f'{split}.jsonl', root_dir / f'{split}.tables.jsonl'))

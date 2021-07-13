@@ -78,32 +78,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return self.get_row_input(context, table.header, row_data, additional_rows, trim_long_table=trim_long_table, shuffle=shuffle)
 
-    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0, shuffle: bool = False):  # none means not trim
-        max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
-        if self.config.context_first:
-            table_tokens_start_idx = len(context) + 2  # account for cls and sep
-            # account for cls and sep, and the ending sep
-            max_table_token_length = max_total_len - len(context) - 2 - 1
-        else:
-            table_tokens_start_idx = 1  # account for starting cls
-            # account for cls and sep, and the ending sep
-            max_table_token_length = max_total_len - len(context) - 2 - 1
-
-        # generate table tokens
+    def _concate_cells(self, header: List, row_data: List, table_tokens_start_idx: int, trim_long_table: int, max_table_token_length: int):
         row_input_tokens = []
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
 
-        ext_header = header * (len(additional_rows) + 1)
-        if shuffle and len(additional_rows) > 0:
-            # TODO: min 5 means inserted at the top 5 positions. use a param?
-            additional_rows.insert(randint(0, min(5, len(additional_rows))), row_data)
-            ext_row_data = [i for r in additional_rows for i in r]
-        else:
-            ext_row_data = row_data + [i for r in additional_rows for i in r]
-
-        for col_id, column in enumerate(ext_header):
-            value_tokens = ext_row_data[col_id]
+        col_id = 0
+        for col_id, column in enumerate(header):
+            value_tokens = row_data[col_id]
             truncated_value_tokens = value_tokens[:self.config.max_cell_len]
 
             column_input_tokens, token_span_map = self.get_cell_input(
@@ -153,6 +135,35 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             column_token_span_maps.append(token_span_map)
 
             if early_stop: break
+
+        return row_input_tokens, column_token_span_maps, col_id
+
+    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0, shuffle: bool = False):  # none means not trim
+        max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
+        if self.config.context_first:
+            table_tokens_start_idx = len(context) + 2  # account for cls and sep
+            # account for cls and sep, and the ending sep
+            max_table_token_length = max_total_len - len(context) - 2 - 1
+        else:
+            table_tokens_start_idx = 1  # account for starting cls
+            # account for cls and sep, and the ending sep
+            max_table_token_length = max_total_len - len(context) - 2 - 1
+
+        # generate table tokens
+        ext_header = header * (len(additional_rows) + 1)
+        if shuffle and len(additional_rows) > 0:
+            # try to see how many rows can fit into the max length
+            _, _, col_id = self._concate_cells(
+                header * len(additional_rows), [i for r in additional_rows for i in r], table_tokens_start_idx=table_tokens_start_idx,
+                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length)
+            num_fit_rows = col_id // len(header)
+            additional_rows.insert(randint(0, max(num_fit_rows - 1, 0)), row_data)
+            ext_row_data = [i for r in additional_rows for i in r]
+        else:
+            ext_row_data = row_data + [i for r in additional_rows for i in r]
+
+        row_input_tokens, column_token_span_maps, col_id = self._concate_cells(
+            ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table, max_table_token_length=max_table_token_length)
 
         # it is possible that the first cell to too long and cannot fit into `max_table_token_length`
         # we need to discard this sample

@@ -1,5 +1,6 @@
 output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
 input_dir=data/wikitablequestions/train/preprocessed_with_ans.jsonl
+# --no_shuffle is needed for dev/test
 additional_row_count=30
 mkdir -p ${output_dir}
 worldsize=1
@@ -28,6 +29,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value \
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
+    --not_skip_empty_column_name \
     --seq2seq_format qa_firstansrow \
     --dev_num 0 \
     --global_rank $i &

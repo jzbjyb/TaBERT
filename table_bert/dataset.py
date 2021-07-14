@@ -694,6 +694,7 @@ class TableDatabase:
         num_workers=None,
         indices=None,
         skip_column_name_longer_than: int=10,
+        not_skip_empty_column_name: bool=False
     ) -> 'TableDatabase':
         file_path = Path(file_path)
 
@@ -717,7 +718,10 @@ class TableDatabase:
                         suffix=None
                     )
 
-                    if TableDatabase.is_valid_example(example, skip_column_name_longer_than=skip_column_name_longer_than):
+                    if TableDatabase.is_valid_example(
+                            example,
+                            skip_column_name_longer_than=skip_column_name_longer_than,
+                            not_skip_empty_column_name=not_skip_empty_column_name):
                         example_store[idx] = example
                         
             db.__example_store = example_store
@@ -803,13 +807,16 @@ class TableDatabase:
             self.client.flushall()
 
     @classmethod
-    def is_valid_example(cls, example, skip_column_name_longer_than: int = 10):
+    def is_valid_example(cls,
+                         example,
+                         skip_column_name_longer_than: int = 10,
+                         not_skip_empty_column_name: bool = False):
         # TODO: move this to preprocess pre-processing
         if skip_column_name_longer_than > 0:
             if any(len(col.name.split(' ')) > skip_column_name_longer_than for col in example.header):
                 return False
 
-        if any(len(col.name_tokens) == 0 for col in example.header):
+        if not not_skip_empty_column_name and any(len(col.name_tokens) == 0 for col in example.header):
             return False
 
         return True

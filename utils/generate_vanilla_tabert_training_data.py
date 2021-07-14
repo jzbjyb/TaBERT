@@ -184,7 +184,8 @@ def main():
     logger.debug(f'local train table indices: {local_train_table_indices[:1000]}')
 
     with TableDatabase.from_jsonl(args.train_corpus, backend='memory', tokenizer=tokenizer, indices=local_indices,
-                                  skip_column_name_longer_than=table_bert_config.skip_column_name_longer_than) as table_db:
+                                  skip_column_name_longer_than=table_bert_config.skip_column_name_longer_than,
+                                  not_skip_empty_column_name=table_bert_config.not_skip_empty_column_name) as table_db:
         local_indices = {idx for idx in local_indices if idx in table_db}
         local_dev_table_indices = [idx for idx in local_dev_table_indices if idx in local_indices]
         local_train_table_indices = [idx for idx in local_train_table_indices if idx in local_indices]

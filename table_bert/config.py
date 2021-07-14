@@ -146,6 +146,7 @@ class TableBertConfig(SimpleNamespace):
         mask_value_column_separate: bool = False,
         max_column_len: int = None,
         skip_column_name_longer_than: int = None,
+        not_skip_empty_column_name: bool = False,
         only_table: bool = False,
         seq2seq_format: str = None,
         **kwargs
@@ -212,6 +213,7 @@ class TableBertConfig(SimpleNamespace):
         self.mask_value_column_separate = mask_value_column_separate
         self.mask_value = mask_value or additional_row_count > 0 or mask_value_column_separate
         self.skip_column_name_longer_than = skip_column_name_longer_than
+        self.not_skip_empty_column_name = not_skip_empty_column_name
         self.only_table = only_table
         self.seq2seq_format = seq2seq_format
 
@@ -254,6 +256,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument("--max_cell_len", type=int, default=5)
         parser.add_argument("--max_column_len", type=int, default=None)
         parser.add_argument("--skip_column_name_longer_than", type=int, default=10)
+        parser.add_argument("--not_skip_empty_column_name", action='store_true')
 
         parser.add_argument("--masked_context_prob", type=float, default=0.15,
                             help="Probability of masking each token for the LM task")

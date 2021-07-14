@@ -1,5 +1,5 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
-input_dir=data/wikisql/train/preprocessed_with_ans.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
+input_dir=data/wikitablequestions/train/preprocessed_with_ans.jsonl
 additional_row_count=30
 mkdir -p ${output_dir}
 worldsize=1
@@ -11,7 +11,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 20 \
+    --epochs_to_generate 10 \
     --max_context_len 128 \
     --max_column_len 15 \
     --max_cell_len 15 \
@@ -30,6 +30,6 @@ for (( i=0; i<${worldsize}; ++i)); do
     --skip_column_name_longer_than 0 \
     --seq2seq_format qa_firstansrow \
     --dev_num 0 \
-    --global_rank $i
+    --global_rank $i &
 done
 wait

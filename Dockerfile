@@ -39,3 +39,10 @@ RUN pip install -r /tmp/scripts/requirements_electra.txt
 
 # wandb
 RUN pip install wandb==0.10.33
+
+# TAPAS
+#RUN apt-get -y install protobuf-compiler
+#COPY requirements_tapas.txt /tmp/scripts/.
+#RUN pip install -r /tmp/scripts/requirements_tapas.txt
+#RUN conda install cudatoolkit=10.1
+#RUN conda install -c anaconda cudnn=7.6.5

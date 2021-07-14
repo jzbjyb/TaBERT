@@ -6,9 +6,10 @@ from collections import defaultdict
 import random
 from tqdm import tqdm
 import numpy as np
+from table_bert.dataset_utils import BasicDataset
 
 
-class Totto(object):
+class Totto(BasicDataset):
     def __init__(self, root_dir: Path):
         self.train_data = self.load(root_dir / 'totto_train_data.jsonl')
         self.dev_data = self.load(root_dir / 'totto_dev_data.jsonl')
@@ -28,16 +29,6 @@ class Totto(object):
             'row_span': 1,
             'value': '',
         }
-
-    @staticmethod
-    def is_number(s):
-        if s is None:
-            return False
-        try:
-            float(s)
-            return True
-        except ValueError:
-            return False
 
     @staticmethod
     def is_valid_cell(cell):

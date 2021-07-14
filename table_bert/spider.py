@@ -8,9 +8,10 @@ from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 from table_bert import Table, Column
+from table_bert.dataset_utils import BasicDataset
 
 
-class Spider(object):
+class Spider(BasicDataset):
     def __init__(self, root_dir: Path):
         self.train_file = root_dir / 'train_spider.json'
         self.dev_file = root_dir / 'dev.json'

@@ -5,9 +5,10 @@ from collections import defaultdict
 import random
 from tqdm import tqdm
 import csv
+from table_bert.dataset_utils import BasicDataset
 
 
-class TableFact(object):
+class TableFact(BasicDataset):
     def __init__(self, root_dir: Path):
         self.table_dir = root_dir / 'all_csv'
         self.full_data = self.load(root_dir / 'full_cleaned.json')
@@ -16,16 +17,6 @@ class TableFact(object):
         with open(example_file, 'r') as fin:
             data = json.load(fin)
             return data
-
-    @staticmethod
-    def is_number(s):
-        if s is None:
-            return False
-        try:
-            float(s)
-            return True
-        except ValueError:
-            return False
 
     @staticmethod
     def get_table(filename: str):

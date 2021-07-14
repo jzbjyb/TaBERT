@@ -5,11 +5,12 @@ import random
 from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
+from table_bert.wikitablequestions import WikiTQ
 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact'])
+    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wikitq'])
     parser.add_argument('--path', type=Path, required=True)
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
@@ -32,6 +33,19 @@ def main():
         tf = TableFact(args.path)
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         tf.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed.jsonl')
+    elif args.data == 'wikitq':
+        wtq = WikiTQ(args.path)
+        os.makedirs(args.output_dir / args.split, exist_ok=True)
+        wtq.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed.jsonl')
+        split2file = {
+            'train': 'random-split-5-train.tsv',
+            'dev': 'random-split-5-dev.tsv',
+            'test': 'test.tsv'
+        }
+        WikiTQ.add_answer(args.output_dir / args.split / 'preprocessed.jsonl',
+                          args.output_dir / 'converted' / split2file[args.split],
+                          args.output_dir / args.split / 'preprocessed_with_ans.jsonl',
+                          string_match=True)
     else:
         raise NotImplementedError
 

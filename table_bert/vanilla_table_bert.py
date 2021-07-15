@@ -12,7 +12,7 @@ from typing import List, Any, Tuple, Dict
 import numpy as np
 from fairseq import distributed_utils
 from tqdm import tqdm
-
+import json
 import torch
 from torch.nn import CrossEntropyLoss
 from torch_scatter import scatter_max, scatter_mean
@@ -502,17 +502,46 @@ class VanillaTableBert(TableBertModel):
 
         return stats
 
+    def evaluate(self, data_loader, args):
+        output_file = 'evaluation.jsonl' if args.output_file is None else args.output_file
+        was_training = self.training
+        self.eval()
+
+        results: List[Dict] = []
+        with torch.no_grad(), open(args.output_dir / output_file, 'w') as fout:
+            with tqdm(total=len(data_loader), desc='Evaluation', file=sys.stdout) as pbar:
+                for step, batch in enumerate(data_loader):
+                    src_ids, src_mask = batch['input_ids'], batch['attention_mask']
+                    tgt_ids = batch['target_input_ids']
+                    decoder_input_ids = shift_tokens_right(tgt_ids, self.config.pad_id)
+                    logits = self._bart(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids,
+                                        use_cache=False, return_dict=True).logits
+                    pred_ids = logits.max(-1)[1]
+                    gold_ids = batch['masked_lm_labels']
+                    for tgt_id, pred_id, gold_id in zip(tgt_ids, pred_ids, gold_ids):
+                        tgt = self.tokenizer.convert_ids_to_tokens(tgt_id)
+                        pred = self.tokenizer.convert_ids_to_tokens(pred_id)
+                        gold = self.tokenizer.convert_ids_to_tokens(gold_id)
+                        result = {'tgt': tgt, 'pred': pred, 'gold': gold}
+                        results.append(result)
+                        fout.write(json.dumps(result) + '\n')
+                    pbar.update(1)
+
+        if was_training:
+            self.train()
+
     def generate(self, data_loader, args):
+        output_file = 'generations.txt' if args.output_file is None else args.output_file
         was_training = self.training
         self.eval()
 
         results: List[str] = []
-        with torch.no_grad(), open(args.output_dir / 'generations.txt', 'w') as fout:
+        with torch.no_grad(), open(args.output_dir / output_file, 'w') as fout:
             with tqdm(total=len(data_loader), desc='Generation', file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
                     target_ids = self._bart.generate(
                         batch['input_ids'], attention_mask=batch['attention_mask'],
-                        num_beams=5, max_length=20, early_stopping=True)
+                        num_beams=args.num_beams, max_length=args.max_generate_length, early_stopping=True)
                     gold_ids = batch['target_input_ids']
                     for input_id, target_id, gold_id in zip(batch['input_ids'], target_ids, gold_ids):
                         source = self.tokenizer.decode(input_id, skip_special_tokens=False).replace('\n', '\\n')

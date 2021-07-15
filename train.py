@@ -118,7 +118,13 @@ def parse_train_arg():
                         help='how often to clear the PyTorch CUDA cache (0 to disable)')
     parser.add_argument('--save-checkpoint-every-niter', default=10000, type=int)
     parser.add_argument('--log-every-niter', default=100, type=int)
+
+    # test details
     parser.add_argument('--only_test', action='store_true')
+    parser.add_argument('--mode', type=str, choices=['generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev'], default='generate-test')
+    parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
+    parser.add_argument('--max_generate_length', type=int, default=20, help='max number of tokens generated for the generate mode')
+    parser.add_argument('--output_file', type=str, default=None)
 
     FairseqAdam.add_args(parser)
     PolynomialDecaySchedule.add_args(parser)
@@ -268,14 +274,6 @@ def main():
 
     # init trainer
     trainer = Trainer(model, args)
-    checkpoint_file = args.output_dir / 'model.ckpt.bin'
-    is_resumed = False
-    # trainer.save_checkpoint(checkpoint_file)
-    if checkpoint_file.exists():
-        logger.info(f'Logging checkpoint file {checkpoint_file}')
-        is_resumed = True
-        trainer.load_checkpoint(checkpoint_file)
-    model.train()
 
     # we also partitation the dev set for every local process
     logger.info('Loading dev/test (optional) set...')
@@ -286,8 +284,22 @@ def main():
                            multi_gpu=args.multi_gpu, debug=args.debug_dataset) if test_data_dir.exists() else None
 
     if args.only_test:
-        trainer.generate(test_set)
+        mode, which_part = args.mode.split('-')
+        if which_part == 'test':
+            trainer.test(test_set, mode=mode)
+        elif which_part == 'dev':
+            trainer.test(dev_set, mode=mode)
         exit()
+
+    # load checkpoint
+    checkpoint_file = args.output_dir / 'model.ckpt.bin'
+    is_resumed = False
+    # trainer.save_checkpoint(checkpoint_file)
+    if checkpoint_file.exists():
+        logger.info(f'Logging checkpoint file {checkpoint_file}')
+        is_resumed = True
+        trainer.load_checkpoint(checkpoint_file)
+    model.train()
 
     logger.info("***** Running training *****")
     logger.info(f"  Current config: {args}")

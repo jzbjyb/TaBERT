@@ -210,7 +210,7 @@ class Trainer(object):
 
         return valid_result
 
-    def generate(self, dataset):
+    def test(self, dataset, mode: str='generate'):
         model = self.model.module if isinstance(self.model, nn.parallel.DistributedDataParallel) else self.model
         config = model.config
         def collate_fn(x):
@@ -220,8 +220,13 @@ class Trainer(object):
             batch_size=self.args.train_batch_size * 2, sampler=SequentialSampler(dataset),
             collate_fn=collate_fn
         )
-        gen_result = model.generate(data_loader, self.args)
-        return gen_result
+        if mode == 'generate':
+            result = model.generate(data_loader, self.args)
+        elif mode == 'evaluate':
+            result = model.evaluate(data_loader, self.args)
+        else:
+            raise NotImplementedError
+        return result
 
     def save_checkpoint(self, ckpt_file: Path):
         if self.args.is_master:

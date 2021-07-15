@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import Dict, Union, Set
 from enum import Enum
 
-from table_bert.utils import BertTokenizer, ElectraTokenizer, BertConfig, ElectraConfig, \
+from table_bert.utils import BertTokenizerWrapper, ElectraTokenizer, BertConfig, ElectraConfig, \
     RobertaTokenizer, RobertaConfig, BartConfig, BartTokenizerWrapper
 
 
@@ -81,7 +81,7 @@ class ModelType(Enum):
 
 
 MODEL2TOKENIZER = {
-    ModelType.BERT: BertTokenizer,
+    ModelType.BERT: BertTokenizerWrapper,
     ModelType.ELECTRA: ElectraTokenizer,
     ModelType.RoBERTa: RobertaTokenizer,
     ModelType.BART: BartTokenizerWrapper,
@@ -277,7 +277,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--seq2seq_format', type=str,
                             choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c',
                                      'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
-                                     'qa_firstansrow'],
+                                     'qa_firstansrow', 'sql'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)

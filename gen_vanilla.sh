@@ -1,7 +1,7 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
-input_dir=data/wikitablequestions/train/preprocessed_with_ans.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wikisql_sql_bart
+input_dir=data/wikisql/train/preprocessed_with_sql.jsonl
 # --no_shuffle is needed for dev/test
-additional_row_count=30
+additional_row_count=0
 mkdir -p ${output_dir}
 worldsize=1
 
@@ -30,7 +30,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format qa_firstansrow \
+    --seq2seq_format sql \
     --dev_num 0 \
     --global_rank $i &
 done

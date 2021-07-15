@@ -1,12 +1,10 @@
 from typing import List, Dict
 import json
 from pathlib import Path
-from collections import defaultdict
 import random
 from tqdm import tqdm
 import re
 import logging
-import csv
 from table_bert.dataset_utils import BasicDataset
 
 
@@ -33,10 +31,19 @@ class WikiSQL(BasicDataset):
         return data
 
     @staticmethod
+    def convert_to_human_readable(sel, agg, columns, conditions):
+        # Make SQL query string. Based on https://github.com/salesforce/WikiSQL/blob/c2ed4f9b22db1cc2721805d53e6e76e07e2ccbdc/lib/query.py#L10
+        rep = 'SELECT {agg} {sel} FROM table'.format(
+            agg=WikiSQL.AGG_OPS[agg], sel=columns[sel] if columns is not None else 'col{}'.format(sel))
+        if conditions:
+            rep += ' WHERE ' + ' AND '.join(['{} {} {}'.format(columns[i], WikiSQL.COND_OPS[o], v) for i, o, v in conditions])
+        return ' '.join(rep.split())
+
+    @staticmethod
     def normalize_rows(rows: List[List]):
         return [[str(cell).replace(' ,', ',') for cell in row] for row in rows]
 
-    def convert_to_tabert_format(self, split: str, output_path: Path):
+    def convert_to_tabert_format(self, split: str, output_path: Path, add_sql: bool = False):
         count = num_rows = num_cols = num_used_cols = 0
         data = getattr(self, '{}_data'.format(split))
         all_types = set()
@@ -95,6 +102,11 @@ class WikiSQL(BasicDataset):
                     else:
                         td['table']['header'][col_ind]['sample_value']['value'] = value
                         td['table']['header'][col_ind]['value_used'] = True
+
+                if add_sql:  # extract sql
+                    td['sql'] = self.convert_to_human_readable(
+                        sql['sel'], sql['agg'], example['table']['header'], sql['conds'])
+
                 count += 1
                 fout.write(json.dumps(td) + '\n')
         print('total count {}, used columns {}/{}'.format(count, num_used_cols, num_cols))

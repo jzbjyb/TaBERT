@@ -385,3 +385,37 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
     /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_mlm seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20/pytorch_model_epoch19.bin"'
+
+# wikisql sql
+- name: bart_wikisql_sql
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_sql_bart
+    /mnt/root/TaBERT/data/runs/bart_wikisql_sql seq2seq 24 10 null
+- name: bart_wikisql_sql_pretrain_seq2seq
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_sql_bart
+    /mnt/root/TaBERT/data/runs/bart_wikisql_sql_pretrain_seq2seq seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_onlytable_ep5/pytorch_model_epoch04.bin"'
+- name: bart_wikisql_sql_pretrain_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_sql_bart
+    /mnt/root/TaBERT/data/runs/bart_wikisql_sql_pretrain_mlm seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20/pytorch_model_epoch19.bin"'

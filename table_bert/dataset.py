@@ -425,7 +425,7 @@ class TableDataset(Dataset):
 
 class Example(object):
     def __init__(self, uuid, header, context, column_data=None, is_positive=True,
-                 answer_coordinates: List[Tuple[int, int]]=None, answers: List[str]=None, **kwargs):
+                 answer_coordinates: List[Tuple[int, int]]=None, answers: List[str]=None, sql: str=None, **kwargs):
         self.uuid = uuid
         self.header = header
         self.context = context
@@ -433,6 +433,7 @@ class Example(object):
         self.is_positive = is_positive
         self.answer_coordinates = answer_coordinates
         self.answers = answers
+        self.sql = sql
 
         for key, val in kwargs.items():
             setattr(self, key, val)
@@ -446,7 +447,8 @@ class Example(object):
             'is_positive': self.is_positive,
             'header': [x.to_dict() for x in self.header],
             'answer_coordinates': self.answer_coordinates,
-            'answers': self.answers
+            'answers': self.answers,
+            'sql': self.sql,
         }
 
         return example
@@ -546,6 +548,7 @@ class Example(object):
 
         answer_coordinates = entry['answer_coordinates'] if 'answer_coordinates' in entry else None
         answers = entry['answers'] if 'answers' in entry else None
+        sql = entry['sql'] if 'sql' in entry else None
 
         return cls(uuid, header,
                    [context_before, context_after],
@@ -553,7 +556,8 @@ class Example(object):
                    source=source,
                    is_positive=is_positive,
                    answer_coordinates=answer_coordinates,
-                   answers=answers)
+                   answers=answers,
+                   sql=sql)
 
 
 class TableDatabase:

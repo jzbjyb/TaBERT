@@ -143,6 +143,21 @@ class VanillaTableBert(TableBertModel):
         total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
 
+    def evaluate_bert(self, batch):
+        results: List[Dict] = []
+        input_ids, attention_mask, token_type_ids = batch['input_ids'], batch['attention_mask'], batch['token_type_ids']
+        repr = self._bert_model.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)[0]
+        logits = self._bert_model.cls(repr)
+        pred_ids = logits.max(-1)[1]
+        gold_ids = batch['masked_lm_labels']
+        for tgt_id, pred_id, gold_id in zip(input_ids, pred_ids, gold_ids):
+            tgt = self.tokenizer.convert_ids_to_tokens(tgt_id.detach().cpu().numpy())
+            pred = self.tokenizer.convert_ids_to_tokens(pred_id.detach().cpu().numpy())
+            gold = self.tokenizer.convert_ids_to_tokens(gold_id.detach().cpu().numpy())
+            result = {'tgt': tgt, 'pred': pred, 'gold': gold}
+            results.append(result)
+        return results
+
     def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
         sample_size = 0
@@ -257,6 +272,23 @@ class VanillaTableBert(TableBertModel):
         logging_output['loss'] = total_loss.item()
         total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
+
+    def evaluate_bart(self, batch):
+        results: List[Dict] = []
+        src_ids, src_mask = batch['input_ids'], batch['attention_mask']
+        tgt_ids = batch['target_input_ids']
+        decoder_input_ids = shift_tokens_right(tgt_ids, self.config.pad_id)
+        logits = self._bart(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids,
+                            use_cache=False, return_dict=True).logits
+        pred_ids = logits.max(-1)[1]
+        gold_ids = batch['masked_lm_labels']
+        for tgt_id, pred_id, gold_id in zip(tgt_ids, pred_ids, gold_ids):
+            tgt = self.tokenizer.convert_ids_to_tokens(tgt_id)
+            pred = self.tokenizer.convert_ids_to_tokens(pred_id)
+            gold = self.tokenizer.convert_ids_to_tokens(gold_id)
+            result = {'tgt': tgt, 'pred': pred, 'gold': gold}
+            results.append(result)
+        return results
 
     def encode_context_and_table(
         self,
@@ -507,23 +539,10 @@ class VanillaTableBert(TableBertModel):
         was_training = self.training
         self.eval()
 
-        results: List[Dict] = []
         with torch.no_grad(), open(args.output_dir / output_file, 'w') as fout:
             with tqdm(total=len(data_loader), desc='Evaluation', file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
-                    src_ids, src_mask = batch['input_ids'], batch['attention_mask']
-                    tgt_ids = batch['target_input_ids']
-                    decoder_input_ids = shift_tokens_right(tgt_ids, self.config.pad_id)
-                    logits = self._bart(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids,
-                                        use_cache=False, return_dict=True).logits
-                    pred_ids = logits.max(-1)[1]
-                    gold_ids = batch['masked_lm_labels']
-                    for tgt_id, pred_id, gold_id in zip(tgt_ids, pred_ids, gold_ids):
-                        tgt = self.tokenizer.convert_ids_to_tokens(tgt_id)
-                        pred = self.tokenizer.convert_ids_to_tokens(pred_id)
-                        gold = self.tokenizer.convert_ids_to_tokens(gold_id)
-                        result = {'tgt': tgt, 'pred': pred, 'gold': gold}
-                        results.append(result)
+                    for result in getattr(self, f'evaluate_{self.config.model_type.value}')(batch):
                         fout.write(json.dumps(result) + '\n')
                     pbar.update(1)
 

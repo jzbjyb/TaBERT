@@ -268,6 +268,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         instances = []
         context_iter = context_sampler(
             example, self.config.max_context_len, context_sample_strategy=self.config.context_sample_strategy)
+        seq2seq_format = self.config.seq2seq_format
 
         for context in context_iter:
             # row_num = len(example.column_data)
@@ -275,22 +276,25 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
             additional_rows, answer = self.get_a_row(example)
 
-            if self.config.seq2seq_format is None:
+            if seq2seq_format is None:
                 instance = self.create_pretraining_instance(context, example.header, additional_rows)
                 instance['source'] = example.source
                 instances.append(instance)
             else:
-                if 'mlm' in self.config.seq2seq_format:  # added a dummy target which is identical to the masked sequence
+                if 'mlm' in seq2seq_format:  # added a dummy target which is identical to the masked sequence
                     instance = self.create_pretraining_instance(context, example.header, additional_rows)
                     instance['source'] = example.source
                     instance['target_token_ids'] = instance['token_ids']
                     instances.append(instance)
-                if 'single' in self.config.seq2seq_format:
+                if 'single' in seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
-                if 'qa' in self.config.seq2seq_format:
+                if 'qa' in seq2seq_format:
                     instances.extend(self.create_qa_instances(context, example.header, answer, additional_rows))
+                if 'sql' in seq2seq_format:
+                    instances.extend(self.create_sql_instances(context, example.header, example.sql))
 
-            if 'qa' in self.config.seq2seq_format:  # for qa format, do not iterative over context (i.e., question)
+            if 'qa' in seq2seq_format or 'sql' in seq2seq_format:
+                # for qa/sql format, do not iterative over context (i.e., question)
                 break
 
         return instances
@@ -353,6 +357,27 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         seq_a_len = instance['segment_a_length']
         # answer as target
         target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        instance = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance]
+
+    def create_sql_instances(self, context, header: List[Column], sql: str):
+        # context + table without mask
+        table = Table('fake_table', header)
+        instance = self.get_input(context, table)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        # sql as target
+        target = [self.config.cls_token] + self.tokenizer.tokenize(sql)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
             'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),

@@ -31,6 +31,15 @@ try:
         BertLMPredictionHead, BertLayerNorm, gelu
     )
     from pytorch_pretrained_bert.tokenization import BertTokenizer
+    class BertTokenizerWrapper(BertTokenizer):
+        def convert_ids_to_tokens(self, ids):
+            tokens = []
+            for i in ids:
+                if i < 0:
+                    tokens.append(None)
+                else:
+                    tokens.append(self.ids_to_tokens[i])
+            return tokens
 
     hf_flag = 'old'
     TRANSFORMER_VERSION = TransformerVersion.PYTORCH_PRETRAINED_BERT

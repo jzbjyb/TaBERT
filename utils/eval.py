@@ -4,6 +4,7 @@ import numpy as np
 import random
 import csv
 from collections import defaultdict
+from rouge import Rouge
 from table_bert.dataset_utils import BasicDataset
 from utils.wtq_evaluator import to_value
 AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
@@ -15,8 +16,9 @@ if __name__ == '__main__':
     parser.add_argument('--prediction', type=str, required=True)
     parser.add_argument('--gold', type=str, required=True)
     parser.add_argument('--output', type=str, default=None)
-    parser.add_argument('--data', type=str, choices=['wikisql', 'wtq'])
+    parser.add_argument('--data', type=str, choices=['wikisql', 'wtq', 'wikisql_sql'])
     args = parser.parse_args()
+    rouge = Rouge()
 
     ems = []
     tapas_ems = []  # follow the tapas filtering conditions
@@ -54,6 +56,8 @@ if __name__ == '__main__':
                 em = pred.lower() == gold.lower()
             elif args.data == 'wtq':  # official evaluation
                 em = to_value(gold).match(to_value(pred))
+            elif args.data == 'wikisql_sql':
+                em = rouge.get_scores([pred.lower()], [gold.lower()], avg=True)['rouge-l']['f']
             else:
                 raise NotImplementedError
             ems.append(em)
@@ -62,7 +66,7 @@ if __name__ == '__main__':
 
             example = prev_example = json.loads(gfin.readline())
             #example = next(csv_reader)
-            if 'sql' in example:  # wikisql example
+            if 'sql' in example and type(example['sql']) is dict and 'agg' in example['sql']:  # wikisql example
                 agg = example['sql']['agg']
                 num_cond = len(example['sql']['conds'])
                 agg2ems[AGG_OPS[agg]].append(em)
@@ -72,7 +76,7 @@ if __name__ == '__main__':
                     cond = cond[1]
                     cond2ems[COND_OPS[cond]].append(em)
                     cond2cases[COND_OPS[cond]][int(em)].append((source, pred, gold))
-            else:  # tabert format
+            elif 'answer_coordinates' in example:  # tabert format
                 num_coord = len(example['answer_coordinates'])
                 numcoord2ems[num_coord].append(em)
                 if anstype == 'number' or num_coord == 1:

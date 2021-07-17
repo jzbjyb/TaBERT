@@ -320,7 +320,8 @@ class TableBertConfig(SimpleNamespace):
     def from_dict(cls, args: Dict):
         return cls(**args)
 
-    def check_model_type(self, model_name: str) -> ModelType:
+    @classmethod
+    def check_model_type(cls, model_name: str) -> ModelType:
         model_name = model_name.lower()
         if 'electra' in model_name:
             return ModelType.ELECTRA

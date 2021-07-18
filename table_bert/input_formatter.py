@@ -430,8 +430,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         schema_tokens = self.concate_cells(
             header, [[] for _ in range(len(header))],
             table_tokens_start_idx=0, trim_long_table=0, max_table_token_length=max_schema_token_length,
-            cell_input_template=['column', '|', 'type'])
-        schema_tokens = [self.config.cls_token] + schema_tokens + [self.config.sep_token]
+            cell_input_template=['column', '|', 'type'])[0]
+        schema_tokens = [self.config.cls_token] + schema_tokens
+        if len(schema_tokens) > 0 and schema_tokens[-1] != self.config.sep_token:
+            schema_tokens.append(self.config.sep_token)
 
         context_tokens = [self.config.cls_token] + context + [self.config.sep_token]
         seq_a_len = len(context_tokens)

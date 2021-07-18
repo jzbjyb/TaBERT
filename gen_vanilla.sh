@@ -1,4 +1,4 @@
-output_dir=/mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+output_dir=/mnt/root/TaBERT/data/train_data/turl_sa_bart_gen
 input_dir=data/turl/train/preprocessed_sa.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -18,7 +18,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --max_cell_len 15 \
     --table_mask_strategy column \
     --context_sample_strategy concate_and_enumerate \
-    --masked_column_prob 1.0 \
+    --masked_column_prob 0.2 \
     --masked_context_prob 0.15 \
     --max_predictions_per_seq 200 \
     --cell_input_template 'column | type | value' \
@@ -30,7 +30,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format schema-augmentation-mask \
+    --seq2seq_format schema-augmentation-gen \
     --dev_num 0 \
     --global_rank $i &
 done

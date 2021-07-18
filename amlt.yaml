@@ -419,3 +419,27 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wikisql_sql_bart
     /mnt/root/TaBERT/data/runs/bart_wikisql_sql_pretrain_mlm seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20/pytorch_model_epoch19.bin"'
+
+# turl cf (bart)
+- name: bart_turl_cf_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm seq2seq 24 10 null
+
+# turl cf (bert)
+- name: bert_turl_cf_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bert_mlm
+    /mnt/root/TaBERT/data/runs/bert_turl_cf_mlm mlm 32 10 null

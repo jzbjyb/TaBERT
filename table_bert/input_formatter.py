@@ -420,22 +420,26 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return [instance]
 
     def create_cf_gen_instance(self, context, header: List[Column]):
+        # get target using object columns (odd)
+        target_cells: List[List] = []
+        for col_idx, cell in enumerate(header):
+            if col_idx % 2 == 0:
+                continue
+            target_cells.append(cell.sample_value_tokens[:self.config.max_cell_len] + [self.config.sep_token])
+            cell.sample_value_tokens = []  # skip it in the source
+
         table = Table('fake_table', header)
-        input_instance = self.get_input(context, table, cell_input_template=['column', '|', 'type', '|'])  # core format function
+        input_instance = self.get_input(context, table)
         source_tokens = input_instance['tokens']
         seq_a_len = input_instance['segment_a_length']
 
+        num_columns_used = len(input_instance['column_spans']) // 2
         target_tokens = [self.config.cls_token]
-        for cell in header:
-            target_tokens.extend(cell.sample_value_tokens[:self.config.max_cell_len])
-            target_tokens.append(self.config.sep_token)
+        for tc in target_cells[:num_columns_used]:
+            target_tokens.extend(tc)
         target_tokens = target_tokens[:MAX_TARGET_LENGTH]
-        if len(target_tokens) > 0 and target_tokens[-1]  != self.config.sep_token:
+        if len(target_tokens) > 0 and target_tokens[-1] != self.config.sep_token:
             target_tokens[-1] = self.config.sep_token
-
-        print(source_tokens)
-        print(target_tokens)
-        input()
 
         return {
             'tokens': source_tokens,
@@ -451,13 +455,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def create_cf_mask_instance(self, context, header: List[Column]):
         table = Table('fake_table', header)
-        input_instance = self.get_input(context, table)  # core format function
+        input_instance = self.get_input(context, table)
         column_spans = input_instance['column_spans']
 
         assert self.config.mask_value and self.config.masked_column_prob == 1.0, \
             'generating cell filling examples requires mask_value=True and masked_column_prob=1.0'
+        # assume: the odd ones are object columns, the even ones are subject columns
         column_candidate_indices = [
-            list(range(*span['value']) if 'value' in span else []) for col_id, span in enumerate(column_spans)]
+            list(range(*span['value']) if ('value' in span and col_id % 2 == 1) else [])
+            for col_id, span in enumerate(column_spans)]
         context_candidate_indices = []
 
         masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(

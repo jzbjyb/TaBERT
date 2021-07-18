@@ -10,6 +10,7 @@ name="$(basename -- $output_dir)"
 echo '==========' ${name} '=========='
 gradac=1
 load=$6
+args="${@:7}"
 
 # activate env if needed
 if [[ "$PATH" == *"tabert"* ]]; then
@@ -47,4 +48,5 @@ python train.py \
     --fp16 \
     --clip-norm 1.0 \
     --empty-cache-freq 128 \
-    --name ${name}
+    --name ${name} \
+    ${args}

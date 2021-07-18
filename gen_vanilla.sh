@@ -1,4 +1,4 @@
-output_dir=/mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+output_dir=/mnt/root/TaBERT/data/train_data/turl_cf_bert_mlm
 input_dir=data/turl/train/preprocessed_cf.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -10,7 +10,7 @@ for (( i=0; i<${worldsize}; ++i)); do
   python -m utils.generate_vanilla_tabert_training_data \
     --output_dir ${output_dir} \
     --train_corpus ${input_dir} \
-    --base_model_name facebook/bart-base \
+    --base_model_name bert-base-uncased \
     --do_lower_case \
     --epochs_to_generate 10 \
     --max_context_len 128 \

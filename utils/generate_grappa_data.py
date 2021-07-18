@@ -7,11 +7,12 @@ from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
 from table_bert.wikitablequestions import WikiTQ
+from table_bert.turl import TurlData
 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq'])
+    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl'])
     parser.add_argument('--path', type=Path, required=True)
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
@@ -48,6 +49,10 @@ def main():
                           args.output_dir / 'converted' / split2file[args.split],
                           args.output_dir / args.split / 'preprocessed_with_ans.jsonl',
                           string_match=True)
+    elif args.data == 'turl':
+        turl = TurlData(args.path)
+        os.makedirs(args.output_dir / args.split, exist_ok=True)
+        turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_cf.jsonl', task='cell_filling')
     else:
         raise NotImplementedError
 

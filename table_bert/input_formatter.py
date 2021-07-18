@@ -70,15 +70,23 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return input, span_map
 
-    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0, shuffle: bool = False):
+    def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [],
+                  trim_long_table: Union[None, int] = 0, shuffle: bool = False, cell_input_template: List[str] = None):
         row_data = [
             column.sample_value_tokens
             for column in table.header
         ]
 
-        return self.get_row_input(context, table.header, row_data, additional_rows, trim_long_table=trim_long_table, shuffle=shuffle)
+        return self.get_row_input(context, table.header, row_data, additional_rows,
+                                  trim_long_table=trim_long_table, shuffle=shuffle, cell_input_template=cell_input_template)
 
-    def _concate_cells(self, header: List, row_data: List, table_tokens_start_idx: int, trim_long_table: int, max_table_token_length: int):
+    def _concate_cells(self,
+                       header: List,
+                       row_data: List,
+                       table_tokens_start_idx: int,
+                       trim_long_table: int,
+                       max_table_token_length: int,
+                       cell_input_template: List[str] = None):
         row_input_tokens = []
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
@@ -91,7 +99,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             column_input_tokens, token_span_map = self.get_cell_input(
                 column,
                 truncated_value_tokens,
-                token_offset=column_start_idx
+                token_offset=column_start_idx,
+                cell_input_template=cell_input_template
             )
             column_input_tokens.append(self.config.column_delimiter)
 
@@ -138,7 +147,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return row_input_tokens, column_token_span_maps, col_id
 
-    def get_row_input(self, context: List[str], header: List[Column], row_data: List[Any], additional_rows: List[List[Any]] = [], trim_long_table: Union[None, int] = 0, shuffle: bool = False):  # none means not trim
+    def get_row_input(self,
+                      context: List[str],
+                      header: List[Column],
+                      row_data: List[Any],
+                      additional_rows: List[List[Any]] = [],
+                      trim_long_table: Union[None, int] = 0,
+                      shuffle: bool = False,
+                      cell_input_template: List[str] = None):  # none means not trim
         max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
@@ -155,7 +171,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             # try to see how many rows can fit into the max length
             _, _, col_id = self._concate_cells(
                 header * len(additional_rows), [i for r in additional_rows for i in r], table_tokens_start_idx=table_tokens_start_idx,
-                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length)
+                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length, cell_input_template=cell_input_template)
             num_fit_rows = col_id // len(header)
             additional_rows.insert(randint(0, max(num_fit_rows - 1, 0)), row_data)
             ext_row_data = [i for r in additional_rows for i in r]
@@ -163,7 +179,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             ext_row_data = row_data + [i for r in additional_rows for i in r]
 
         row_input_tokens, column_token_span_maps, col_id = self._concate_cells(
-            ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table, max_table_token_length=max_table_token_length)
+            ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table,
+            max_table_token_length=max_table_token_length, cell_input_template=cell_input_template)
 
         # it is possible that the first cell to too long and cannot fit into `max_table_token_length`
         # we need to discard this sample
@@ -292,9 +309,20 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_qa_instances(context, example.header, answer, additional_rows))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
+                if 'cell-filling-mask' in seq2seq_format:
+                    instance = self.create_cf_mask_instance(context, example.header)
+                    instance['target_token_ids'] = instance['token_ids']
+                    instances.append(instance)
+                if 'cell-filling-gen' in seq2seq_format:
+                    instances.append(self.create_cf_gen_instance(context, example.header))
 
-            if 'qa' in seq2seq_format or 'sql' in seq2seq_format:
-                # for qa/sql format, do not iterative over context (i.e., question)
+            stop = False
+            for fm in {'qa', 'sql', 'cell-filling'}:
+                # for these formats, do not iterative over context
+                if fm in seq2seq_format:
+                    stop = True
+                    break
+            if stop:
                 break
 
         return instances
@@ -391,6 +419,63 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         }
         return [instance]
 
+    def create_cf_gen_instance(self, context, header: List[Column]):
+        table = Table('fake_table', header)
+        input_instance = self.get_input(context, table, cell_input_template=['column', '|', 'type', '|'])  # core format function
+        source_tokens = input_instance['tokens']
+        seq_a_len = input_instance['segment_a_length']
+
+        target_tokens = [self.config.cls_token]
+        for cell in header:
+            target_tokens.extend(cell.sample_value_tokens[:self.config.max_cell_len])
+            target_tokens.append(self.config.sep_token)
+        target_tokens = target_tokens[:MAX_TARGET_LENGTH]
+        if len(target_tokens) > 0 and target_tokens[-1]  != self.config.sep_token:
+            target_tokens[-1] = self.config.sep_token
+
+        print(source_tokens)
+        print(target_tokens)
+        input()
+
+        return {
+            'tokens': source_tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(source_tokens),
+            'target_tokens': target_tokens,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target_tokens),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+
+    def create_cf_mask_instance(self, context, header: List[Column]):
+        table = Table('fake_table', header)
+        input_instance = self.get_input(context, table)  # core format function
+        column_spans = input_instance['column_spans']
+
+        assert self.config.mask_value and self.config.masked_column_prob == 1.0, \
+            'generating cell filling examples requires mask_value=True and masked_column_prob=1.0'
+        column_candidate_indices = [
+            list(range(*span['value']) if 'value' in span else []) for col_id, span in enumerate(column_spans)]
+        context_candidate_indices = []
+
+        masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(
+            input_instance['tokens'], context_candidate_indices, column_candidate_indices)
+        info['num_columns'] = len(header)
+
+        instance = {
+            "tokens": masked_sequence,
+            "token_ids": self.tokenizer.convert_tokens_to_ids(masked_sequence),
+            "segment_a_length": input_instance['segment_a_length'],
+            "masked_lm_positions": masked_lm_positions,
+            "masked_lm_labels": masked_lm_labels,
+            "masked_lm_label_ids": self.tokenizer.convert_tokens_to_ids(masked_lm_labels),
+            "info": info
+        }
+
+        return instance
+
     def create_pretraining_instance(self, context, header, additional_rows: List[List[Any]] = []):
         table = Table('fake_table', header)
         input_instance = self.get_input(context, table, additional_rows)  # core format function
@@ -480,8 +565,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             raise RuntimeError('unknown mode!')
 
         max_context_token_to_mask = self.config.max_predictions_per_seq - num_column_tokens_to_mask
-        num_context_tokens_to_mask = min(max_context_token_to_mask,
-                                         max(1, int(len(context_indices) * self.config.masked_context_prob)))
+        num_context_tokens_to_mask = min(max_context_token_to_mask, min(
+            len(context_indices), max(1, int(len(context_indices) * self.config.masked_context_prob))))
 
         if num_context_tokens_to_mask > 0:
             # if num_context_tokens_to_mask < 0 or num_context_tokens_to_mask > len(context_indices):

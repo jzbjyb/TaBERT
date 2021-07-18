@@ -53,6 +53,7 @@ def main():
         turl = TurlData(args.path)
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_cf.jsonl', task='cell_filling')
+        turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_sa.jsonl', task='schema_augmentation')
     else:
         raise NotImplementedError
 

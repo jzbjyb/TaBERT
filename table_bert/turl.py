@@ -153,6 +153,21 @@ class TurlData(BasicDataset):
                             })
                         count += 1
                         fout.write(json.dumps(td) + '\n')
+                elif task == 'schema_augmentation':
+                    for column in example['columns']:
+                        td['table']['header'].append({
+                            'name': column['name'],
+                            'name_tokens': None,
+                            'type': column['value_type'],
+                            'sample_value': {'value': None, 'tokens': [], 'ner_tags': []},
+                            'sample_value_tokens': None,
+                            'is_primary_key': False,
+                            'foreign_key': None,
+                            'used': False,
+                            'value_used': False,
+                        })
+                    count += 1
+                    fout.write(json.dumps(td) + '\n')
                 else:
                     raise NotImplementedError
             print(f'total count {count}, #columns {num_cols}, #rows {num_rows} #rows per example {np.mean(num_rows_per_example)}')

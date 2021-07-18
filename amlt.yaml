@@ -487,3 +487,71 @@ jobs:
     /mnt/root/TaBERT/data/train_data/turl_cf_bert_mlm
     /mnt/root/TaBERT/data/runs/tabert_my_turl_cf_mlm mlm 32 10
     '"/mnt/root/TaBERT/data/runs/vanilla_tabert_ep10/pytorch_model_epoch09.bin"'
+
+# turl sa (bart)
+- name: bart_turl_sa_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm seq2seq 24 10 null
+- name: bart_turl_sa_mlm_pretrain_seq2seq
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_seq2seq seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_onlytable_ep5/pytorch_model_epoch04.bin"'
+- name: bart_turl_sa_mlm_pretrain_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_mlm seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20/pytorch_model_epoch19.bin"'
+
+# turl sa (bert)
+- name: bert_turl_sa_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bert_mlm
+    /mnt/root/TaBERT/data/runs/bert_turl_sa_mlm mlm 32 10 null
+- name: tabert_turl_sa_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bert_mlm
+    /mnt/root/TaBERT/data/runs/tabert_turl_sa_mlm mlm 32 10
+    '"/mnt/root/TaBERT/data/runs/tabert_base_k1/model.bin"'
+- name: tabert_my_turl_sa_mlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bert_mlm
+    /mnt/root/TaBERT/data/runs/tabert_my_turl_sa_mlm mlm 32 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_ep10/pytorch_model_epoch09.bin"'

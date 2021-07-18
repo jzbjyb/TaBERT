@@ -80,7 +80,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return self.get_row_input(context, table.header, row_data, additional_rows,
                                   trim_long_table=trim_long_table, shuffle=shuffle, cell_input_template=cell_input_template)
 
-    def _concate_cells(self,
+    def concate_cells(self,
                        header: List,
                        row_data: List,
                        table_tokens_start_idx: int,
@@ -169,7 +169,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         ext_header = header * (len(additional_rows) + 1)
         if shuffle and len(additional_rows) > 0:
             # try to see how many rows can fit into the max length
-            _, _, col_id = self._concate_cells(
+            _, _, col_id = self.concate_cells(
                 header * len(additional_rows), [i for r in additional_rows for i in r], table_tokens_start_idx=table_tokens_start_idx,
                 trim_long_table=trim_long_table, max_table_token_length=max_table_token_length, cell_input_template=cell_input_template)
             num_fit_rows = col_id // len(header)
@@ -178,7 +178,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         else:
             ext_row_data = row_data + [i for r in additional_rows for i in r]
 
-        row_input_tokens, column_token_span_maps, col_id = self._concate_cells(
+        row_input_tokens, column_token_span_maps, col_id = self.concate_cells(
             ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table,
             max_table_token_length=max_table_token_length, cell_input_template=cell_input_template)
 
@@ -315,9 +315,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.append(instance)
                 if 'cell-filling-gen' in seq2seq_format:
                     instances.append(self.create_cf_gen_instance(context, example.header))
+                if 'schema-augmentation-mask' in seq2seq_format:
+                    instance = self.create_sa_mask_instance(context, example.header)
+                    instance['target_token_ids'] = instance['token_ids']
+                    instances.append(instance)
+                if 'schema-augmentation-gen' in seq2seq_format:
+                    instances.append(self.create_sa_gen_instance(context, example.header))
 
             stop = False
-            for fm in {'qa', 'sql', 'cell-filling'}:
+            for fm in {'qa', 'sql', 'cell-filling', 'schema-augmentation'}:
                 # for these formats, do not iterative over context
                 if fm in seq2seq_format:
                     stop = True
@@ -419,6 +425,29 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         }
         return [instance]
 
+    def create_sa_gen_instance(self, context, header: List[Column]):
+        max_schema_token_length = MAX_TARGET_LENGTH - 2  # cls and sep token
+        schema_tokens = self.concate_cells(
+            header, [[] for _ in range(len(header))],
+            table_tokens_start_idx=0, trim_long_table=0, max_table_token_length=max_schema_token_length,
+            cell_input_template=['column', '|', 'type'])
+        schema_tokens = [self.config.cls_token] + schema_tokens + [self.config.sep_token]
+
+        context_tokens = [self.config.cls_token] + context + [self.config.sep_token]
+        seq_a_len = len(context_tokens)
+
+        return {
+            'tokens': context_tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(context_tokens),
+            'target_tokens': schema_tokens,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(schema_tokens),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+
     def create_cf_gen_instance(self, context, header: List[Column]):
         # get target using object columns (odd)
         target_cells: List[List] = []
@@ -452,6 +481,37 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'masked_lm_label_ids': [],
             'info': None
         }
+
+    def create_sa_mask_instance(self, context, header: List[Column]):
+        table = Table('fake_table', header)
+        input_instance = self.get_input(context, table, cell_input_template=['column', '|', 'type'])
+        column_spans = input_instance['column_spans']
+
+        assert self.config.masked_column_prob == 1.0, \
+            'generating schema augmentation examples requires masked_column_prob=1.0'
+        column_candidate_indices = [
+            (
+                list(range(*span['column_name']) if 'column_name' in span else []) +
+                list(range(*span['type']) if 'type' in span else [])
+            )
+            for col_id, span in enumerate(column_spans)]
+        context_candidate_indices = []
+
+        masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(
+            input_instance['tokens'], context_candidate_indices, column_candidate_indices)
+        info['num_columns'] = len(header)
+
+        instance = {
+            "tokens": masked_sequence,
+            "token_ids": self.tokenizer.convert_tokens_to_ids(masked_sequence),
+            "segment_a_length": input_instance['segment_a_length'],
+            "masked_lm_positions": masked_lm_positions,
+            "masked_lm_labels": masked_lm_labels,
+            "masked_lm_label_ids": self.tokenizer.convert_tokens_to_ids(masked_lm_labels),
+            "info": info
+        }
+
+        return instance
 
     def create_cf_mask_instance(self, context, header: List[Column]):
         table = Table('fake_table', header)

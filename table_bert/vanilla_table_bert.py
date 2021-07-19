@@ -550,7 +550,7 @@ class VanillaTableBert(TableBertModel):
             self.train()
 
     def generate(self, data_loader, args):
-        output_file = 'generations.txt' if args.output_file is None else args.output_file
+        output_file = 'generation.tsv' if args.output_file is None else args.output_file
         was_training = self.training
         self.eval()
 

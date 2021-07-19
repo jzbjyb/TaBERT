@@ -560,12 +560,13 @@ class VanillaTableBert(TableBertModel):
                 for step, batch in enumerate(data_loader):
                     target_ids = self._bart.generate(
                         batch['input_ids'], attention_mask=batch['attention_mask'],
-                        num_beams=args.num_beams, max_length=args.max_generate_length, early_stopping=True)
+                        num_beams=args.num_beams, min_length=args.min_generate_length,
+                        max_length=args.max_generate_length, early_stopping=True)
                     gold_ids = batch['target_input_ids']
                     for input_id, target_id, gold_id in zip(batch['input_ids'], target_ids, gold_ids):
                         source = self.tokenizer.decode(input_id, skip_special_tokens=False).replace('\n', '\\n')
-                        pred = self.tokenizer.decode(target_id, skip_special_tokens=True).replace('\n', '\\n')
-                        gold = self.tokenizer.decode(gold_id, skip_special_tokens=True).replace('\n', '\\n')
+                        pred = self.tokenizer.decode(target_id, skip_special_tokens=False).replace('\n', '\\n')
+                        gold = self.tokenizer.decode(gold_id, skip_special_tokens=False).replace('\n', '\\n')
                         results.append(pred)
                         fout.write(f'{pred}\t{gold}\t{source}\n')
                     pbar.update(1)

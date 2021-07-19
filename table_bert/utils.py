@@ -46,6 +46,7 @@ try:
     logging.warning('You are using the old version of `pytorch_pretrained_bert`')
 except ImportError:
     from transformers.tokenization_bert import BertTokenizer    # noqa
+    BertTokenizerWrapper = BertTokenizer
     from transformers.modeling_bert import (    # noqa
         BertForMaskedLM, BertForPreTraining, BertModel,
         BertSelfOutput, BertIntermediate, BertOutput,

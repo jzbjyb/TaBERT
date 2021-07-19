@@ -121,7 +121,7 @@ def parse_train_arg():
 
     # test details
     parser.add_argument('--only_test', action='store_true')
-    parser.add_argument('--mode', type=str, choices=['generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev'], default='generate-test')
+    parser.add_argument('--mode', type=str, choices=['generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev', None], default=None)
     parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
     parser.add_argument('--max_generate_length', type=int, default=20, help='max number of tokens generated for the generate mode')
     parser.add_argument('--output_file', type=str, default=None)
@@ -284,11 +284,9 @@ def main():
                            multi_gpu=args.multi_gpu, debug=args.debug_dataset) if test_data_dir.exists() else None
 
     if args.only_test:
+        assert args.mode is not None, 'need to set mode for only_test'
         mode, which_part = args.mode.split('-')
-        if which_part == 'test':
-            trainer.test(test_set, mode=mode)
-        elif which_part == 'dev':
-            trainer.test(dev_set, mode=mode)
+        trainer.test(eval(f'{which_part}_set'), mode=mode)
         exit()
 
     # load checkpoint
@@ -385,6 +383,10 @@ def main():
             sys.stderr.flush()
 
         trainer.next_epoch()
+
+    if args.mode is not None:  # evaluate after training
+        mode, which_part = args.mode.split('-')
+        trainer.test(eval(f'{which_part}_set'), mode=mode)
 
 
 if __name__ == '__main__':

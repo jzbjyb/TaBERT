@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from collections import OrderedDict
 from types import SimpleNamespace
-from typing import Dict, Union, Set
+from typing import Dict, Union, List
 from enum import Enum
 
 from table_bert.utils import BertTokenizerWrapper, ElectraTokenizer, BertConfig, ElectraConfig, \
@@ -149,6 +149,7 @@ class TableBertConfig(SimpleNamespace):
         not_skip_empty_column_name: bool = False,
         only_table: bool = False,
         seq2seq_format: str = None,
+        multi_decode_sep_token: str = '<|>',
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -165,6 +166,9 @@ class TableBertConfig(SimpleNamespace):
             self.column_delimiter = MODEL2SEP[self.model_type]
         self.sep_token = MODEL2SEP[self.model_type]
         self.sep_id = self.tokenizer_cls.from_pretrained(self.base_model_name).convert_tokens_to_ids([self.sep_token])[0]
+        assert multi_decode_sep_token != self.sep_token, \
+            'sep token is eos tokens, which should not be used as a symbol for multi answer decoding'
+        self.multi_decode_sep_tokens: List[str] = self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(multi_decode_sep_token)
         self.cls_token = MODEL2CLS[self.model_type]
         self.mask_token = MODEL2MASK[self.model_type]
         self.pad_id = MODEL2PADID[self.model_type]

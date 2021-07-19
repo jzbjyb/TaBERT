@@ -1,5 +1,5 @@
-output_dir=/mnt/root/TaBERT/data/train_data/turl_sa_bart_gen
-input_dir=data/turl/train/preprocessed_sa.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/turl_cf_bart_gen
+input_dir=/mnt/root/TaBERT/data/turl/train/preprocessed_cf.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 mkdir -p ${output_dir}
@@ -30,7 +30,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format schema-augmentation-gen \
+    --seq2seq_format cell-filling-gen \
     --dev_num 0 \
     --global_rank $i &
 done

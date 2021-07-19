@@ -81,15 +81,17 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                   trim_long_table=trim_long_table, shuffle=shuffle, cell_input_template=cell_input_template)
 
     def concate_cells(self,
-                       header: List,
-                       row_data: List,
-                       table_tokens_start_idx: int,
-                       trim_long_table: int,
-                       max_table_token_length: int,
-                       cell_input_template: List[str] = None):
+                      header: List,
+                      row_data: List,
+                      table_tokens_start_idx: int,
+                      trim_long_table: int,
+                      max_table_token_length: int,
+                      cell_input_template: List[str] = None,
+                      column_delimiters: List[str] = None):
         row_input_tokens = []
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
+        column_delimiters = column_delimiters or [self.config.column_delimiter]
 
         col_id = 0
         for col_id, column in enumerate(header):
@@ -102,7 +104,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 token_offset=column_start_idx,
                 cell_input_template=cell_input_template
             )
-            column_input_tokens.append(self.config.column_delimiter)
+            column_input_tokens.extend(column_delimiters)
 
             early_stop = False
             if trim_long_table is not None:
@@ -427,13 +429,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def create_sa_gen_instance(self, context, header: List[Column]):
         max_schema_token_length = MAX_TARGET_LENGTH - 2  # cls and sep token
+        cds = self.config.multi_decode_sep_tokens
         schema_tokens = self.concate_cells(
             header, [[] for _ in range(len(header))],
             table_tokens_start_idx=0, trim_long_table=0, max_table_token_length=max_schema_token_length,
-            cell_input_template=['column', '|', 'type'])[0]
-        schema_tokens = [self.config.cls_token] + schema_tokens
-        if len(schema_tokens) > 0 and schema_tokens[-1] != self.config.sep_token:
-            schema_tokens.append(self.config.sep_token)
+            cell_input_template=['column', '|', 'type'], column_delimiters=cds)[0]
+        if ''.join(schema_tokens[-len(cds):]) == ''.join(cds):
+            schema_tokens = schema_tokens[:-len(cds)]
+        schema_tokens = [self.config.cls_token] + schema_tokens + [self.config.sep_token]
 
         context_tokens = [self.config.cls_token] + context + [self.config.sep_token]
         seq_a_len = len(context_tokens)
@@ -456,7 +459,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         for col_idx, cell in enumerate(header):
             if col_idx % 2 == 0:
                 continue
-            target_cells.append(cell.sample_value_tokens[:self.config.max_cell_len] + [self.config.sep_token])
+            target_cells.append(cell.sample_value_tokens[:self.config.max_cell_len])
             cell.sample_value_tokens = []  # skip it in the source
 
         table = Table('fake_table', header)
@@ -466,8 +469,12 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         num_columns_used = len(input_instance['column_spans']) // 2
         target_tokens = [self.config.cls_token]
-        for tc in target_cells[:num_columns_used]:
+        target_cells = target_cells[:num_columns_used]
+        for i, tc in enumerate(target_cells):
             target_tokens.extend(tc)
+            if i < len(target_cells) - 1:
+                target_tokens.extend(self.config.multi_decode_sep_tokens)
+        target_tokens.append(self.config.sep_token)
         target_tokens = target_tokens[:MAX_TARGET_LENGTH]
         if len(target_tokens) > 0 and target_tokens[-1] != self.config.sep_token:
             target_tokens[-1] = self.config.sep_token

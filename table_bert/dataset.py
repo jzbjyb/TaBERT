@@ -424,12 +424,16 @@ class TableDataset(Dataset):
 
 
 class Example(object):
-    def __init__(self, uuid, header, context, column_data=None, is_positive=True,
+    def __init__(self, uuid, header, context: Tuple[List, List], context_mentions: Tuple[List, List]=([], []),
+                 column_data=None, column_data_used=None, is_positive=True,
                  answer_coordinates: List[Tuple[int, int]]=None, answers: List[str]=None, sql: str=None, **kwargs):
         self.uuid = uuid
         self.header = header
         self.context = context
+        self.context_mentions = context_mentions
+        assert len(context[0]) == len(context_mentions[0]) and len(context[1]) == len(context_mentions[1])
         self.column_data = column_data
+        self.column_data_used = column_data_used
         self.is_positive = is_positive
         self.answer_coordinates = answer_coordinates
         self.answers = answers
@@ -443,7 +447,9 @@ class Example(object):
             'uuid': self.uuid,
             'source': self.source,
             'context': self.context,
+            'context_mentions': self.context_mentions,
             'column_data': self.column_data,
+            'column_data_used': self.column_data_used,
             'is_positive': self.is_positive,
             'header': [x.to_dict() for x in self.header],
             'answer_coordinates': self.answer_coordinates,
@@ -515,6 +521,11 @@ class Example(object):
 
                     column_data[col_id].append(cell_val)
 
+        if 'data_used' in entry['table']:
+            column_data_used = entry['table']['data_used']
+        else:
+            column_data_used = []
+
         context_before = []
         context_after = []
 
@@ -543,6 +554,10 @@ class Example(object):
                     sent = tokenizer.tokenize(sent)
                 context_after.append(sent)
 
+        # TODO: add conversion from char index to token index
+        context_before_mentions = entry['context_before_mentions'] if 'context_before_mentions' in entry else []
+        context_after_mentions = entry['context_after_mentions'] if 'context_after_mentions' in entry else []
+
         uuid = entry['uuid']
         is_positive = entry['is_positive'] if 'is_positive' in entry else True
 
@@ -551,8 +566,10 @@ class Example(object):
         sql = entry['sql'] if 'sql' in entry else None
 
         return cls(uuid, header,
-                   [context_before, context_after],
+                   (context_before, context_after),
+                   (context_before_mentions, context_after_mentions),
                    column_data=column_data,
+                   column_data_used=column_data_used,
                    source=source,
                    is_positive=is_positive,
                    answer_coordinates=answer_coordinates,

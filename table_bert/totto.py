@@ -52,7 +52,7 @@ class Totto(BasicDataset):
             return table_list
         total_num_rows = np.max(list(table.keys())) + 1
         total_num_cols = (np.max(list(table[0].keys())) + 1) if truncate_by_first_row else (
-                    np.max([c for r in table for c in table[r]]) + 1)
+                np.max([c for r in table for c in table[r]]) + 1)
         for i in range(total_num_rows):
             table_list.append([])
             assert not strict or total_num_cols == len(
@@ -151,30 +151,43 @@ class Totto(BasicDataset):
 
         cases = {'inner_header': 0, 'no_header': 0, 'no_data': 0, 'fake_header': 0,
                  'multi_header': 0, 'partial_header': 0, 'expand': 0}
+        numrows2count = defaultdict(lambda: 0)
+        numusedcells2count = defaultdict(lambda: 0)
+        nummentions2count = defaultdict(lambda: 0)
+        find_mention_ratios: List[float] = []
 
         with open(output_path, 'w') as fout:
             for example in tqdm(data):
                 td = {
                     'uuid': None,
-                    'table': {'caption': '', 'header': [], 'data': [], 'used_header': []},
+                    'table': {'caption': '', 'header': [], 'data': [], 'used_data': [], 'used_header': []},
                     'context_before': [],
+                    'context_before_mentions': [],
                     'context_after': []
                 }
+
                 td['uuid'] = 'totto_{}'.format(example['example_id'])
-                td['context_before'].append(
-                    example['sentence_annotations'][0]['final_sentence'])  # use the first annotated sentence
-                row2count: Dict[int, int] = defaultdict(lambda: 0)
-                col2rows: Dict[int, Set] = defaultdict(set)
+                context = example['sentence_annotations'][0]['final_sentence']  # use the first annotated sentence
+                table = example['table']
+                highlighted_cells = example['highlighted_cells']
+                td['context_before'].append(context)
+                mention_locations = self.get_mention_locations(
+                    context, [[c['value'] for c in r] for r in table], highlighted_cells)
+                td['context_before_mentions'].append(mention_locations)
+                numusedcells2count[len(highlighted_cells)] += 1
+                nummentions2count[len(mention_locations)] += 1
+                find_mention_ratios.append(len(mention_locations) / (len(highlighted_cells) or 1))
 
                 invalid_table = False
 
                 # expand table
-                table = example['table']
                 expand_table, expand_highlighted_cells, is_expand = Totto.expand_table(
-                    table, set(map(tuple, example['highlighted_cells'])))
+                    table, set(map(tuple, highlighted_cells)))
                 cases['expand'] += int(is_expand)
 
                 # merge header
+                row2count: Dict[int, int] = defaultdict(lambda: 0)
+                col2rows: Dict[int, Set] = defaultdict(set)
                 num_hr, merged_header = Totto.get_header_rows_and_merge(expand_table)
                 cases['multi_header'] += int(num_hr > 1)
                 if num_hr <= 0:  # table must contain at least one header row
@@ -197,7 +210,7 @@ class Totto(BasicDataset):
                 fake_header = np.any([i in row2count for i in range(num_hr)])
                 cases['fake_header'] += int(fake_header)
 
-                # extract data
+                # extract data and used_data
                 inner_header = False
                 partial_header = False
                 for row in expand_table[num_hr:]:
@@ -210,15 +223,13 @@ class Totto(BasicDataset):
                     td['table']['data'].append(r)
                 cases['inner_header'] += int(inner_header)
                 cases['partial_header'] += int(partial_header)
-                if fake_header:  # add fake header
-                    for row_idx in range(num_hr):
-                        r = [cell['value'] for cell in expand_table[row_idx]]
-                        td['table']['data'].insert(0, r)
+                td['table']['used_data'] = sorted([(r - num_hr, c) for r, c in expand_highlighted_cells if r >= num_hr])
+                numrows2count[len(td['table']['data'])] += 1
 
                 # extract column name
                 for cell in merged_header:
                     td['table']['header'].append({
-                        'name': '',
+                        'name': cell['value'],
                         'name_tokens': None,
                         'type': 'text',
                         'sample_value': {'value': None, 'tokens': [], 'ner_tags': []},
@@ -226,14 +237,15 @@ class Totto(BasicDataset):
                         'is_primary_key': False,
                         'foreign_key': None,
                         'used': False,
+                        'value_used': False
                     })
-                    td['table']['header'][-1]['name'] = cell['value']
 
                 # extract column type, value, and used
                 for col_idx, header in enumerate(td['table']['header']):
                     if col_idx in col2rows:  # highlight column
                         row_idx = random.choice(list(col2rows[col_idx]))
-                        header['used'] = True
+                        header['used'] = len([i for i in col2rows[col_idx] if i < num_hr]) > 0  # use the header
+                        header['value_used'] = len([i for i in col2rows[col_idx] if i >= num_hr]) > 0  # use the values
                         value = expand_table[row_idx][col_idx]['value']
                     else:  # sample from all data
                         all_values = [expand_table[i][col_idx]['value']
@@ -249,3 +261,7 @@ class Totto(BasicDataset):
         print('total count {}, used rows {}/{}, used columns {}/{}'.format(
             count, num_used_rows, num_rows, num_used_cols, num_cols))
         print('out of {}, {}'.format(len(data), cases))
+        print(f'#rows -> count {sorted(numrows2count.items())}')
+        print(f'#used cells -> count {sorted(numusedcells2count.items())}')
+        print(f'#mentions -> count {sorted(nummentions2count.items())}')
+        print(f'find mention ratio {np.mean(find_mention_ratios)}')

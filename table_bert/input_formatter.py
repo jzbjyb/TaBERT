@@ -87,16 +87,19 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                       trim_long_table: int,
                       max_table_token_length: int,
                       cell_input_template: List[str] = None,
-                      column_delimiters: List[str] = None):
+                      column_delimiters: List[str] = None,
+                      multi_row_split: List[bool] = None):
         row_input_tokens = []
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
         column_delimiters = column_delimiters or [self.config.column_delimiter]
+        row_delimiters = [self.config.row_delimiter]
 
         col_id = 0
         for col_id, column in enumerate(header):
             value_tokens = row_data[col_id]
             truncated_value_tokens = value_tokens[:self.config.max_cell_len]
+            is_mrs = False if multi_row_split is None else multi_row_split[col_id]
 
             column_input_tokens, token_span_map = self.get_cell_input(
                 column,
@@ -104,7 +107,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 token_offset=column_start_idx,
                 cell_input_template=cell_input_template
             )
-            column_input_tokens.extend(column_delimiters)
+            column_input_tokens.extend(row_delimiters if is_mrs else column_delimiters)
 
             early_stop = False
             if trim_long_table is not None:
@@ -157,6 +160,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                       trim_long_table: Union[None, int] = 0,
                       shuffle: bool = False,
                       cell_input_template: List[str] = None):  # none means not trim
+        use_row_data = self.config.top_row_count == 0
         max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
@@ -168,28 +172,29 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             max_table_token_length = max_total_len - len(context) - 2 - 1
 
         # generate table tokens
-        ext_header = header * (len(additional_rows) + 1)
-        if shuffle and len(additional_rows) > 0:
+        ext_header = header * (len(additional_rows) + int(use_row_data))
+        multi_row_split = ([False] * (len(header) - 1) + [True]) * (len(additional_rows) + int(use_row_data))
+        if use_row_data and shuffle and len(additional_rows) > 0:
             # try to see how many rows can fit into the max length
             _, _, col_id = self.concate_cells(
                 header * len(additional_rows), [i for r in additional_rows for i in r], table_tokens_start_idx=table_tokens_start_idx,
-                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length, cell_input_template=cell_input_template)
+                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length, cell_input_template=cell_input_template, multi_row_split=multi_row_split)
             num_fit_rows = col_id // len(header)
             additional_rows.insert(randint(0, max(num_fit_rows - 1, 0)), row_data)
             ext_row_data = [i for r in additional_rows for i in r]
         else:
-            ext_row_data = row_data + [i for r in additional_rows for i in r]
+            ext_row_data = (row_data if use_row_data else []) + [i for r in additional_rows for i in r]
 
         row_input_tokens, column_token_span_maps, col_id = self.concate_cells(
             ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table,
-            max_table_token_length=max_table_token_length, cell_input_template=cell_input_template)
+            max_table_token_length=max_table_token_length, cell_input_template=cell_input_template, multi_row_split=multi_row_split)
 
         # it is possible that the first cell to too long and cannot fit into `max_table_token_length`
         # we need to discard this sample
         if len(row_input_tokens) == 0:
             raise TableTooLongError()
 
-        if row_input_tokens[-1] == self.config.column_delimiter:
+        if row_input_tokens[-1] in {self.config.column_delimiter, self.config.row_delimiter}:
             del row_input_tokens[-1]
 
         if self.config.context_first:
@@ -218,9 +223,9 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return instance
 
-    def get_additional_rows(self, example, sample_num_rows: int, exclude: Set[int]={}):
+    def get_multiple_rows(self, example, keep_num_rows: int, exclude: Set[int]={}, use_sample: bool = True, skip_empty: bool = True):
         additional_rows = []
-        if len(example.column_data) <= 0 or sample_num_rows <= 0:  # no data or no sample
+        if len(example.column_data) <= 0 or keep_num_rows <= 0:  # no data or no sample
             return additional_rows
 
         # get valid rows
@@ -229,6 +234,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         for row_idx in range(num_rows):
             if row_idx in exclude:
                 continue
+            if not skip_empty:
+                valid_rows.append(row_idx)
             valid = True
             for col_idx, column in enumerate(example.header):
                 val = example.column_data[col_idx][row_idx]
@@ -238,8 +245,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             if valid:
                 valid_rows.append(row_idx)
 
-        # sample sample_num_rows rows
-        sampled_rows = sample(valid_rows, min(len(valid_rows), sample_num_rows))
+        if use_sample:  # sample rows
+            sampled_rows = sample(valid_rows, min(len(valid_rows), keep_num_rows))
+        else:  # use the top rows
+            sampled_rows = valid_rows[:keep_num_rows]
         additional_rows = [[] for _ in range(len(sampled_rows))]
         for col_idx, column in enumerate(example.header):
             for i, row_idx in enumerate(sampled_rows):
@@ -249,14 +258,16 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
     def get_a_row(self, example):
         additional_rows = []
         answer = None
-        if 'firstansrow' in self.config.seq2seq_format:  # use the first answer
+        if 'firstansrow' in self.config.seq2seq_format:  # use the first answer and sample from other rows
             answer = example.answers[0]
             ans_coord = example.answer_coordinates[0] if len(example.answer_coordinates) > 0 else None
             exclude = {} if ans_coord is None else {ans_coord[0]}
             if self.config.additional_row_count:
-                additional_rows = self.get_additional_rows(example, self.config.additional_row_count, exclude=exclude)
+                additional_rows = self.get_multiple_rows(example, self.config.additional_row_count, exclude=exclude, use_sample=True)
         elif self.config.additional_row_count:
             raise NotImplementedError
+        elif self.config.top_row_count:
+            additional_rows = self.get_multiple_rows(example, self.config.top_row_count, use_sample=False, skip_empty=False)
 
         for col_idx, column in enumerate(example.header):
             if 'firstansrow' in self.config.seq2seq_format and ans_coord is not None:
@@ -323,6 +334,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.append(instance)
                 if 'schema-augmentation-gen' in seq2seq_format:
                     instances.append(self.create_sa_gen_instance(context, example.header))
+                if 'mention-context' in seq2seq_format:
+                    instances.extend(self.create_mention_context_instances(context, example, additional_rows))
+                if 'mention-table' in seq2seq_format:
+                    instances.extend(self.create_mention_table_instances(context, example, additional_rows))
 
             stop = False
             for fm in {'qa', 'sql', 'cell-filling', 'schema-augmentation'}:
@@ -334,6 +349,18 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 break
 
         return instances
+
+    def create_mention_context_instances(self, context, example: Example, additional_rows: List[List[Any]]):
+        # context + table without mask
+        table = Table('fake_table', example.header)
+        instance = self.get_input(context, table, additional_rows)
+        raise NotImplementedError
+
+    def create_mention_table_instances(self, context, example: Example, additional_rows: List[List[Any]]):
+        # context + table without mask
+        table = Table('fake_table', example.header)
+        instance = self.get_input(context, table, additional_rows)
+        raise NotImplementedError
 
     def _add_single_head(self, raw_tokens: List[str], toadd: List[str], target: List[str], seq_a_len: int):
         need_to_remove = len(raw_tokens) + len(toadd) + 1 - MAX_BERT_INPUT_LENGTH  # sep token
@@ -377,7 +404,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 target_tokens = [self.config.cls_token] + cell_value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
                 ctokens = self.get_cell_input(single_head, cell_value, cell_input_template=['column', '|', 'type', '|'])[0]
                 instances.append(self._add_single_head(raw_tokens, ctokens, target_tokens, seq_a_len))
-            if 'single-v2c' in seq2seqf and single_head.used:
+            if 'single-v2c' in seq2seqf and (single_head.value_used or single_head.used):
                 cell_value = single_head.sample_value_tokens[:self.config.max_cell_len]
                 vtokens = self.get_cell_input(single_head, cell_value, cell_input_template=['|', 'value'])[0]
                 ctokens = self.get_cell_input(single_head, cell_value, cell_input_template=['column', '|', 'type'])[0]
@@ -567,14 +594,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 )
             )
             for col_id, span
-            in enumerate(column_spans[:len(header)])  # only mask the first row and used columns if specified
+            in enumerate(column_spans)  # only mask the first row and used columns if specified
             if not self.config.mask_used_column_prob or header[col_id].used
         ]
         if self.config.mask_value:
             column_candidate_indices_value = [
                 list(range(*span['value']) if 'value' in span else [])
                 for col_id, span
-                in enumerate(column_spans[:len(header)])  # only mask the first row and used columns if specified
+                in enumerate(column_spans)  # only mask the first row and used columns if specified
                 if not self.config.mask_used_column_prob or header[col_id].used
             ]
             assert len(column_candidate_indices_value) == len(column_candidate_indices), 'candidate indices length inconsistent'
@@ -585,7 +612,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         masked_column_prob = None
         if self.config.mask_used_column_prob:
-            masked_column_prob = min(self.config.masked_column_prob * len(column_spans[:len(header)]) / (len(column_candidate_indices) or 1), 1.0)
+            masked_column_prob = min(self.config.masked_column_prob * len(column_spans) / (len(column_candidate_indices) or 1), 1.0)
 
         context_candidate_indices = (
             list(range(*input_instance['context_span']))[1:]

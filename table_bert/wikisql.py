@@ -4,7 +4,9 @@ from pathlib import Path
 import random
 from tqdm import tqdm
 import re
+from collections import defaultdict
 import logging
+import numpy as np
 from table_bert.dataset_utils import BasicDataset
 
 
@@ -36,7 +38,8 @@ class WikiSQL(BasicDataset):
         rep = 'SELECT {agg} {sel} FROM table'.format(
             agg=WikiSQL.AGG_OPS[agg], sel=columns[sel] if columns is not None else 'col{}'.format(sel))
         if conditions:
-            rep += ' WHERE ' + ' AND '.join(['{} {} {}'.format(columns[i], WikiSQL.COND_OPS[o], v) for i, o, v in conditions])
+            rep += ' WHERE ' + ' AND '.join(
+                ['{} {} {}'.format(columns[i], WikiSQL.COND_OPS[o], v) for i, o, v in conditions])
         return ' '.join(rep.split())
 
     @staticmethod
@@ -49,21 +52,27 @@ class WikiSQL(BasicDataset):
 
     def convert_to_tabert_format(self, split: str, output_path: Path, add_sql: bool = False):
         count = num_rows = num_cols = num_used_cols = 0
+        numrows2count = defaultdict(lambda: 0)
+        numusedcells2count = defaultdict(lambda: 0)
+        nummentions2count = defaultdict(lambda: 0)
+        find_mention_ratios: List[float] = []
+        condition_found: List[bool] = []
         data = getattr(self, '{}_data'.format(split))
-        all_types = set()
         with open(output_path, 'w') as fout:
             for idx, example in tqdm(enumerate(data)):
                 td = {
                     'uuid': None,
-                    'table': {'caption': '', 'header': [], 'data': [], 'used_header': []},
+                    'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
                     'context_before': [],
-                    'context_after': []
+                    'context_after': [],
+                    'context_before_mentions': [],
                 }
                 td['uuid'] = f'wsql_{split}_{idx}'
                 question = example['question']
                 td['context_before'].append(question)
                 td['table']['data'] = self.normalize_rows(example['table']['rows'])
                 num_rows += len(td['table']['data'])
+                numrows2count[len(td['table']['data'])] += 1
 
                 # extract column name
                 for cname, ctype in zip(example['table']['header'], example['table']['types']):
@@ -80,10 +89,9 @@ class WikiSQL(BasicDataset):
                     })
                     td['table']['header'][-1]['name'] = cname
                     td['table']['header'][-1]['type'] = ctype if ctype == 'text' else 'real'
-                    all_types.add(ctype)
                 num_cols += len(td['table']['header'])
 
-                # extract value, and used
+                # extract value, used, and data_used
                 sql = example['sql']
                 num_used_cols += len(set([sql['sel']] + [c[0] for c in sql['conds']]))
                 td['table']['header'][sql['sel']]['used'] = True
@@ -93,19 +101,33 @@ class WikiSQL(BasicDataset):
                     conds = [cond, re.sub(r'\.0$', '', cond), cond.title()]  # match candidates
                     column_data = [row[col_ind] for row in td['table']['data']]
                     value = None
+                    row_ind = None
                     for cond in conds:
-                        for v in column_data:
+                        for i, v in enumerate(column_data):
                             if cond == v or cond.lower() == v.lower() or self.float_eq(cond, v):
                                 value = v
+                                row_ind = i
                                 break
                         if value is not None:
                             break
                     if value is None:
                         logging.warn(f'{conds} not in data {column_data} for {question}')
                         td['table']['header'][col_ind]['sample_value']['value'] = random.choice(column_data)
+                        condition_found.append(False)
                     else:
                         td['table']['header'][col_ind]['sample_value']['value'] = value
                         td['table']['header'][col_ind]['value_used'] = True
+                        td['table']['data_used'].append((row_ind, col_ind))
+                        condition_found.append(True)
+                td['table']['data_used'] = sorted(list(set(td['table']['data_used'])))
+
+                # extract mentions
+                hl_cells = td['table']['data_used']
+                mention_locations = self.get_mention_locations(question, td['table']['data'], hl_cells)
+                td['context_before_mentions'].append(mention_locations)
+                numusedcells2count[len(hl_cells)] += 1
+                nummentions2count[len(mention_locations)] += 1
+                find_mention_ratios.append(len(mention_locations) / (len(hl_cells) or 1))
 
                 if add_sql:  # extract sql
                     td['sql'] = self.convert_to_human_readable(
@@ -114,3 +136,8 @@ class WikiSQL(BasicDataset):
                 count += 1
                 fout.write(json.dumps(td) + '\n')
         print('total count {}, used columns {}/{}'.format(count, num_used_cols, num_cols))
+        print(f'#rows -> count {sorted(numrows2count.items())}')
+        print(f'#used cells -> count {sorted(numusedcells2count.items())}')
+        print(f'#mentions -> count {sorted(nummentions2count.items())}')
+        print(f'find mention ratio {np.mean(find_mention_ratios)}')
+        print(f'find condition ratio {np.mean(condition_found)}')

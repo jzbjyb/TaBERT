@@ -453,6 +453,28 @@ jobs:
     /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
     /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_mlm seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20/pytorch_model_epoch19.bin"'
+- name: bart_turl_cf_mlm_pretrain_seq2seq_noonlytable
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_seq2seq_noonlytable seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_ep5/pytorch_model_epoch04.bin"'
+- name: bart_turl_cf_mlm_pretrain_seq2seq_nomlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_seq2seq_nomlm seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_nomlm_onlytable_ep5/pytorch_model_epoch04.bin"'
 
 # turl cf (bart gen)
 - name: bart_turl_cf_gen
@@ -555,6 +577,28 @@ jobs:
     /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
     /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_mlm seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/vanilla_tabert_totto_maskseparate_bart_mlm_ep20/pytorch_model_epoch19.bin"'
+- name: bart_turl_sa_mlm_pretrain_seq2seq_noonlytable
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_seq2seq_noonlytable seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_ep5/pytorch_model_epoch04.bin"'
+- name: bart_turl_sa_mlm_pretrain_seq2seq_nomlm
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_seq2seq_nomlm seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/vanilla_tabert_bart_3merge_seq2seq_nomlm_onlytable_ep5/pytorch_model_epoch04.bin"'
 
 # turl sa (bart gen)
 - name: bart_turl_sa_gen
@@ -623,3 +667,15 @@ jobs:
     /mnt/root/TaBERT/data/train_data/turl_sa_bert_mlm
     /mnt/root/TaBERT/data/runs/tabert_my_turl_sa_mlm mlm 32 10
     '"/mnt/root/TaBERT/data/runs/vanilla_tabert_ep10/pytorch_model_epoch09.bin"'
+
+# 3merge wholetabel
+- name: wholetable_3merge_bart_mlm
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm seq2seq 24 10 null

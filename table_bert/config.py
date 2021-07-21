@@ -125,6 +125,7 @@ class TableBertConfig(SimpleNamespace):
         base_model_name: str = 'bert-base-uncased',
         load_model_from: str = None,
         column_delimiter: str = '[SEP]',
+        row_delimiter: str = '[SEP]',
         context_first: bool = True,
         cell_input_template: str = 'column | type | value',
         column_representation: str = 'mean_pool',
@@ -140,6 +141,8 @@ class TableBertConfig(SimpleNamespace):
         objective_function: str = 'mlm',
         contrastive_emb_size: int = 512,
         additional_row_count: int = 0,
+        top_row_count: int = 0,
+        max_num_mention_per_example: int = 0,
         use_sampled_value: bool = False,
         mask_used_column_prob: float = 0.0,
         mask_value: bool = False,
@@ -160,15 +163,25 @@ class TableBertConfig(SimpleNamespace):
         self.use_electra = self.model_type == ModelType.ELECTRA
 
         self.tokenizer_cls = MODEL2TOKENIZER[self.model_type]
+        tokenizer = self.tokenizer_cls.from_pretrained(self.base_model_name)
 
         self.column_delimiter = column_delimiter
+        self.row_delimiter = row_delimiter
         if column_delimiter == '[SEP]':  # model-dependent delimiter
             self.column_delimiter = MODEL2SEP[self.model_type]
+        else:
+            self.column_delimiter = tokenizer.tokenize(self.column_delimiter)
+            assert len(self.column_delimiter) == 1, 'column_delimiter should only contain a single word piece'
+            self.column_delimiter =  self.column_delimiter[0]
+        if row_delimiter == '[SEP]':  # model-dependent delimiter
+            self.row_delimiter = MODEL2SEP[self.model_type]
+        else:
+            raise NotImplementedError
         self.sep_token = MODEL2SEP[self.model_type]
-        self.sep_id = self.tokenizer_cls.from_pretrained(self.base_model_name).convert_tokens_to_ids([self.sep_token])[0]
+        self.sep_id = tokenizer.convert_tokens_to_ids([self.sep_token])[0]
         assert multi_decode_sep_token != self.sep_token, \
             'sep token is eos tokens, which should not be used as a symbol for multi answer decoding'
-        self.multi_decode_sep_tokens: List[str] = self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(multi_decode_sep_token)
+        self.multi_decode_sep_tokens: List[str] = tokenizer.tokenize(multi_decode_sep_token)
         self.cls_token = MODEL2CLS[self.model_type]
         self.mask_token = MODEL2MASK[self.model_type]
         self.pad_id = MODEL2PADID[self.model_type]
@@ -192,15 +205,18 @@ class TableBertConfig(SimpleNamespace):
 
         if isinstance(cell_input_template, str):
             if ' ' in cell_input_template:
-                cell_input_template = cell_input_template.split(' ')
+                if '|' in cell_input_template:
+                    assert len(tokenizer.tokenize('|')) == 1, 'template should only contain single word piece tokens'
+                    cell_input_template = [tokenizer.tokenize(t)[0] if t == '|' else t for t in cell_input_template.split(' ')]
+                else:
+                    raise NotImplementedError
             else:
                 if self.model_type not in {ModelType.BERT, ModelType.ELECTRA, ModelType.RoBERTa}:
                     raise Exception(
                         f'WARNING: cell_input_template is outdated: {cell_input_template}, '
                         f'tokenizing this template using transformers tokenizers might have unexpected behaviors')
                 else:
-                    cell_input_template = \
-                        self.tokenizer_cls.from_pretrained(self.base_model_name).tokenize(cell_input_template)
+                    cell_input_template = tokenizer.tokenize(cell_input_template)
 
         self.cell_input_template = cell_input_template
 
@@ -210,7 +226,11 @@ class TableBertConfig(SimpleNamespace):
         self.context_sample_strategy = context_sample_strategy
         self.table_mask_strategy = table_mask_strategy
         self.additional_row_count = additional_row_count
-        assert additional_row_count >= 0
+        self.top_row_count = top_row_count
+        assert additional_row_count >= 0 and top_row_count >= 0
+        assert not additional_row_count or not top_row_count, \
+            'additional_row_count and top_row_count cannot be non-zero at the same time'
+        self.max_num_mention_per_example = max_num_mention_per_example
         self.use_sampled_value = use_sampled_value
         self.mask_used_column_prob = mask_used_column_prob
         assert mask_used_column_prob in {0.0, 1.0}, 'other values are not implemented'
@@ -251,6 +271,7 @@ class TableBertConfig(SimpleNamespace):
         parser.set_defaults(context_first=True)
 
         parser.add_argument("--column_delimiter", type=str, default='[SEP]', help='Column delimiter')
+        parser.add_argument("--row_delimiter", type=str, default='[SEP]', help='row delimiter')
         parser.add_argument("--cell_input_template", type=str, default='column | type | value', help='Cell representation')
         parser.add_argument("--column_representation", type=str, default='mean_pool', help='Column representation')
 
@@ -274,16 +295,18 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--table_mask_strategy', type=str, default='column',
                             choices=['column', 'column_token'])
         parser.add_argument('--additional_row_count', type=int, default=0)
+        parser.add_argument('--top_row_count', type=int, default=0)
+        parser.add_argument('--max_num_mention_per_example', type=int, default=5,
+                            help='max number of mentions (in either context or table) to use')
         parser.add_argument('--use_sampled_value', action='store_true')
         parser.add_argument('--mask_used_column_prob', type=float, default=0.0, help='probability of only masking used columns')
         parser.add_argument('--mask_value', action='store_true')
         parser.add_argument('--mask_value_column_separate', action='store_true')
         parser.add_argument('--seq2seq_format', type=str,
-                            choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c',
-                                     'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
+                            choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
                                      'qa_firstansrow', 'sql',
-                                     'cell-filling-mask', 'cell-filling-gen',
-                                     'schema-augmentation-mask', 'schema-augmentation-gen'],
+                                     'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
+                                     'mention-context', 'mention-table', 'mlm_mention-context', 'mlm_mention-table'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)

@@ -81,7 +81,11 @@ def sample_context(example: Example, max_context_length: int, context_sample_str
     elif context_sample_strategy == 'concate_and_enumerate':
         # concatenate the context before and after, select a random chunk of text
         all_context = example.context[0] + example.context[1]
+        all_context_mentions = example.context_mentions[0] + example.context_mentions[1]
+        if len(all_context) > 1 and len(all_context_mentions) > 0:
+            raise NotImplementedError('need to adjust mention index for multiple contexts')
         selected_context = []
+        selected_context_mentions = []
         for i in range(len(all_context)):
             sent = all_context[i]
             selected_context.extend(sent)

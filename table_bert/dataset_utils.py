@@ -1,8 +1,10 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 from collections import defaultdict
 import json
 import csv
 import re
+from difflib import SequenceMatcher
+
 
 class BasicDataset(object):
     @staticmethod
@@ -65,3 +67,42 @@ class BasicDataset(object):
                 raise Exception(f'{prep_file} and {answer_file} have different #rows')
         print('#ans -> count: {}'.format(sorted(numans2count.items())))
         print(f'found {found_count} out of {total_count}')
+
+    @staticmethod
+    def is_a_word(sentence: str, substr: str):
+        if len(substr) <= 0:
+            return False
+        start = sentence.find(substr)
+        if start < 0:  # not found
+            return False
+        end = start + len(substr)
+        if start != 0 and sentence[start - 1].isalnum():
+            return False
+        if end != len(sentence) and sentence[end].isalnum():
+            return False
+        return True
+
+    @staticmethod
+    def longest_substring(str1, str2):
+        sm = SequenceMatcher(None, str1, str2)
+        match = sm.find_longest_match(0, len(str1), 0, len(str2))
+        if match.size != 0:
+            return str1[match.a:match.a + match.size], match.a, match.b
+        return '', -1, -1
+
+    @staticmethod
+    def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: List[Tuple[int, int]]):
+        locations: Set[Tuple[int, int]] = set()  # (inclusive, exclusive)
+        context = context.lower()
+        for r, c in highlighed_cells:
+            v = table[r][c].lower()
+            if len(v) <= 0:
+                continue
+            # common = STree.STree([v, context]).lcs()  # slow
+            common = BasicDataset.longest_substring(context, v)[0]
+            common = common.strip()
+            find = len(common) == len(v) or (len(v) >= 5 and BasicDataset.is_a_word(v, common)) or len(common) > 10
+            if len(common) > 0 and find:
+                start = context.find(common)
+                locations.add((start, start + len(common)))
+        return sorted(list(locations))

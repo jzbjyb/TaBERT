@@ -45,6 +45,10 @@ class TableFact(BasicDataset):
                 raw_sentence.append(piece)
         return ''.join(raw_sentence), mentions
 
+    def get_page_ids(self, split: str):
+        data = getattr(self, '{}_data'.format(split))
+        return set(tid.split('-')[1] for tid in data)
+
     def convert_to_tabert_format(self, split: str, output_path: Path):
         count = num_rows = num_cols = num_used_rows = num_used_cols = 0
         data = getattr(self, '{}_data'.format(split))

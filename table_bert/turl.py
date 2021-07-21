@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Set
 import json
 from pathlib import Path
 from tqdm import tqdm
@@ -105,13 +105,19 @@ class TurlData(BasicDataset):
                  continue
             yield sub_col_idx, sub_cells, obj_col_idx, obj_cells
 
-    def convert_to_tabert_format(self, split: str, output_path: Path, task: str):
+    def get_page_titles(self, split: str):
+        data = getattr(self, '{}_data'.format(split))
+        return set(e['pgTitle'] for e in data)
+
+    def convert_to_tabert_format(self, split: str, output_path: Path, task: str, avoid_titles: Set[str] = set()):
         assert task in {'cell_filling', 'row_population', 'schema_augmentation'}
         count = num_rows = num_cols = 0
         num_rows_per_example: List[int] = []
         data = getattr(self, '{}_data'.format(split))
         with open(output_path, 'w') as fout:
             for idx, example in tqdm(enumerate(data)):
+                if example['pgTitle'] in avoid_titles:
+                    continue
                 td = {
                     'uuid': f"turl_{task}_{split}_{example['_id']}",
                     'table': {

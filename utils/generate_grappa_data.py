@@ -12,7 +12,7 @@ from table_bert.turl import TurlData
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl'])
+    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap'])
     parser.add_argument('--path', type=Path, required=True)
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
@@ -50,10 +50,17 @@ def main():
                           args.output_dir / args.split / 'preprocessed_with_ans.jsonl',
                           string_match=True)
     elif args.data == 'turl':
+        avoid_titles = set()
+        with open(str(args.path / 'titles_in_3merge.txt'), 'r') as fin:
+            for l in fin:
+                avoid_titles.add(l.strip())
         turl = TurlData(args.path)
         os.makedirs(args.output_dir / args.split, exist_ok=True)
-        turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_cf.jsonl', task='cell_filling')
-        turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_sa.jsonl', task='schema_augmentation')
+        # only use avoid_titles for the test split
+        turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_cf_avoid3merge.jsonl',
+                                      task='cell_filling', avoid_titles=avoid_titles)
+        turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_sa_avoid3merge.jsonl',
+                                      task='schema_augmentation', avoid_titles=avoid_titles)
     else:
         raise NotImplementedError
 

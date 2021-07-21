@@ -1,3 +1,7 @@
+import os
+os.environ['USE_TRANSFORMER'] = 'True'  # use new version
+
+from typing import List
 from argparse import ArgumentParser
 import json
 import numpy as np
@@ -5,10 +9,20 @@ import random
 import csv
 from collections import defaultdict
 from rouge import Rouge
+import re
 from table_bert.dataset_utils import BasicDataset
+from table_bert.config import TableBertConfig, MODEL2SEP, MODEL2CLS, MODEL2TOKENIZER
 from utils.wtq_evaluator import to_value
 AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
 COND_OPS = ['=', '>', '<', 'OP']
+
+
+def compute_f1(preds: List[str], golds: List[str]):
+    sames = set(preds) & set(golds)
+    p = len(sames) / (len(preds) or 1)
+    r = len(sames) / (len(golds) or 1)
+    f1 = 2 * p * r / ((p + r) or 1)
+    return f1
 
 
 if __name__ == '__main__':
@@ -16,9 +30,15 @@ if __name__ == '__main__':
     parser.add_argument('--prediction', type=str, required=True)
     parser.add_argument('--gold', type=str, required=True)
     parser.add_argument('--output', type=str, default=None)
-    parser.add_argument('--data', type=str, choices=['wikisql', 'wtq', 'wikisql_sql'])
+    parser.add_argument('--data', type=str, choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
+    parser.add_argument('--model_type', type=str, default='facebook/bart-base')
     args = parser.parse_args()
     rouge = Rouge()
+
+    mt = TableBertConfig.check_model_type(args.model_type)
+    tokenizer = MODEL2TOKENIZER[mt].from_pretrained(args.model_type)
+    sep_token = MODEL2SEP[mt]
+    cls_token = MODEL2CLS[mt]
 
     ems = []
     tapas_ems = []  # follow the tapas filtering conditions
@@ -48,7 +68,9 @@ if __name__ == '__main__':
                 pred, gold = p[0].strip(), p[1].strip()
             elif len(p) == 3:
                 pred, gold, source = p[0].strip(), p[1].strip(), p[2].strip()
-                source.replace('<pad>', '')
+                pred = pred.replace('<pad>', '')  # TODO: use model-wise param
+                gold = gold.replace('<pad>', '')
+                source = source.replace('<pad>', '')
                 num_cell = len(source.split('</s>')) - 1
                 num_cells.append(num_cell)
                 first_word = source.split()[1].lower()  # skip cls
@@ -58,6 +80,17 @@ if __name__ == '__main__':
                 em = to_value(gold).match(to_value(pred))
             elif args.data == 'wikisql_sql':
                 em = rouge.get_scores([pred.lower()], [gold.lower()], avg=True)['rouge-l']['f']
+            elif args.data == 'turl':
+                pred = pred.replace(cls_token, '').replace(sep_token, '')
+                gold = gold.replace(cls_token, '').replace(sep_token, '')
+                pred = re.sub('\s+', '', pred)
+                gold = re.sub('\s+', '', gold)
+                preds = [i for i in pred.split('<|>') if i != '']
+                golds = [i for i in gold.split('<|>') if i != '']
+                #print(preds)
+                #print(golds)
+                #input()
+                em = compute_f1(preds, golds)
             else:
                 raise NotImplementedError
             ems.append(em)

@@ -43,6 +43,10 @@ class WikiSQL(BasicDataset):
     def normalize_rows(rows: List[List]):
         return [[str(cell).replace(' ,', ',') for cell in row] for row in rows]
 
+    def get_page_ids(self, split: str):
+        data = getattr(self, '{}_data'.format(split))
+        return set(e['table_id'].split('-')[1] for e in data)
+
     def convert_to_tabert_format(self, split: str, output_path: Path, add_sql: bool = False):
         count = num_rows = num_cols = num_used_cols = 0
         data = getattr(self, '{}_data'.format(split))

@@ -281,7 +281,7 @@ def main():
     logger.info('Loading dev/test (optional) set...')
     sys.stdout.flush()
     dev_set = dataset_cls(epoch=0, training_path=dev_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
-                          multi_gpu=args.multi_gpu, debug=args.debug_dataset)
+                          multi_gpu=args.multi_gpu, debug=args.debug_dataset) if dev_data_dir.exists() else None
     test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
                            multi_gpu=args.multi_gpu, debug=args.debug_dataset) if test_data_dir.exists() else None
 
@@ -364,9 +364,11 @@ def main():
 
             # perform validation
             logger.info("** ** * Perform validation ** ** * ")
-            dev_results = trainer.validate(dev_set)
-            dev_results['epoch'] = epoch
-            dev_results = {f'dev-{k}': v for k, v in dev_results.items()}
+            dev_results = {}
+            if dev_data_dir.exists():
+                dev_results = trainer.validate(dev_set)
+                dev_results['epoch'] = epoch
+                dev_results = {f'dev-{k}': v for k, v in dev_results.items()}
             test_results = {}
             if test_data_dir.exists():
                 test_results = trainer.validate(test_set)

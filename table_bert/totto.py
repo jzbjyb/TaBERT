@@ -141,6 +141,10 @@ class Totto(BasicDataset):
                 merged_hr.append(_cell)
         return num_hr, merged_hr
 
+    def get_page_titles(self, split: str):
+        data = getattr(self, '{}_data'.format(split))
+        return set(e['table_page_title'] for e in data)
+
     def convert_to_tabert_format(self, split: str, output_path: Path):
         count = num_rows = num_cols = num_used_rows = num_used_cols = 0
         data = getattr(self, '{}_data'.format(split))

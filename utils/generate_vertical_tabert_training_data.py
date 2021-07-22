@@ -82,22 +82,26 @@ def sample_context(example: Example, max_context_length: int, context_sample_str
         # concatenate the context before and after, select a random chunk of text
         all_context = example.context[0] + example.context[1]
         all_context_mentions = example.context_mentions[0] + example.context_mentions[1]
-        if len(all_context) > 1 and len(all_context_mentions) > 0:
-            raise NotImplementedError('need to adjust mention index for multiple contexts')
+        if len(all_context_mentions) > 1:
+            raise NotImplementedError('adjust mention index for multiple contexts')
         selected_context = []
         selected_context_mentions = []
         for i in range(len(all_context)):
             sent = all_context[i]
+            ment = all_context_mentions[i]
             selected_context.extend(sent)
+            selected_context_mentions.extend(ment)
             if len(selected_context) > max_context_length:
                 selected_context = selected_context[:max_context_length]
-
+                selected_context_mentions = [(min(s, max_context_length - 1), min(e, max_context_length))
+                                             for (s, e) in selected_context_mentions if s < max_context_length]
                 if selected_context:
-                    yield selected_context
+                    yield selected_context, selected_context_mentions
                 selected_context = []
+                selected_context_mentions = []
 
         if selected_context:
-            yield selected_context
+            yield selected_context, selected_context_mentions
     else:
         raise RuntimeError('Unknown context sample strategy')
 

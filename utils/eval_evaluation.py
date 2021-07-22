@@ -26,7 +26,7 @@ if __name__ == '__main__':
     cellstatus2name = {0: 'name', 1: 'type', 2: 'value'}
     type2issames = defaultdict(list)
     with open(args.prediction, 'r') as fin, open(args.prep_file, 'r') as pfin:
-        for _, l in enumerate(fin):
+        for line_id, l in enumerate(fin):
             example = json.loads(pfin.readline())
             example = Example.from_dict(example, tokenizer, suffix=None)
             l = json.loads(l)

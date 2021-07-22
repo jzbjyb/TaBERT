@@ -1,9 +1,9 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
 input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=100
-max_num_mention_per_example=5
+max_num_mention_per_example=3
 column_delimiter='//'
 row_delimiter="[SEP]"
 mkdir -p ${output_dir}
@@ -37,7 +37,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format mlm \
+    --seq2seq_format mlm_mention-context \
     --dev_num 0 \
     --global_rank $i &
 done

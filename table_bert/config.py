@@ -18,6 +18,7 @@ from enum import Enum
 
 from table_bert.utils import BertTokenizerWrapper, ElectraTokenizer, BertConfig, ElectraConfig, \
     RobertaTokenizer, RobertaConfig, BartConfig, BartTokenizerWrapper
+from table_bert.utils import BertTokenizerFast, ElectraTokenizerFast, RobertaTokenizerFast, BartTokenizerFastWrapper
 
 
 BERT_CONFIGS = {
@@ -85,6 +86,13 @@ MODEL2TOKENIZER = {
     ModelType.ELECTRA: ElectraTokenizer,
     ModelType.RoBERTa: RobertaTokenizer,
     ModelType.BART: BartTokenizerWrapper,
+}
+
+MODEL2TOKENIZERFAST = {
+    ModelType.BERT: BertTokenizerFast,
+    ModelType.ELECTRA: ElectraTokenizerFast,
+    ModelType.RoBERTa: RobertaTokenizerFast,
+    ModelType.BART: BartTokenizerFastWrapper,
 }
 
 MODEL2SEP = {
@@ -163,6 +171,7 @@ class TableBertConfig(SimpleNamespace):
         self.use_electra = self.model_type == ModelType.ELECTRA
 
         self.tokenizer_cls = MODEL2TOKENIZER[self.model_type]
+        self.tokenizer_fast_cls = MODEL2TOKENIZERFAST[self.model_type]
         tokenizer = self.tokenizer_cls.from_pretrained(self.base_model_name)
 
         self.column_delimiter = column_delimiter
@@ -306,7 +315,7 @@ class TableBertConfig(SimpleNamespace):
                             choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
                                      'qa_firstansrow', 'sql',
                                      'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
-                                     'mention-context', 'mention-table', 'mlm_mention-context', 'mlm_mention-table'],
+                                     'mention-context', 'mention-table', 'mlm_mention-context', 'mlm_mention-table', 'mlm_table-row-1'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)

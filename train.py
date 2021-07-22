@@ -388,7 +388,7 @@ def main():
 
         trainer.next_epoch()
 
-    if args.mode is not None:  # evaluate after training
+    if args.mode is not None and args.is_master:  # evaluate after training
         mode, which_part = args.mode.split('-')
         trainer.test(eval(f'{which_part}_set'), mode=mode)
 

@@ -160,6 +160,7 @@ def main():
 
     table_bert_config = TableBertConfig.from_dict(vars(args))
     tokenizer = table_bert_config.tokenizer_cls.from_pretrained(table_bert_config.base_model_name)
+    tokenizer_fast = table_bert_config.tokenizer_fast_cls.from_pretrained(table_bert_config.base_model_name)
     input_formatter = VanillaTableBertInputFormatter(table_bert_config, tokenizer)
 
     total_tables_num = int(subprocess.check_output(f"wc -l {args.train_corpus}", shell=True).split()[0])
@@ -183,7 +184,8 @@ def main():
     logger.debug(f'local dev table indices: {local_dev_table_indices[:1000]}')
     logger.debug(f'local train table indices: {local_train_table_indices[:1000]}')
 
-    with TableDatabase.from_jsonl(args.train_corpus, backend='memory', tokenizer=tokenizer, indices=local_indices,
+    with TableDatabase.from_jsonl(args.train_corpus, backend='memory', tokenizer=tokenizer, tokenizer_fast=tokenizer_fast,
+                                  indices=local_indices,
                                   skip_column_name_longer_than=table_bert_config.skip_column_name_longer_than,
                                   not_skip_empty_column_name=table_bert_config.not_skip_empty_column_name) as table_db:
         local_indices = {idx for idx in local_indices if idx in table_db}

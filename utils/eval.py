@@ -75,8 +75,12 @@ if __name__ == '__main__':
                 num_cells.append(num_cell)
                 first_word = source.split()[1].lower()  # skip cls
             if args.data == 'wikisql':  # exact match
+                pred = pred.replace(cls_token, '').replace(sep_token, '').strip()
+                gold = gold.replace(cls_token, '').replace(sep_token, '').strip()
                 em = pred.lower() == gold.lower()
             elif args.data == 'wtq':  # official evaluation
+                pred = pred.replace(cls_token, '').replace(sep_token, '').strip()
+                gold = gold.replace(cls_token, '').replace(sep_token, '').strip()
                 em = to_value(gold).match(to_value(pred))
             elif args.data == 'wikisql_sql':
                 em = rouge.get_scores([pred.lower()], [gold.lower()], avg=True)['rouge-l']['f']

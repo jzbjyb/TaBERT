@@ -61,15 +61,18 @@ except ImportError:
     hf_flag = 'new'
     TRANSFORMER_VERSION = TransformerVersion.TRANSFORMERS
 
+# BERT
+from transformers import BertTokenizerFast
+
 # ELECTRA
-from transformers import ElectraConfig, ElectraTokenizer, ElectraForMaskedLM, ElectraForPreTraining
+from transformers import ElectraConfig, ElectraTokenizer, ElectraTokenizerFast, ElectraForMaskedLM, ElectraForPreTraining
 
 # RoBERTa
 # TODO: set add_prefix_space to True?
-from transformers import RobertaConfig, RobertaTokenizer, RobertaForMaskedLM
+from transformers import RobertaConfig, RobertaTokenizer, RobertaTokenizerFast, RobertaForMaskedLM
 
 # BART
-from transformers import BartConfig, BartTokenizer, BartForConditionalGeneration
+from transformers import BartConfig, BartTokenizer, BartTokenizerFast, BartForConditionalGeneration
 from transformers.modeling_bart import shift_tokens_right
 
 
@@ -82,3 +85,15 @@ class BartTokenizerWrapper(BartTokenizer):
         if 'add_prefix_space' in kwargs:
             del kwargs['add_prefix_space']
         return super(BartTokenizerWrapper, self).tokenize(*args, **kwargs, add_prefix_space=True)  # always add space
+
+class BartTokenizerFastWrapper(BartTokenizerFast):
+    def __call__(self, *args, **kwargs):
+        if type(args[0]) is not str:
+            raise NotImplementedError
+        if len(args[0]) > 0 and args[0][0] != ' ':
+            args = (' ' + args[0],) + args[1:]  # add_prefix_space
+            result = super(BartTokenizerFastWrapper, self).__call__(*args, **kwargs)
+            result['added_prefix_space'] = True
+        else:
+            result = super(BartTokenizerFastWrapper, self).__call__(*args, **kwargs)
+        return result

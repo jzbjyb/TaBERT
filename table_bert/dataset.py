@@ -23,7 +23,7 @@ import redis
 import numpy as np
 import torch
 import zmq
-from table_bert.utils import BertTokenizer
+from table_bert.utils import BertTokenizer, BertTokenizerFast
 from table_bert.config import TableBertConfig
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
@@ -424,14 +424,14 @@ class TableDataset(Dataset):
 
 
 class Example(object):
-    def __init__(self, uuid, header, context: Tuple[List, List], context_mentions: Tuple[List, List]=([], []),
+    def __init__(self, uuid, header, context: Tuple[List, List], context_mentions: Tuple[List, List]=(None, None),
                  column_data=None, column_data_used=None, is_positive=True,
                  answer_coordinates: List[Tuple[int, int]]=None, answers: List[str]=None, sql: str=None, **kwargs):
         self.uuid = uuid
         self.header = header
         self.context = context
-        self.context_mentions = context_mentions
-        assert len(context[0]) == len(context_mentions[0]) and len(context[1]) == len(context_mentions[1])
+        self.context_mentions = [[[] for _ in range(len(context[0]))] if context_mentions[0] is None else context_mentions[0],
+                                 [[] for _ in range(len(context[1]))] if context_mentions[1] is None else context_mentions[1]]
         self.column_data = column_data
         self.column_data_used = column_data_used
         self.is_positive = is_positive
@@ -477,8 +477,63 @@ class Example(object):
         data['header'] = header
         return Example(**data)
 
+    @staticmethod
+    def overlap(s1: int, e1: int, s2: int, e2: int):  # inclusive, exclusive
+        # 0 -> overlap
+        # 1 -> the first passed the second
+        # -1 -> the first not reached second
+        if s1 >= e2:
+            return 1
+        if e1 <= s2:
+            return -1
+        return 0
+
+    @staticmethod
+    def char_index2token_index(offsets: List[Tuple[int, int]], char_mentions: List[Tuple[int, int]], added_prefix_space: bool):
+        char_adjust = -1 if added_prefix_space else 0
+        token_mentions: List[Tuple[int, int]] = [None for _ in range(len(char_mentions))]
+        midx = tid = 0
+        while tid < len(offsets) and midx < len(char_mentions):
+            start, end = offsets[tid]
+            start = start + char_adjust
+            end = end + char_adjust
+            status = None
+            while midx < len(char_mentions):
+                ms, me = char_mentions[midx]
+                status = Example.overlap(start, end, ms, me)
+                if status != 1:
+                    break
+                midx += 1
+            if status == 0:  # overlap
+                if token_mentions[midx] is None:
+                    token_mentions[midx] = (tid, tid + 1)
+                else:
+                    token_mentions[midx] = (token_mentions[midx][0], tid + 1)
+                if char_mentions[midx][1] < end:
+                    midx += 1
+                else:
+                    tid += 1
+            else:  # tid behind
+                tid += 1
+        for tm in token_mentions:
+            if tm is None: raise Exception(f'char2token index error {offsets} {char_mentions}')
+        token_mentions = sorted(set(token_mentions))  # multiple mentions might be from the same token
+        return token_mentions
+
+    @staticmethod
+    def mention_postprocess(mentions: List[Tuple[int, int]]):
+        # dedup, sort, remove overlap
+        de_overlap = []
+        prev = -1
+        for s, e in sorted(set(map(tuple, mentions))):
+            if s < prev:
+                continue
+            de_overlap.append((s, e))
+            prev = e
+        return de_overlap
+
     @classmethod
-    def from_dict(cls, entry: Dict, tokenizer: Optional[BertTokenizer], suffix) -> 'Example':
+    def from_dict(cls, entry: Dict, tokenizer: Optional[BertTokenizer], tokenizer_fast: Optional[BertTokenizerFast]=None, suffix=None) -> 'Example':
         def _get_data_source():
             if 'wiki' in entry['uuid']:
                 return 'wiki'
@@ -527,8 +582,11 @@ class Example(object):
             column_data_used = []
 
         context_before = []
+        context_before_offsets = []
         context_after = []
+        context_after_offsets = []
 
+        aps = False
         if source == 'wiki':
             for para in entry['context_before']:
                 for sent in para:
@@ -545,18 +603,44 @@ class Example(object):
                 context_before.append(caption)
         else:
             for sent in entry['context_before']:
+                offsets = []
+                if tokenizer_fast:
+                    sent_fast = tokenizer_fast(sent, add_special_tokens=False, return_offsets_mapping=True)
+                    offsets = sent_fast['offset_mapping']
+                    if 'added_prefix_space' in sent_fast: aps = sent_fast['added_prefix_space']
                 if tokenizer:
                     sent = tokenizer.tokenize(sent)
+                    if tokenizer_fast:
+                        assert len(sent_fast['input_ids']) == len(sent), f"tokenizer results inconsistent {sent} {sent_fast['input_ids']}"
                 context_before.append(sent)
+                context_before_offsets.append(offsets)
 
             for sent in entry['context_after']:
+                offsets = []
+                if tokenizer_fast:
+                    sent_fast = tokenizer_fast(sent, add_special_tokens=False, return_offsets_mapping=True)
+                    offsets = sent_fast['offset_mapping']
+                    if 'added_prefix_space' in sent_fast: aps = sent_fast['added_prefix_space']
                 if tokenizer:
                     sent = tokenizer.tokenize(sent)
+                    if tokenizer_fast:
+                        assert len(sent_fast['input_ids']) == len(sent), 'tokenizer results inconsistent'
                 context_after.append(sent)
+                context_after_offsets.append(offsets)
 
-        # TODO: add conversion from char index to token index
-        context_before_mentions = entry['context_before_mentions'] if 'context_before_mentions' in entry else []
-        context_after_mentions = entry['context_after_mentions'] if 'context_after_mentions' in entry else []
+        cbm = cam = None
+        if 'context_before_mentions' in entry:
+            cbm = entry['context_before_mentions']
+            assert len(cbm) == len(context_before_offsets)
+            # TODO: modify files to avoid this postprocess
+            cbm = [Example.char_index2token_index(off, Example.mention_postprocess(cm), added_prefix_space=aps)
+                   for off, cm in zip(context_before_offsets, cbm)]
+        if 'context_after_mentions' in entry:
+            cam = entry['context_after_mentions']
+            assert len(cam) == len(context_after_offsets)
+            # TODO: modify files to avoid this postprocess
+            cam = [Example.char_index2token_index(off, Example.mention_postprocess(cm), added_prefix_space=aps)
+                   for off, cm in zip(context_after_offsets, cam)]
 
         uuid = entry['uuid']
         is_positive = entry['is_positive'] if 'is_positive' in entry else True
@@ -567,7 +651,7 @@ class Example(object):
 
         return cls(uuid, header,
                    (context_before, context_after),
-                   (context_before_mentions, context_after_mentions),
+                   (cbm, cam),
                    column_data=column_data,
                    column_data_used=column_data_used,
                    source=source,
@@ -711,6 +795,7 @@ class TableDatabase:
         cls,
         file_path: Path,
         tokenizer: Optional[BertTokenizer] = None,
+        tokenizer_fast: Optional[BertTokenizerFast] = None,
         backend='redis',
         num_workers=None,
         indices=None,
@@ -736,6 +821,7 @@ class TableDatabase:
                     example = Example.from_dict(
                         ujson.loads(json_line),
                         tokenizer,
+                        tokenizer_fast=tokenizer_fast,
                         suffix=None
                     )
 

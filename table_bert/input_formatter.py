@@ -7,7 +7,8 @@
 
 from math import ceil
 from random import choice, shuffle, sample, random, randint
-from typing import List, Callable, Dict, Any, Union, Set
+from typing import List, Callable, Dict, Any, Union, Set, Tuple
+import copy
 
 from table_bert.utils import BertTokenizer
 from table_bert.table_bert import MAX_BERT_INPUT_LENGTH, MAX_TARGET_LENGTH
@@ -300,7 +301,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             example, self.config.max_context_len, context_sample_strategy=self.config.context_sample_strategy)
         seq2seq_format = self.config.seq2seq_format
 
-        for context in context_iter:
+        for context, context_mentions in context_iter:
             # row_num = len(example.column_data)
             # sampled_row_id = choice(list(range(row_num)))
 
@@ -335,9 +336,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 if 'schema-augmentation-gen' in seq2seq_format:
                     instances.append(self.create_sa_gen_instance(context, example.header))
                 if 'mention-context' in seq2seq_format:
-                    instances.extend(self.create_mention_context_instances(context, example, additional_rows))
+                    instances.extend(self.create_mention_context_instances(context, context_mentions, example, additional_rows))
                 if 'mention-table' in seq2seq_format:
                     instances.extend(self.create_mention_table_instances(context, example, additional_rows))
+                if 'table-row' in seq2seq_format:
+                    instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
             stop = False
             for fm in {'qa', 'sql', 'cell-filling', 'schema-augmentation'}:
@@ -350,17 +353,62 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return instances
 
-    def create_mention_context_instances(self, context, example: Example, additional_rows: List[List[Any]]):
-        # context + table without mask
+    def create_table_row_instances(self, context, example: Example, additional_rows: List[List[Any]]):
+        pass
+
+    def create_mention_context_instances(self,
+                                         context: List[str],
+                                         context_mentions: List[Tuple[int, int]],
+                                         example: Example,
+                                         additional_rows: List[List[Any]]):
+        instances = []
+        if len(context_mentions) <= 0:
+            return instances
         table = Table('fake_table', example.header)
-        instance = self.get_input(context, table, additional_rows)
-        raise NotImplementedError
+        for start, end in sample(context_mentions, min(len(context_mentions), self.config.max_num_mention_per_example)):
+            _context = context[:start] + [self.config.mask_token] + context[end:]
+            instance = self.get_input(_context, table, additional_rows)
+            target = [self.config.cls_token] +  context[start:end][:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+            instance = {
+                'tokens': instance['tokens'],
+                'token_ids': self.tokenizer.convert_tokens_to_ids(instance['tokens']),
+                'target_tokens': target,
+                'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+                'segment_a_length': instance['segment_a_length'],
+                'masked_lm_positions': [],
+                'masked_lm_labels': [],
+                'masked_lm_label_ids': [],
+                'info': None
+            }
+            instances.append(instance)
+        return instances
 
     def create_mention_table_instances(self, context, example: Example, additional_rows: List[List[Any]]):
-        # context + table without mask
+        instances = []
+        column_data_used = example.column_data_used
+        if len(column_data_used) <= 0:
+            return instances
         table = Table('fake_table', example.header)
-        instance = self.get_input(context, table, additional_rows)
-        raise NotImplementedError
+        for row_idx, col_idx in sample(column_data_used, min(len(column_data_used), self.config.max_num_mention_per_example)):
+            if row_idx >= len(additional_rows):
+                continue
+            value = additional_rows[row_idx][col_idx]
+            additional_rows[row_idx][col_idx] = [self.config.mask_token]
+            instance = self.get_input(context, table, additional_rows)
+            target = [self.config.cls_token] + value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+            instance = {
+                'tokens': instance['tokens'],
+                'token_ids': self.tokenizer.convert_tokens_to_ids(instance['tokens']),
+                'target_tokens': target,
+                'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+                'segment_a_length': instance['segment_a_length'],
+                'masked_lm_positions': [],
+                'masked_lm_labels': [],
+                'masked_lm_label_ids': [],
+                'info': None
+            }
+            instances.append(instance)
+        return instances
 
     def _add_single_head(self, raw_tokens: List[str], toadd: List[str], target: List[str], seq_a_len: int):
         need_to_remove = len(raw_tokens) + len(toadd) + 1 - MAX_BERT_INPUT_LENGTH  # sep token

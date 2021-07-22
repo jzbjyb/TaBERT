@@ -151,6 +151,18 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
             if early_stop: break
 
+        # delete delimiters at the end
+        cd = column_delimiters
+        rd = row_delimiters
+        if len(cd) == 1 and row_input_tokens[-1] == cd[0]:
+            del row_input_tokens[-1]
+        elif len(cd) > 1 and ''.join(row_input_tokens[-len(cd):]) == ''.join(cd):
+            row_input_tokens = row_input_tokens[:-len(cd)]
+        if len(rd) == 1 and row_input_tokens[-1] == rd[0]:
+            del row_input_tokens[-1]
+        elif len(rd) > 1 and ''.join(row_input_tokens[-len(rd):]) == ''.join(rd):
+            row_input_tokens = row_input_tokens[:-len(rd)]
+
         return row_input_tokens, column_token_span_maps, col_id
 
     def get_row_input(self,
@@ -194,9 +206,6 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         # we need to discard this sample
         if len(row_input_tokens) == 0:
             raise TableTooLongError()
-
-        if row_input_tokens[-1] in {self.config.column_delimiter, self.config.row_delimiter}:
-            del row_input_tokens[-1]
 
         if self.config.context_first:
             sequence = [self.config.cls_token] + context + [self.config.sep_token] + row_input_tokens + [self.config.sep_token]
@@ -355,7 +364,31 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return instances
 
     def create_table_row_instances(self, context, example: Example, additional_rows: List[List[Any]]):
-        pass
+        instances = []
+        if len(additional_rows) <= 0:
+            return instances
+        table = Table('fake_table', example.header)
+        for row_idx in sample(range(len(additional_rows)), min(len(additional_rows), self.config.max_num_mention_per_example)):
+            target_row = additional_rows[row_idx]
+            other_rows = additional_rows[:row_idx] + [[self.config.mask_token for _ in target_row]] + additional_rows[row_idx + 1:]
+            instance = self.get_input(context, table, other_rows)
+            target = self.concate_cells(
+                example.header, target_row, table_tokens_start_idx=0,
+                trim_long_table=0, max_table_token_length=MAX_TARGET_LENGTH - 2)[0]
+            target = [self.config.cls_token] + target[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+            instance = {
+                'tokens': instance['tokens'],
+                'token_ids': self.tokenizer.convert_tokens_to_ids(instance['tokens']),
+                'target_tokens': target,
+                'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+                'segment_a_length': instance['segment_a_length'],
+                'masked_lm_positions': [],
+                'masked_lm_labels': [],
+                'masked_lm_label_ids': [],
+                'info': None
+            }
+            instances.append(instance)
+        return instances
 
     def create_mention_context_instances(self,
                                          context: List[str],
@@ -513,8 +546,6 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             header, [[] for _ in range(len(header))],
             table_tokens_start_idx=0, trim_long_table=0, max_table_token_length=max_schema_token_length,
             cell_input_template=['column', '|', 'type'], column_delimiters=cds)[0]
-        if ''.join(schema_tokens[-len(cds):]) == ''.join(cds):
-            schema_tokens = schema_tokens[:-len(cds)]
         schema_tokens = [self.config.cls_token] + schema_tokens + [self.config.sep_token]
 
         context_tokens = [self.config.cls_token] + context + [self.config.sep_token]

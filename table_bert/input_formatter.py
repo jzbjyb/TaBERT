@@ -393,6 +393,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         for row_idx, col_idx in sample(column_data_used, min(len(column_data_used), self.config.max_num_mention_per_example)):
             if row_idx >= len(additional_rows):
                 continue
+            if col_idx >= len(additional_rows[row_idx]):
+                continue
             value = additional_rows[row_idx][col_idx]
             additional_rows[row_idx][col_idx] = [self.config.mask_token]
             instance = self.get_input(context, table, additional_rows)

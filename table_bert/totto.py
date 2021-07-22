@@ -105,6 +105,7 @@ class Totto(BasicDataset):
                             _table[_row_idx + i][_col_idx + j] = _cell
                             visited_col_idx.add(_col_idx + j)
                             if (row_idx, col_idx) in highlighted_cells:
+                                # TODO: some highlighted cells overflow because of the following truncate
                                 _highlighted_cells.add((_row_idx + i, _col_idx + j))
                     _col_idx += cs
                     col_idx += 1

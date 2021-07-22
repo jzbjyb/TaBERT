@@ -160,7 +160,7 @@ class Totto(BasicDataset):
             for example in tqdm(data):
                 td = {
                     'uuid': None,
-                    'table': {'caption': '', 'header': [], 'data': [], 'used_data': [], 'used_header': []},
+                    'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
                     'context_before': [],
                     'context_before_mentions': [],
                     'context_after': []
@@ -210,7 +210,7 @@ class Totto(BasicDataset):
                 fake_header = np.any([i in row2count for i in range(num_hr)])
                 cases['fake_header'] += int(fake_header)
 
-                # extract data and used_data
+                # extract data and data_used
                 inner_header = False
                 partial_header = False
                 for row in expand_table[num_hr:]:
@@ -223,7 +223,7 @@ class Totto(BasicDataset):
                     td['table']['data'].append(r)
                 cases['inner_header'] += int(inner_header)
                 cases['partial_header'] += int(partial_header)
-                td['table']['used_data'] = sorted([(r - num_hr, c) for r, c in expand_highlighted_cells if r >= num_hr])
+                td['table']['data_used'] = sorted([(r - num_hr, c) for r, c in expand_highlighted_cells if r >= num_hr])
                 numrows2count[len(td['table']['data'])] += 1
 
                 # extract column name

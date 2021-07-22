@@ -576,8 +576,11 @@ class Example(object):
 
                     column_data[col_id].append(cell_val)
 
+        # TODO: modify files to avoid this postprocess
         if 'data_used' in entry['table']:
-            column_data_used = entry['table']['data_used']
+            column_data_used = sorted(set(map(tuple, entry['table']['data_used'])))
+        elif 'used_data' in entry['table']:
+            column_data_used = sorted(set(map(tuple, entry['table']['used_data'])))
         else:
             column_data_used = []
 

@@ -237,14 +237,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 continue
             if not skip_empty:
                 valid_rows.append(row_idx)
-            valid = True
-            for col_idx, column in enumerate(example.header):
-                val = example.column_data[col_idx][row_idx]
-                if val is None or len(val) == 0:
-                    valid = False
-                    break
-            if valid:
-                valid_rows.append(row_idx)
+            else:
+                valid = True
+                for col_idx, column in enumerate(example.header):
+                    val = example.column_data[col_idx][row_idx]
+                    if val is None or len(val) == 0:
+                        valid = False
+                        break
+                if valid:
+                    valid_rows.append(row_idx)
 
         if use_sample:  # sample rows
             sampled_rows = sample(valid_rows, min(len(valid_rows), keep_num_rows))
@@ -395,6 +396,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             value = additional_rows[row_idx][col_idx]
             additional_rows[row_idx][col_idx] = [self.config.mask_token]
             instance = self.get_input(context, table, additional_rows)
+            additional_rows[row_idx][col_idx] = value  # recover it
             target = [self.config.cls_token] + value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
             instance = {
                 'tokens': instance['tokens'],

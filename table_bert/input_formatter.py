@@ -9,6 +9,7 @@ from math import ceil
 from random import choice, shuffle, sample, random, randint
 from typing import List, Callable, Dict, Any, Union, Set, Tuple
 import copy
+from collections import defaultdict
 
 from table_bert.utils import BertTokenizer
 from table_bert.table_bert import MAX_BERT_INPUT_LENGTH, MAX_TARGET_LENGTH
@@ -17,6 +18,7 @@ from table_bert.dataset import Example
 from table_bert.table import Column, Table
 
 trim_count = {'total': 0, 'trim': 0}
+tablededup2count: Dict[int, int] = defaultdict(lambda: 0)
 
 
 class TableBertBertInputFormatter(object):
@@ -349,6 +351,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_mention_context_instances(context, context_mentions, example, additional_rows))
                 if 'mention-table' in seq2seq_format:
                     instances.extend(self.create_mention_table_instances(context, example, additional_rows))
+                if 'mention-dedup-table' in seq2seq_format:
+                    instances.extend(self.create_mention_table_instances(context, example, additional_rows, dedup=True))
                 if 'table-row' in seq2seq_format:
                     instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
@@ -417,7 +421,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             instances.append(instance)
         return instances
 
-    def create_mention_table_instances(self, context, example: Example, additional_rows: List[List[Any]]):
+    def create_mention_table_instances(self, context, example: Example, additional_rows: List[List[Any]], dedup: bool = False):
         instances = []
         column_data_used = example.column_data_used
         if len(column_data_used) <= 0:
@@ -430,8 +434,20 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 continue
             value = additional_rows[row_idx][col_idx]
             additional_rows[row_idx][col_idx] = [self.config.mask_token]
+            if dedup:
+                others: List[Tuple[int, int]] = []
+                for ri in range(len(additional_rows)):
+                    for ci in range(len(additional_rows[ri])):
+                        if '@'.join(value) == '@'.join(additional_rows[ri][ci]):
+                            additional_rows[ri][ci] = [self.config.mask_token]
+                            others.append((ri, ci))
+                tablededup2count[len(others)] += 1
             instance = self.get_input(context, table, additional_rows)
-            additional_rows[row_idx][col_idx] = value  # recover it
+            # recover it
+            additional_rows[row_idx][col_idx] = value
+            if dedup:
+                for ri, ci in others:
+                    additional_rows[ri][ci] = value
             target = [self.config.cls_token] + value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
             instance = {
                 'tokens': instance['tokens'],

@@ -1,4 +1,4 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_tablerow1
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_tablemention_dedup
 input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -37,7 +37,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format mlm_table-row-1 \
+    --seq2seq_format mlm_mention-dedup-table \
     --dev_num 0 \
     --global_rank $i &
 done

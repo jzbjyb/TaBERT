@@ -34,7 +34,7 @@ from tqdm import tqdm, trange
 
 from random import shuffle, choice, sample, random
 
-from table_bert.input_formatter import VanillaTableBertInputFormatter, TableBertBertInputFormatter, trim_count
+from table_bert.input_formatter import VanillaTableBertInputFormatter, TableBertBertInputFormatter, trim_count, tablededup2count
 from table_bert.config import TableBertConfig
 from table_bert.dataset import Example, TableDatabase
 #from utils.prepare_training_data import sample_context
@@ -212,6 +212,7 @@ def main():
             generate_for_epoch(table_db, local_train_table_indices, epoch_filename, input_formatter, args)
 
     print('trimed table statistics', trim_count)
+    print(f'table dup cells {sorted(tablededup2count.items())}')
 
 
 if __name__ == '__main__':

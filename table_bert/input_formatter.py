@@ -54,16 +54,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             start_token_abs_position = len(input) + token_offset
             if token == 'column':
                 name_tokens = column.name_tokens if self.config.max_column_len is None else column.name_tokens[:self.config.max_column_len]
-                span_map['column_name'] = (start_token_abs_position,
-                                           start_token_abs_position + len(name_tokens))
+                span_map['column_name'] = (start_token_abs_position, start_token_abs_position + len(name_tokens))
                 input.extend(name_tokens)
             elif token == 'value':
-                span_map['value'] = (start_token_abs_position,
-                                     start_token_abs_position + len(cell_value))
-                input.extend(cell_value)
+                value_tokens = cell_value if self.config.max_cell_len is None else cell_value[:self.config.max_cell_len]
+                span_map['value'] = (start_token_abs_position, start_token_abs_position + len(value_tokens))
+                input.extend(value_tokens)
             elif token == 'type':
-                span_map['type'] = (start_token_abs_position,
-                                    start_token_abs_position + 1)
+                span_map['type'] = (start_token_abs_position, start_token_abs_position + 1)
                 input.append(column.type)
             else:
                 span_map.setdefault('other_tokens', []).append(start_token_abs_position)
@@ -73,15 +71,47 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return input, span_map
 
+    def get_cell_input_columnwise(
+        self,
+        cell_index: List[str],
+        cell_value: List[str],
+        token_offset: int = 0,
+        cell_input_template: List[str] = None,
+    ):
+        input = []
+        span_map = {
+            'first_token': (token_offset, token_offset + 1)
+        }
+        cell_input_template = cell_input_template or self.config.cell_input_template
+
+        for token in cell_input_template:
+            start_token_abs_position = len(input) + token_offset
+            if token == 'index':
+                index_tokens = cell_index[:self.config.max_column_len]
+                span_map['index'] = (start_token_abs_position, start_token_abs_position + len(index_tokens))
+                input.extend(index_tokens)
+            elif token == 'value':
+                value_tokens = cell_value if self.config.max_cell_len is None else cell_value[:self.config.max_cell_len]
+                span_map['value'] = (start_token_abs_position, start_token_abs_position + len(value_tokens))
+                input.extend(value_tokens)
+            else:
+                span_map.setdefault('other_tokens', []).append(start_token_abs_position)
+                input.append(token)
+        span_map['whole_span'] = (token_offset, token_offset + len(input))
+
+        return input, span_map
+
     def get_input(self, context: List[str], table: Table, additional_rows: List[List[Any]] = [],
-                  trim_long_table: Union[None, int] = 0, shuffle: bool = False, cell_input_template: List[str] = None):
+                  trim_long_table: Union[None, int] = 0, shuffle: bool = False,
+                  cell_input_template: List[str] = None):
         row_data = [
             column.sample_value_tokens
             for column in table.header
         ]
 
         return self.get_row_input(context, table.header, row_data, additional_rows,
-                                  trim_long_table=trim_long_table, shuffle=shuffle, cell_input_template=cell_input_template)
+                                  trim_long_table=trim_long_table, shuffle=shuffle,
+                                  cell_input_template=cell_input_template)
 
     def concate_cells(self,
                       header: List,
@@ -91,7 +121,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                       max_table_token_length: int,
                       cell_input_template: List[str] = None,
                       column_delimiters: List[str] = None,
-                      multi_row_split: List[bool] = None):
+                      multi_row_split: List[bool] = None,
+                      column_wise: bool = False):
         row_input_tokens = []
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
@@ -101,16 +132,24 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         col_id = 0
         for col_id, column in enumerate(header):
             value_tokens = row_data[col_id]
-            truncated_value_tokens = value_tokens[:self.config.max_cell_len]
             is_mrs = False if multi_row_split is None else multi_row_split[col_id]
 
-            column_input_tokens, token_span_map = self.get_cell_input(
-                column,
-                truncated_value_tokens,
-                token_offset=column_start_idx,
-                cell_input_template=cell_input_template
-            )
-            column_input_tokens.extend(row_delimiters if is_mrs else column_delimiters)
+            if column_wise:
+                column_input_tokens, token_span_map = self.get_cell_input_columnwise(
+                    column,
+                    value_tokens,
+                    token_offset=column_start_idx,
+                    cell_input_template=cell_input_template
+                )
+                column_input_tokens.extend(row_delimiters if is_mrs else column_delimiters)
+            else:
+                column_input_tokens, token_span_map = self.get_cell_input(
+                    column,
+                    value_tokens,
+                    token_offset=column_start_idx,
+                    cell_input_template=cell_input_template
+                )
+                column_input_tokens.extend(row_delimiters if is_mrs else column_delimiters)
 
             early_stop = False
             if trim_long_table is not None:
@@ -122,7 +161,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     end_index = column_start_idx + len(column_input_tokens)
                     keys_to_delete = []
                     for key in token_span_map:
-                        if key in {'column_name', 'type', 'value', 'whole_span'}:
+                        if key in {'column_name', 'type', 'value', 'whole_span', 'index'}:
                             span_start_idx, span_end_idx = token_span_map[key]
                             if span_start_idx < end_index < span_end_idx:
                                 token_span_map[key] = (span_start_idx, end_index)
@@ -167,6 +206,31 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return row_input_tokens, column_token_span_maps, col_id
 
+    def iter_table_data(self, header: List[Column], rows: List[List], column_wise: bool) -> Tuple[List, List, List]:
+        index_cells = []
+        value_cells = []
+        multi_split = []
+        if column_wise:
+            for col_idx in range(len(header)):
+                index_cells.append(self.tokenizer.tokenize('HEADER'))
+                value_cells.append(header[col_idx].name_tokens)
+                multi_split.append(False)
+                for row_idx in range(len(rows)):
+                    index_cells.append(self.tokenizer.tokenize(f'ROW{row_idx}'))
+                    value_cells.append(rows[row_idx][col_idx])
+                    multi_split.append(row_idx == len(rows) - 1)
+        else:
+            for col_idx in range(len(header)):
+                index_cells.append(self.tokenizer.tokenize('HEADER'))
+                value_cells.append(header[col_idx].name_tokens)
+                multi_split.append(col_idx == len(header) - 1)
+            for row_idx in range(len(rows)):
+                for col_idx in range(len(header)):
+                    index_cells.append(self.tokenizer.tokenize(f'ROW{row_idx}'))
+                    value_cells.append(rows[row_idx][col_idx])
+                    multi_split.append(col_idx == len(header) - 1)
+        return index_cells, value_cells, multi_split
+
     def get_row_input(self,
                       context: List[str],
                       header: List[Column],
@@ -175,6 +239,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                       trim_long_table: Union[None, int] = 0,
                       shuffle: bool = False,
                       cell_input_template: List[str] = None):  # none means not trim
+        column_wise = self.config.column_wise
         use_row_data = self.config.top_row_count == 0
         max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
         if self.config.context_first:
@@ -186,23 +251,44 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             # account for cls and sep, and the ending sep
             max_table_token_length = max_total_len - len(context) - 2 - 1
 
-        # generate table tokens
-        ext_header = header * (len(additional_rows) + int(use_row_data))
-        multi_row_split = ([False] * (len(header) - 1) + [True]) * (len(additional_rows) + int(use_row_data))
-        if use_row_data and shuffle and len(additional_rows) > 0:
-            # try to see how many rows can fit into the max length
+        if column_wise:  # get max #rows that can fit into the max length which is necessary for column_wise iteration
+            index_cells, value_cells, multi_split = self.iter_table_data(header, additional_rows, column_wise=False)
             _, _, col_id = self.concate_cells(
-                header * len(additional_rows), [i for r in additional_rows for i in r], table_tokens_start_idx=table_tokens_start_idx,
-                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length, cell_input_template=cell_input_template, multi_row_split=multi_row_split)
-            num_fit_rows = col_id // len(header)
-            additional_rows.insert(randint(0, max(num_fit_rows - 1, 0)), row_data)
-            ext_row_data = [i for r in additional_rows for i in r]
-        else:
-            ext_row_data = (row_data if use_row_data else []) + [i for r in additional_rows for i in r]
+                index_cells, value_cells,
+                table_tokens_start_idx=table_tokens_start_idx,
+                trim_long_table=trim_long_table, max_table_token_length=max_table_token_length,
+                cell_input_template=cell_input_template, multi_row_split=multi_split, column_wise=True)
+            num_fit_rows = max((col_id + 1) // len(header) - 1, 0)  # remove the header row
+            additional_rows = additional_rows[:num_fit_rows]
 
-        row_input_tokens, column_token_span_maps, col_id = self.concate_cells(
-            ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table,
-            max_table_token_length=max_table_token_length, cell_input_template=cell_input_template, multi_row_split=multi_row_split)
+        # generate table tokens
+        if column_wise:
+            if use_row_data and shuffle and len(additional_rows) > 0:
+                additional_rows.insert(randint(0, len(additional_rows)), row_data)
+                combined_rows = additional_rows
+            else:
+                combined_rows = [row_data] + additional_rows if use_row_data else additional_rows
+            index_cells, value_cells, multi_split = self.iter_table_data(header, combined_rows, column_wise=True)
+            row_input_tokens, column_token_span_maps, col_id = self.concate_cells(
+                index_cells, value_cells, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table,
+                max_table_token_length=max_table_token_length, cell_input_template=cell_input_template,
+                multi_row_split=multi_split, column_wise=True)
+        else:
+            ext_header = header * (len(additional_rows) + int(use_row_data))
+            multi_row_split = ([False] * (len(header) - 1) + [True]) * (len(additional_rows) + int(use_row_data))
+            if use_row_data and shuffle and len(additional_rows) > 0:
+                # try to see how many rows can fit into the max length
+                _, _, col_id = self.concate_cells(
+                    header * len(additional_rows), [i for r in additional_rows for i in r], table_tokens_start_idx=table_tokens_start_idx,
+                    trim_long_table=trim_long_table, max_table_token_length=max_table_token_length, cell_input_template=cell_input_template, multi_row_split=multi_row_split)
+                num_fit_rows = col_id // len(header)
+                additional_rows.insert(randint(0, max(num_fit_rows - 1, 0)), row_data)
+                ext_row_data = [i for r in additional_rows for i in r]
+            else:
+                ext_row_data = (row_data if use_row_data else []) + [i for r in additional_rows for i in r]
+            row_input_tokens, column_token_span_maps, col_id = self.concate_cells(
+                ext_header, ext_row_data, table_tokens_start_idx=table_tokens_start_idx, trim_long_table=trim_long_table,
+                max_table_token_length=max_table_token_length, cell_input_template=cell_input_template, multi_row_split=multi_row_split)
 
         # it is possible that the first cell to too long and cannot fit into `max_table_token_length`
         # we need to discard this sample
@@ -686,6 +772,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             (
                 list(range(*span['column_name']) if 'column_name' in span else []) +
                 list(range(*span['type']) if 'type' in span else []) +
+                list(range(*span['index']) if 'index' in span else []) +
                 (
                     span['other_tokens']
                     if random() < 0.01 and 'other_tokens' in span

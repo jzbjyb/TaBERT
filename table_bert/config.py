@@ -161,6 +161,7 @@ class TableBertConfig(SimpleNamespace):
         only_table: bool = False,
         seq2seq_format: str = None,
         multi_decode_sep_token: str = '<|>',
+        column_wise: bool = False,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -197,6 +198,7 @@ class TableBertConfig(SimpleNamespace):
         self.context_first = context_first
         self.column_representation = column_representation
         self.objective_function = objective_function
+        self.column_wise = column_wise
         assert objective_function in {
             'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm',
             'table2text_mlm', 'text2table_mlm', 'table2text_text2table', 'table2text_text2table_mlm',  # bart
@@ -318,6 +320,7 @@ class TableBertConfig(SimpleNamespace):
                                      'mention-context', 'mention-table', 'mlm_mention-context',
                                      'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1'],
                             help='seq2seq examples for BART-like models')
+        parser.add_argument('--column_wise', action='store_true', help='linearize the table by columns')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)
 

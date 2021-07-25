@@ -908,7 +908,67 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_tablemention/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
 
-# 3merge wholetabel (mlm table mention)
+# 3merge wholetabel (mlm table mention dedup)
+- name: wholetable_3merge_bart_mlm_tablemention_dedup
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_tablemention_dedup
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_tablemention_dedup seq2seq 24 10 null
+- name: bart_turl_cf_mlm_pretrain_3merge_mlm_tablemention_dedup
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_3merge_mlm_tablemention_dedup seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_tablemention_dedup/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_turl_sa_mlm_pretrain_3merge_mlm_tablemention_dedup
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_3merge_mlm_tablemention_dedup seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_tablemention_dedup/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_wikisql_qa_add30_pretrain_3merge_mlm_tablemention_dedup
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add30_pretrain_3merge_mlm_tablemention_dedup seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_tablemention_dedup/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+- name: bart_wtq_qa_add30_pretrain_3merge_mlm_tablemention_dedup
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_3merge_mlm_tablemention_dedup seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_tablemention_dedup/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+
+# 3merge wholetabel (mlm table row1)
 - name: wholetable_3merge_bart_mlm_tablerow1
   sku: G8
   sku_count: 3

@@ -39,7 +39,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --not_skip_empty_column_name \
     --seq2seq_format mlm_mention-context \
     --dev_num 0 \
-    --global_rank $i \
-    --column_wise
+    --column_wise \
+    --global_rank $i &
 done
 wait

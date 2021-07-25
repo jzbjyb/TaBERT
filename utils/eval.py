@@ -8,7 +8,6 @@ import numpy as np
 import random
 import csv
 from collections import defaultdict
-from rouge import Rouge
 import re
 from table_bert.dataset_utils import BasicDataset
 from table_bert.config import TableBertConfig, MODEL2SEP, MODEL2CLS, MODEL2TOKENIZER
@@ -33,7 +32,9 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
     parser.add_argument('--model_type', type=str, default='facebook/bart-base')
     args = parser.parse_args()
-    rouge = Rouge()
+    if '_sql' in args.data:
+        from rouge import Rouge
+        rouge = Rouge()
 
     mt = TableBertConfig.check_model_type(args.model_type)
     tokenizer = MODEL2TOKENIZER[mt].from_pretrained(args.model_type)

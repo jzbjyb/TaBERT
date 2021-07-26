@@ -1,8 +1,13 @@
+from typing import List, Dict, Tuple, Set
 from argparse import ArgumentParser
 from pathlib import Path
 import os
 import random
 import numpy as np
+import json
+import copy
+from collections import defaultdict
+from tqdm import tqdm
 from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
@@ -10,9 +15,52 @@ from table_bert.wikitablequestions import WikiTQ
 from table_bert.turl import TurlData
 
 
+def find_other_table(prep_file: str, output_file: str, max_count: int):
+    tablecell2ind: Dict[str, List] = defaultdict(list)
+    examples: List[Dict] = []
+    with open(prep_file, 'r') as fin:
+        for eid, l in tqdm(enumerate(fin), desc='build tablecell2ind'):
+            example = json.loads(l)
+            examples.append(example)
+            for row in example['table']['data']:
+                for cell in row:
+                    cell = cell.strip().lower()
+                    if len(tablecell2ind[cell]) > 0 and tablecell2ind[cell][-1] == eid:
+                        continue
+                    tablecell2ind[cell].append(eid)
+    match_counts = []
+    used_eids: Set[int] = set()
+    with open(output_file, 'w') as fout:
+        for eid, example in tqdm(enumerate(examples), desc='find tables'):
+            context = example['context_before'][0]
+            eid2mentions: Dict[int, Set[Tuple[int, int]]] = defaultdict(set)
+            all_mentions: Set[Tuple[int, int]] = set()
+            for s, e in example['context_before_mentions'][0]:
+                all_mentions.add((s, e))
+                kw = context[s:e].strip().lower()
+                for _eid in tablecell2ind[kw]:
+                    if _eid == eid:
+                        continue
+                    eid2mentions[_eid].add((s, e))
+            eid2mentions = sorted(eid2mentions.items(), key=lambda x: -len(x[1])) or [(random.randint(0, len(examples) - 1), set())]
+            eid2mentions = [(e, c) for e, c in eid2mentions if len(c) >= 3] or eid2mentions[:1]
+            random.shuffle(eid2mentions)
+            match_eid, mentions = eid2mentions[0]
+            used_eids.add(match_eid)
+            ne = copy.deepcopy(example)
+            ne['table'] = examples[match_eid]['table']
+            ne['context_before_mentions'] = [list(mentions) + list(all_mentions - mentions)]
+            assert len(ne['context_before_mentions'][0]) == len(
+                all_mentions), f"{ne['context_before_mentions'][0]} {all_mentions}"
+            fout.write(f'{json.dumps(ne)}\n')
+            match_counts.append(min(max_count, len(mentions)))
+            print(np.mean(match_counts))
+        print(f'#used_eids {len(used_eids)}')
+
+
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap'])
+    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap', 'fakepair'])
     parser.add_argument('--path', type=Path, required=True)
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
@@ -61,6 +109,8 @@ def main():
                                       task='cell_filling', avoid_titles=avoid_titles)
         turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_sa_avoid3merge.jsonl',
                                       task='schema_augmentation', avoid_titles=avoid_titles)
+    elif args.data == 'fakepair':
+        find_other_table(args.path, args.output_dir, max_count=3)
     else:
         raise NotImplementedError
 

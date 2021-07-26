@@ -240,7 +240,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                       shuffle: bool = False,
                       cell_input_template: List[str] = None):  # none means not trim
         column_wise = self.config.column_wise
-        use_row_data = self.config.top_row_count == 0
+        use_row_data = self.config.top_row_count == 0 and len(row_data) > 0
         max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
@@ -251,7 +251,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             # account for cls and sep, and the ending sep
             max_table_token_length = max_total_len - len(context) - 2 - 1
 
-        if column_wise:  # get max #rows that can fit into the max length which is necessary for column_wise iteration
+        if column_wise and len(additional_rows) > 0:
+            # get max #rows that can fit into the max length which is necessary for column_wise iteration
             index_cells, value_cells, multi_split = self.iter_table_data(header, additional_rows, column_wise=False)
             _, _, col_id = self.concate_cells(
                 index_cells, value_cells,
@@ -734,19 +735,27 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return instance
 
-    def create_cf_mask_instance(self, context, header: List[Column]):
-        table = Table('fake_table', header)
-        input_instance = self.get_input(context, table)
+    def _recover_data_from_header(self, header: List[Column], interval: int):
+        real_header = header[:interval]
+        rows: List[List] = []
+        for i, h in enumerate(header):
+            if i % interval == 0:
+                rows.append([])
+            rows[-1].append(h.sample_value_tokens)
+        return real_header, rows
+
+    def create_cf_mask_instance_columnwise(self, context, header: List[Column]):
+        header, rows = self._recover_data_from_header(header, interval=2)
+        input_instance = self.get_row_input(context, header, [], rows)
         column_spans = input_instance['column_spans']
 
         assert self.config.mask_value and self.config.masked_column_prob == 1.0, \
             'generating cell filling examples requires mask_value=True and masked_column_prob=1.0'
-        # assume: the odd ones are object columns, the even ones are subject columns
+        # assume: the second column (later half) is value, and the first of it is a header
         column_candidate_indices = [
-            list(range(*span['value']) if ('value' in span and col_id % 2 == 1) else [])
+            list(range(*span['value']) if ('value' in span and col_id > len(column_spans) // 2) else [])
             for col_id, span in enumerate(column_spans)]
         context_candidate_indices = []
-
         masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(
             input_instance['tokens'], context_candidate_indices, column_candidate_indices)
         info['num_columns'] = len(header)
@@ -760,7 +769,49 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             "masked_lm_label_ids": self.tokenizer.convert_tokens_to_ids(masked_lm_labels),
             "info": info
         }
+        print(self.tokenizer.decode(instance['token_ids']))
+        print(instance['masked_lm_labels'])
+        print()
+        input()
 
+        return instance
+
+    def create_cf_mask_instance(self, context, header: List[Column]):
+        if self.config.column_wise:
+            header, rows = self._recover_data_from_header(header, interval=2)
+            input_instance = self.get_row_input(context, header, [], rows)
+            column_spans = input_instance['column_spans']
+            assert self.config.mask_value and self.config.masked_column_prob == 1.0, \
+                'generating cell filling examples requires mask_value=True and masked_column_prob=1.0'
+            # assume: the second column (later half) is value, and the first of it is a header
+            column_candidate_indices = [
+                list(range(*span['value']) if ('value' in span and col_id > len(column_spans) // 2) else [])
+                for col_id, span in enumerate(column_spans)]
+        else:
+            table = Table('fake_table', header)
+            input_instance = self.get_input(context, table)
+            column_spans = input_instance['column_spans']
+            assert self.config.mask_value and self.config.masked_column_prob == 1.0, \
+                'generating cell filling examples requires mask_value=True and masked_column_prob=1.0'
+            # assume: the odd ones are object columns, the even ones are subject columns
+            column_candidate_indices = [
+                list(range(*span['value']) if ('value' in span and col_id % 2 == 1) else [])
+                for col_id, span in enumerate(column_spans)]
+
+        context_candidate_indices = []
+        masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(
+            input_instance['tokens'], context_candidate_indices, column_candidate_indices)
+        info['num_columns'] = len(header)
+
+        instance = {
+            "tokens": masked_sequence,
+            "token_ids": self.tokenizer.convert_tokens_to_ids(masked_sequence),
+            "segment_a_length": input_instance['segment_a_length'],
+            "masked_lm_positions": masked_lm_positions,
+            "masked_lm_labels": masked_lm_labels,
+            "masked_lm_label_ids": self.tokenizer.convert_tokens_to_ids(masked_lm_labels),
+            "info": info
+        }
         return instance
 
     def create_pretraining_instance(self, context, header, additional_rows: List[List[Any]] = []):

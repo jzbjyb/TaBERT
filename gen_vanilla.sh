@@ -1,5 +1,5 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_columnwise
-input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_fakepair
+input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention_fakepair.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=100
@@ -25,7 +25,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --masked_column_prob 0.2 \
     --masked_context_prob 0.15 \
     --max_predictions_per_seq 200 \
-    --cell_input_template 'index | value' \
+    --cell_input_template 'column | value' \
     --column_delimiter ${column_delimiter} \
     --row_delimiter ${row_delimiter} \
     --world_size ${worldsize} \
@@ -39,7 +39,6 @@ for (( i=0; i<${worldsize}; ++i)); do
     --not_skip_empty_column_name \
     --seq2seq_format mlm_mention-context \
     --dev_num 0 \
-    --column_wise \
     --global_rank $i &
 done
 wait

@@ -38,14 +38,14 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
             for s, e in example['context_before_mentions'][0]:
                 all_mentions.add((s, e))
                 kw = context[s:e].strip().lower()
-                for _eid in tablecell2ind[kw][:5000]:
+                for _eid in tablecell2ind[kw][:2000]:
                     if _eid == eid:
                         continue
                     eid2mentions[_eid].add((s, e))
-            eid2mentions = sorted(eid2mentions.items(), key=lambda x: -len(x[1])) or [(random.randint(0, len(examples) - 1), set())]
-            eid2mentions = [(e, c) for e, c in eid2mentions if len(c) >= 3] or eid2mentions[:1]
-            random.shuffle(eid2mentions)
-            match_eid, mentions = eid2mentions[0]
+            if len(eid2mentions) > 0:
+                match_eid, mentions = max(eid2mentions.items(), key=lambda x: len(x[1]))
+            else:
+                match_eid, mentions = (random.randint(0, len(examples) - 1), set())
             used_eids.add(match_eid)
             ne = copy.deepcopy(example)
             ne['table'] = examples[match_eid]['table']
@@ -53,7 +53,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
             assert len(ne['context_before_mentions'][0]) == len(all_mentions), f"{ne['context_before_mentions'][0]} {all_mentions}"
             fout.write(f'{json.dumps(ne)}\n')
             match_counts.append(min(max_count, len(mentions)))
-            print(np.mean(match_counts))
+        print(np.mean(match_counts))
         print(f'#used_eids {len(used_eids)}')
 
 

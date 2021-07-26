@@ -38,7 +38,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
             for s, e in example['context_before_mentions'][0]:
                 all_mentions.add((s, e))
                 kw = context[s:e].strip().lower()
-                for _eid in tablecell2ind[kw]:
+                for _eid in tablecell2ind[kw][:5000]:
                     if _eid == eid:
                         continue
                     eid2mentions[_eid].add((s, e))
@@ -50,8 +50,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
             ne = copy.deepcopy(example)
             ne['table'] = examples[match_eid]['table']
             ne['context_before_mentions'] = [list(mentions) + list(all_mentions - mentions)]
-            assert len(ne['context_before_mentions'][0]) == len(
-                all_mentions), f"{ne['context_before_mentions'][0]} {all_mentions}"
+            assert len(ne['context_before_mentions'][0]) == len(all_mentions), f"{ne['context_before_mentions'][0]} {all_mentions}"
             fout.write(f'{json.dumps(ne)}\n')
             match_counts.append(min(max_count, len(mentions)))
             print(np.mean(match_counts))

@@ -908,6 +908,30 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_fakepair/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
 
+# 3merge wholetabel (mlm context mention ret bycontext)
+- name: wholetable_3merge_bart_mlm_contextmention_retbycontext
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbycontext
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbycontext seq2seq 24 10 null
+
+# 3merge wholetabel (mlm context mention ret bytable)
+- name: wholetable_3merge_bart_mlm_contextmention_retbytable
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbytable
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbytable seq2seq 24 10 null
+
 # 3merge wholetabel (mlm context mention column wise)
 - name: wholetable_3merge_bart_mlm_contextmention_columnwise
   sku: G8

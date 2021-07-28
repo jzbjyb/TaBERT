@@ -3,10 +3,18 @@ from collections import defaultdict
 import json
 import csv
 import re
+from nltk.corpus import stopwords
 from difflib import SequenceMatcher
 
 
 class BasicDataset(object):
+    STOPWORDS = None
+    @staticmethod
+    def get_stopwords():
+        if BasicDataset.STOPWORDS is None:
+            BasicDataset.STOPWORDS = set(stopwords.words('english'))
+        return BasicDataset.STOPWORDS
+
     @staticmethod
     def is_number(s):
         if s is None:
@@ -91,9 +99,13 @@ class BasicDataset(object):
         return '', -1, -1
 
     @staticmethod
-    def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: List[Tuple[int, int]]):
+    def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: List[Tuple[int, int]] = None):
         locations: Set[Tuple[int, int]] = set()  # (inclusive, exclusive)
         context = context.lower()
+        annotated = True
+        if highlighed_cells is None:  # assume all cells are highlighted
+            annotated = False
+            highlighed_cells = [(row_idx, col_idx) for row_idx, row in enumerate(table) for col_idx, _ in enumerate(row)]
         for r, c in highlighed_cells:
             v = table[r][c].lower()
             if len(v) <= 0:
@@ -101,7 +113,15 @@ class BasicDataset(object):
             # common = STree.STree([v, context]).lcs()  # slow
             common = BasicDataset.longest_substring(context, v)[0]
             common = common.strip()
-            find = len(common) == len(v) or (len(v) >= 5 and BasicDataset.is_a_word(v, common)) or len(common) > 10
+            if annotated:
+                find = len(common) == len(v) or \
+                       (len(v) >= 5 and BasicDataset.is_a_word(v, common)) or \
+                       len(common) > 10
+            else:  # higher standard
+                find = (common not in BasicDataset.get_stopwords()) and (re.search('[a-zA-Z0-9]', common) is not None)
+                find &= (len(common) == len(v) and BasicDataset.is_a_word(context, common)) or \
+                        (len(v) >= 5 and len(common) / len(v) >= 0.7 and BasicDataset.is_a_word(v, common) and BasicDataset.is_a_word(context, common)) or \
+                        len(common) >= 20
             if len(common) > 0 and find:
                 start = context.find(common)
                 locations.add((start, start + len(common)))

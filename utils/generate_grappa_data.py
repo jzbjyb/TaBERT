@@ -1,4 +1,6 @@
 from typing import List, Dict, Tuple, Set
+import functools
+import time
 from argparse import ArgumentParser
 from pathlib import Path
 import os
@@ -8,11 +10,13 @@ import json
 import copy
 from collections import defaultdict
 from tqdm import tqdm
+import multiprocessing
 from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.turl import TurlData
+from table_bert.dataset_utils import BasicDataset
 
 
 def find_other_table(prep_file: str, output_file: str, max_count: int):
@@ -57,10 +61,89 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
         print(f'#used_eids {len(used_eids)}')
 
 
+def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str):
+    examples = []
+    for example_line, ret_examples in zip(example_lines, ret_examples_li):
+        example = json.loads(example_line)
+        best_match_mentions = None
+        best_match = None
+        for _example in ret_examples:
+            if bywhich == 'context':
+                context = example['context_before'][0]
+                table = _example['table']['data']
+            elif bywhich == 'table':
+                context = _example['context_before'][0]
+                table = example['table']['data']
+            else:
+                raise NotImplementedError
+            locations = BasicDataset.get_mention_locations(context, table)
+            if best_match_mentions is None or len(locations) > len(best_match_mentions):
+                best_match_mentions = locations
+                best_match = _example
+        if best_match is not None:
+            if bywhich == 'context':
+                example['table'] = best_match['table']
+                example['context_before_mentions'] = [best_match_mentions]
+            elif bywhich == 'table':
+                example['context_before'] = best_match['context_before']
+                example['context_before_mentions'] = [best_match_mentions]
+        examples.append(example)
+    return examples
+
+
+def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
+                            bywhich: str, topk: int, nthread: int, batch_size: int = 100):
+    assert bywhich in {'context', 'table'}
+    remove_self = target_file == source_file
+    idx2example: Dict[int, Dict] = {}
+    with open(source_file, 'r') as fin:
+        for idx, l in enumerate(fin):
+            idx2example[idx] = json.loads(l)
+    pool = multiprocessing.Pool(processes=nthread)
+    start = time.time()
+    with open(retrieval_file, 'r') as fin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
+        example_lines = []
+        ret_examples_li = []
+        results = []
+        for l in tqdm(fin, miniters=50):
+            idx, bytext, bytable = l.strip().split('\t')
+            idx = int(idx)
+            bytext = [int(s.split(',')[0]) for s in bytext.split(' ')][:topk]
+            bytable = [int(s.split(',')[0]) for s in bytable.split(' ')][:topk]
+            byall = list(set(bytext + bytable) - ({idx} if remove_self else {}))[:topk]
+            ret_examples = [idx2example[_idx] for _idx in byall]
+            example_line = tfin.readline()
+            ret_examples_li.append(ret_examples)
+            example_lines.append(example_line)
+            if len(example_lines) >= batch_size:
+                r = pool.apply_async(
+                    functools.partial(_generate_retrieval_data_single, bywhich=bywhich),
+                    (example_lines, ret_examples_li))
+                results.append(r)
+                example_lines = []
+                ret_examples_li = []
+                if len(results) == nthread:
+                    for r in results:
+                        for e in r.get():
+                            fout.write(json.dumps(e) + '\n')
+                    results = []
+        if len(example_lines) >= 0:
+            r = pool.apply_async(
+                functools.partial(_generate_retrieval_data_single, bywhich=bywhich),
+                (example_lines, ret_examples_li))
+            results.append(r)
+        if len(results) > 0:
+            for r in results:
+                for e in r.get():
+                    fout.write(json.dumps(e) + '\n')
+    end = time.time()
+    print(f'total time {end - start}')
+
+
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap', 'fakepair'])
-    parser.add_argument('--path', type=Path, required=True)
+    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap', 'fakepair', 'retpair'])
+    parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
     args = parser.parse_args()
@@ -69,22 +152,22 @@ def main():
     np.random.seed(2021)
 
     if args.data == 'totto':
-        totto = Totto(args.path)
+        totto = Totto(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         totto.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_mention.jsonl')
     elif args.data == 'wikisql':
-        wsql = WikiSQL(args.path)
+        wsql = WikiSQL(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         wsql.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_mention_with_sql.jsonl', add_sql=True)
         WikiSQL.add_answer(args.output_dir / args.split / 'preprocessed_mention_with_sql.jsonl',
                            args.output_dir / 'converted' / f'{args.split}.tsv',  # generated by TAPAS
                            args.output_dir / args.split / 'preprocessed_mention_with_sql_ans.jsonl')
     elif args.data == 'tablefact':
-        tf = TableFact(args.path)
+        tf = TableFact(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         tf.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_mention.jsonl')
     elif args.data == 'wikitq':
-        wtq = WikiTQ(args.path)
+        wtq = WikiTQ(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         wtq.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed.jsonl')
         split2file = {
@@ -98,10 +181,10 @@ def main():
                           string_match=True)
     elif args.data == 'turl':
         avoid_titles = set()
-        with open(str(args.path / 'titles_in_3merge.txt'), 'r') as fin:
+        with open(str(args.path[0] / 'titles_in_3merge.txt'), 'r') as fin:
             for l in fin:
                 avoid_titles.add(l.strip())
-        turl = TurlData(args.path)
+        turl = TurlData(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         # only use avoid_titles for the test split
         turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_cf_avoid3merge.jsonl',
@@ -109,7 +192,11 @@ def main():
         turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_sa_avoid3merge.jsonl',
                                       task='schema_augmentation', avoid_titles=avoid_titles)
     elif args.data == 'fakepair':
-        find_other_table(args.path, args.output_dir, max_count=3)
+        find_other_table(args.path[0], args.output_dir, max_count=3)
+    elif args.data == 'retpair':
+        retrieval_file, target_file, source_file = args.path
+        generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
+                                bywhich=args.split, topk=10, nthread=20, batch_size=1000)
     else:
         raise NotImplementedError
 

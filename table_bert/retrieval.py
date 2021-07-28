@@ -14,7 +14,7 @@ import numpy as np
 
 
 class ESWrapper():
-    MAX_QUERY_LEN = 4096
+    MAX_QUERY_LEN = 1024
     PUNCT_TO_SPACE = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
 
     def __init__(self, index_name: str):
@@ -49,16 +49,21 @@ class ESWrapper():
         return ' '.join(example['context_before'] + example['context_after'])
 
     @staticmethod
-    def format_table(example):
-        return ' & '.join(['{} | {} | {}'.format(
-            h['name'], h['type'], h['sample_value']['value']) for h in example['table']['header']])
+    def format_table(example, full_table: bool = False):
+        if full_table:
+            header: str = ' | '.join([c['name'] for c in example['table']['header']])
+            data: List[str] = [' | '.join(row) for row in example['table']['data']]
+            return '\n'.join([header] + data)
+        else:
+            return ' & '.join(['{} | {} | {}'.format(
+                h['name'], h['type'], h['sample_value']['value']) for h in example['table']['header']])
 
-    def table_text_data_iterator(self, filename: str, split: str = 'train', max_length: int = 10000):
+    def table_text_data_iterator(self, filename: str, split: str = 'train', max_length: int = 10000, full_table: bool = False):
         with open(filename, 'r') as fin:
             for idx, l in tqdm(enumerate(fin)):
                 example = json.loads(l)
                 text = self.format_text(example)[:max_length]
-                table = self.format_table(example)[:max_length]
+                table = self.format_table(example, full_table=full_table)[:max_length]
                 yield {
                     '_index': self.index_name,
                     '_type': 'document',
@@ -70,7 +75,7 @@ class ESWrapper():
                 }
 
 
-def retrieve_part(filename, topk, two_idx):  # inclusive and exclusive
+def retrieve_part(filename, topk, full_table, two_idx):  # inclusive and exclusive
     start_idx, end_idx = two_idx
     results: List[Tuple[int, List, List]] = []
     with open(filename, 'r') as fin:
@@ -80,21 +85,21 @@ def retrieve_part(filename, topk, two_idx):  # inclusive and exclusive
             if idx >= end_idx:
                 break
             example = json.loads(l)
-            text, table = ESWrapper.format_text(example), ESWrapper.format_table(example)
+            text, table = ESWrapper.format_text(example), ESWrapper.format_table(example, full_table=full_table)
             bytext = [(doc['line_idx'], score) for doc, score in es.get_topk(text, field='text', topk=topk + 1)]
             bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(table, field='table', topk=topk + 1)]
             results.append((idx, bytext, bytable))
     return results
 
 
-def retrieve(filename: str, output: str, topk: int = 5, threads: int = 1):
+def retrieve(filename: str, output: str, topk: int = 5, threads: int = 1, full_table: bool = False):
     total_count = int(subprocess.check_output('wc -l {}'.format(filename), shell=True).split()[0])
     bs = total_count // threads
     splits = [(i * bs, (i * bs + bs) if i < threads - 1 else total_count) for i in range(threads)]
     print('splits:', splits)
 
     pool = mp.Pool(threads)
-    results_list = pool.map(partial(retrieve_part, filename, topk), splits)
+    results_list = pool.map(partial(retrieve_part, filename, topk, full_table), splits)
 
     format_list = lambda l: ' '.join(['{},{}'.format(i, s) for i, s in l])
     with open(output, 'w') as fout:
@@ -186,14 +191,28 @@ def combine_negative(data_file: str, neg_file: str, output: str, fill_to: int, n
 
 
 if __name__ == '__main__':
-    # index and search
-    filename = 'data/totto_data/train/preprocessed.jsonl'
-    neg_file = 'test.tsv'
-    topk = 100
-    es = ESWrapper('totto')
-    es.build_index(es.table_text_data_iterator(filename))
-    retrieve(filename, neg_file, topk=topk, threads=10)
+    task = '3merge-ret'.split('-')
 
-    # get negative
-    final_file = 'test.jsonl'
-    combine_negative(filename, neg_file, final_file, topk, 3, 3, 3)
+    if task[0] == 'totto':
+        # index and search
+        filename = 'data/totto_data/train/preprocessed.jsonl'
+        neg_file = 'test.tsv'
+        topk = 100
+        es = ESWrapper('totto')
+        es.build_index(es.table_text_data_iterator(filename))
+        retrieve(filename, neg_file, topk=topk, threads=10)
+
+        # get negative
+        final_file = 'test.jsonl'
+        combine_negative(filename, neg_file, final_file, topk, 3, 3, 3)
+
+    elif task[0] == '3merge':  # TOTTO, TableFact, WikiSQL
+        filename = '/home/zhengbao/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
+        index_name = '3merge'
+        es = ESWrapper(index_name)
+        if task[1] == 'index':
+            es.build_index(es.table_text_data_iterator(filename, full_table=True))
+        elif task[1] == 'ret':
+            topk = 100
+            retrieve_output = filename + f'.ret{topk}'
+            retrieve(filename, retrieve_output, topk=topk, threads=10, full_table=True)

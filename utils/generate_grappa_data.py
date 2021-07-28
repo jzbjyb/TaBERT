@@ -38,7 +38,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
             for s, e in example['context_before_mentions'][0]:
                 all_mentions.add((s, e))
                 kw = context[s:e].strip().lower()
-                for _eid in tablecell2ind[kw][:2000]:
+                for _eid in random.sample(tablecell2ind[kw], min(len(tablecell2ind[kw]), 1000)):
                     if _eid == eid:
                         continue
                     eid2mentions[_eid].add((s, e))

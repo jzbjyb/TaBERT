@@ -18,6 +18,15 @@ from table_bert.wikitablequestions import WikiTQ
 from table_bert.turl import TurlData
 from table_bert.tapas import TapasTables
 from table_bert.dataset_utils import BasicDataset
+from table_bert.dataset import Example
+
+
+def tableshuffle(prep_file: str, output_file: str):
+    with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
+        for l in tqdm(fin):
+            example = json.loads(l)
+            Example.shuffle_table(example)
+            fout.write(json.dumps(example) + '\n')
 
 
 def find_other_table(prep_file: str, output_file: str, max_count: int):
@@ -62,7 +71,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
         print(f'#used_eids {len(used_eids)}')
 
 
-def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str):
+def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str, max_context_len: int, max_num_rows: int):
     examples = []
     for example_line, ret_examples in zip(example_lines, ret_examples_li):
         example = json.loads(example_line)
@@ -77,6 +86,10 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
                 table = example['table']['data']
             else:
                 raise NotImplementedError
+            if max_context_len:
+                context = context[:max_context_len]
+            if max_num_rows:
+                table = table[:max_num_rows]
             locations = BasicDataset.get_mention_locations(context, table)
             if best_match_mentions is None or len(locations) > len(best_match_mentions):
                 best_match_mentions = locations
@@ -93,7 +106,8 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
 
 
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
-                            bywhich: str, topk: int, nthread: int, batch_size: int = 100):
+                            bywhich: str, topk: int, nthread: int, batch_size: int = 100,
+                            max_context_len: int = None, max_num_rows: int = None):
     assert bywhich in {'context', 'table'}
     remove_self = target_file == source_file
     idx2example: Dict[int, Dict] = {}
@@ -111,14 +125,15 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
             idx = int(idx)
             bytext = [int(s.split(',')[0]) for s in bytext.split(' ')][:topk]
             bytable = [int(s.split(',')[0]) for s in bytable.split(' ')][:topk]
-            byall = list(set(bytext + bytable) - ({idx} if remove_self else {}))[:topk]
+            byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
             ret_examples = [idx2example[_idx] for _idx in byall]
             example_line = tfin.readline()
             ret_examples_li.append(ret_examples)
             example_lines.append(example_line)
             if len(example_lines) >= batch_size:
                 r = pool.apply_async(
-                    functools.partial(_generate_retrieval_data_single, bywhich=bywhich),
+                    functools.partial(_generate_retrieval_data_single,
+                                      bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows),
                     (example_lines, ret_examples_li))
                 results.append(r)
                 example_lines = []
@@ -130,7 +145,8 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                     results = []
         if len(example_lines) >= 0:
             r = pool.apply_async(
-                functools.partial(_generate_retrieval_data_single, bywhich=bywhich),
+                functools.partial(_generate_retrieval_data_single,
+                                  bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows),
                 (example_lines, ret_examples_li))
             results.append(r)
         if len(results) > 0:
@@ -143,7 +159,8 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap', 'fakepair', 'retpair', 'tapas'])
+    parser.add_argument('--data', type=str, required=True, choices=[
+        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'overlap', 'fakepair', 'retpair', 'tableshuffle'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
@@ -204,7 +221,10 @@ def main():
     elif args.data == 'retpair':
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
-                                bywhich=args.split, topk=10, nthread=20, batch_size=1000)
+                                bywhich=args.split, topk=10, nthread=20, batch_size=1000,
+                                max_context_len=256, max_num_rows=100)  # used for tapas bytable setting
+    elif args.data == 'tableshuffle':
+        tableshuffle(args.path[0], args.output_dir)
     else:
         raise NotImplementedError
 

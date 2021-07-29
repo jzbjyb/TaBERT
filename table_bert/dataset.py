@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 from typing import Dict, Optional, Iterator, Set, Union, List, Tuple
 import redis
+import random
 
 import numpy as np
 import torch
@@ -441,6 +442,64 @@ class Example(object):
 
         for key, val in kwargs.items():
             setattr(self, key, val)
+
+    @staticmethod
+    def shuffle_table(example: Dict):
+        data = example['table']['data']
+        header = example['table']['header']
+        data_used = example['table']['data_used'] if 'data_used' in example['table'] else example['table']['used_data']
+        if len(data) <= 0:
+            return
+        num_rows = len(data)
+        num_cols = len(data[0])
+        data_used = [(r, c) for r, c in data_used if r < num_rows and c < num_cols]  # remove out-of-bound indices
+        if len(data_used) <= 1:
+            return
+
+        # get used rows/columns
+        row_idxs, col_idxs = list(zip(*data_used))
+        row_idxs = list(set(row_idxs))
+        col_idxs = list(set(col_idxs))
+        # shuffle
+        random.shuffle(row_idxs)
+        random.shuffle(col_idxs)
+
+        full_row_idxs = []
+        full_col_idxs = []
+        row_old2new: Dict[int, int] = {}
+        col_old2new: Dict[int, int] = {}
+        ind = 0
+        for i in range(num_rows):
+            if i in row_idxs:
+                full_row_idxs.append(row_idxs[ind])
+                row_old2new[i] = row_idxs[ind]
+                ind += 1
+            else:
+                full_row_idxs.append(i)
+        ind = 0
+        for i in range(num_cols):
+            if i in col_idxs:
+                full_col_idxs.append(col_idxs[ind])
+                col_old2new[i] = col_idxs[ind]
+                ind += 1
+            else:
+                full_col_idxs.append(i)
+
+        new_header = []
+        for j in range(num_cols):
+            new_header.append(header[full_col_idxs[j]])
+        new_data = []
+        for i in range(num_rows):
+            new_data.append([])
+            for j in range(num_cols):
+                new_data[-1].append(data[full_row_idxs[i]][full_col_idxs[j]])
+        new_data_used = [(row_old2new[r], col_old2new[c]) for r, c in data_used]
+
+        example['table']['data'] = new_data
+        example['table']['header'] = new_header
+        if 'used_data' in example['table']:
+            del example['table']['used_data']
+        example['table']['data_used'] = new_data_used
 
     def serialize(self):
         example = {

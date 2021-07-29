@@ -39,8 +39,8 @@ class TurlData(BasicDataset):
         li = [page_title, section_title, caption]
         for i in range(len(li)):  # preprocess text
             li[i] = li[i].strip()
-            if add_punc and len(li[i]) > 0 and re.match('[?.!]$', li[i]) is None:
-                li[i] = li[i] + '.'
+            if add_punc:
+                li[i] = BasicDataset.add_punc(li[i])
         page_title, section_title, caption = li
         toks = []
         if len(page_title) > 0:

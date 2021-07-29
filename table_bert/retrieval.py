@@ -9,7 +9,7 @@ from functools import partial
 import multiprocessing as mp
 import subprocess
 import copy
-import random
+import sys
 import numpy as np
 
 
@@ -75,9 +75,10 @@ class ESWrapper():
                 }
 
 
-def retrieve_part(filename, topk, full_table, two_idx):  # inclusive and exclusive
+def retrieve_part(index_name, filename, topk, full_table, two_idx):  # inclusive and exclusive
     start_idx, end_idx = two_idx
     results: List[Tuple[int, List, List]] = []
+    es = ESWrapper(index_name)
     with open(filename, 'r') as fin:
         for idx, l in tqdm(enumerate(fin), total=end_idx - start_idx, disable=start_idx != 0):
             if idx < start_idx:
@@ -92,14 +93,14 @@ def retrieve_part(filename, topk, full_table, two_idx):  # inclusive and exclusi
     return results
 
 
-def retrieve(filename: str, output: str, topk: int = 5, threads: int = 1, full_table: bool = False):
+def retrieve(index_name: str, filename: str, output: str, topk: int = 5, threads: int = 1, full_table: bool = False):
     total_count = int(subprocess.check_output('wc -l {}'.format(filename), shell=True).split()[0])
     bs = total_count // threads
     splits = [(i * bs, (i * bs + bs) if i < threads - 1 else total_count) for i in range(threads)]
     print('splits:', splits)
 
     pool = mp.Pool(threads)
-    results_list = pool.map(partial(retrieve_part, filename, topk, full_table), splits)
+    results_list = pool.map(partial(retrieve_part, index_name, filename, topk, full_table), splits)
 
     format_list = lambda l: ' '.join(['{},{}'.format(i, s) for i, s in l])
     with open(output, 'w') as fout:
@@ -191,16 +192,17 @@ def combine_negative(data_file: str, neg_file: str, output: str, fill_to: int, n
 
 
 if __name__ == '__main__':
-    task = '3merge-ret'.split('-')
+    task = sys.argv[1].split('-')
 
     if task[0] == 'totto':
         # index and search
+        index_name = 'totto'
         filename = 'data/totto_data/train/preprocessed.jsonl'
         neg_file = 'test.tsv'
         topk = 100
-        es = ESWrapper('totto')
+        es = ESWrapper(index_name)
         es.build_index(es.table_text_data_iterator(filename))
-        retrieve(filename, neg_file, topk=topk, threads=10)
+        retrieve(index_name, filename, neg_file, topk=topk, threads=10)
 
         # get negative
         final_file = 'test.jsonl'
@@ -215,4 +217,16 @@ if __name__ == '__main__':
         elif task[1] == 'ret':
             topk = 100
             retrieve_output = filename + f'.ret{topk}'
-            retrieve(filename, retrieve_output, topk=topk, threads=10, full_table=True)
+            retrieve(index_name, filename, retrieve_output, topk=topk, threads=10, full_table=True)
+
+    elif task[0] == 'tapas':
+        index_name = 'tapas_1m'
+        es = ESWrapper(index_name)
+        if 'index' in task[1]:
+            filename = '/home/zhengbao/mnt/root/tapas/data/pretrain/train/preprocessed_1m.jsonl'
+            es.build_index(es.table_text_data_iterator(filename, full_table=True))
+        if 'ret' in task[1]:
+            topk = 100
+            filename = '/home/zhengbao/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
+            retrieve_output = filename + f'.{index_name}_ret{topk}'
+            retrieve(index_name, filename, retrieve_output, topk=topk, threads=10, full_table=True)

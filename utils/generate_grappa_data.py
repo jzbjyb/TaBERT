@@ -16,6 +16,7 @@ from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.turl import TurlData
+from table_bert.tapas import TapasTables
 from table_bert.dataset_utils import BasicDataset
 
 
@@ -142,7 +143,7 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap', 'fakepair', 'retpair'])
+    parser.add_argument('--data', type=str, required=True, choices=['totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'overlap', 'fakepair', 'retpair', 'tapas'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=True)
     parser.add_argument('--split', type=str, default='dev')
@@ -151,6 +152,7 @@ def main():
     random.seed(2021)
     np.random.seed(2021)
 
+    # dataset-specific prep
     if args.data == 'totto':
         totto = Totto(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
@@ -191,6 +193,12 @@ def main():
                                       task='cell_filling', avoid_titles=avoid_titles)
         turl.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed_sa_avoid3merge.jsonl',
                                       task='schema_augmentation', avoid_titles=avoid_titles)
+    elif args.data == 'tapas':
+        tt = TapasTables(args.path[0])
+        os.makedirs(args.output_dir / args.split, exist_ok=True)
+        tt.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed.jsonl')
+
+    # others
     elif args.data == 'fakepair':
         find_other_table(args.path[0], args.output_dir, max_count=3)
     elif args.data == 'retpair':

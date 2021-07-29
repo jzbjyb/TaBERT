@@ -16,6 +16,13 @@ class BasicDataset(object):
         return BasicDataset.STOPWORDS
 
     @staticmethod
+    def add_punc(text, punc: str = '.'):
+        text = text.strip()
+        if len(text) > 0 and re.search('[?.!"]$', text) is None:
+            return text + punc
+        return text
+
+    @staticmethod
     def is_number(s):
         if s is None:
             return False

@@ -851,7 +851,7 @@ jobs:
 # 3merge wholetabel (mlm context mention shuffletable)
 - name: wholetable_3merge_bart_mlm_contextmention_shuffletable
   sku: G8
-  sku_count: 3
+  sku_count: 1
   aml_mpirun:
     process_count_per_node: 8
     communicator: "OpenMpi"
@@ -859,6 +859,7 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_shuffletable
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_shuffletable seq2seq 24 10 null
+    --gradient-accumulation-steps 3
 - name: bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention_shuffletable
   sku: G4
   sku_count: 1
@@ -1091,7 +1092,7 @@ jobs:
 # 3merge wholetabel (mlm context mention ret bycontext tapas)
 - name: wholetable_3merge_bart_mlm_contextmention_retbycontext_tapas
   sku: G8
-  sku_count: 3
+  sku_count: 1
   aml_mpirun:
     process_count_per_node: 8
     communicator: "OpenMpi"
@@ -1099,6 +1100,7 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbycontext_tapas
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbycontext_tapas seq2seq 24 10 null
+    --gradient-accumulation-steps 3
 - name: bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention_retbycontext_tapas
   sku: G4
   sku_count: 1

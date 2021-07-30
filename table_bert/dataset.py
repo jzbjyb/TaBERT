@@ -575,8 +575,8 @@ class Example(object):
             else:  # tid behind
                 tid += 1
         for tm in token_mentions:
-            if tm is None: raise Exception(f'char2token index error {offsets} {char_mentions}')
-        token_mentions = sorted(set(token_mentions))  # multiple mentions might be from the same token
+            if tm is None: logging.warning(f'char2token index error {offsets} {char_mentions}')
+        token_mentions = sorted(set(token_mentions) - {None})  # multiple mentions might be from the same token
         return token_mentions
 
     @staticmethod

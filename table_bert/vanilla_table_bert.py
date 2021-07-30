@@ -92,6 +92,7 @@ class VanillaTableBert(TableBertModel):
     def forward_bert(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
         sample_size = masked_lm_labels.ne(-1).sum().item()
+        logging_output = {'sample_size': sample_size}
         obj = self.config.objective_function
         if 'mlm' in obj or 'binary' in obj:
             sequence_output, pooled_output = self._bert_model.bert(input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False)
@@ -103,6 +104,7 @@ class VanillaTableBert(TableBertModel):
                 loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='mean')
                 masked_lm_loss = loss_fct(prediction_scores.view(-1, prediction_scores.size(-1)), masked_lm_labels.view(-1))
                 total_loss += masked_lm_loss
+                logging_output['mlm_loss'] = masked_lm_loss.item()
             if 'binary' in obj:
                 binary_label = 1 - kwargs['is_positives']  # 0 => next sentence is the continuation, 1 => next sentence is a random sentence
                 binary_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), binary_label.view(-1))
@@ -117,6 +119,7 @@ class VanillaTableBert(TableBertModel):
                 output_all_encoded_layers=False)[0][:, 0, :]
             contrastive_loss = self.contrastive_loss(context_repr, table_repr)
             total_loss += contrastive_loss
+            logging_output['contrastive_loss'] = contrastive_loss.item()
         if 'contrast-concat' in obj:
             # use the representation corresponding to the first token (cls or sep)
             concat_repr, _ = self._bert_model.bert(
@@ -136,10 +139,7 @@ class VanillaTableBert(TableBertModel):
             nsp_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), nsp_label.view(-1))
             total_loss += nsp_loss
 
-        logging_output = {
-            'sample_size': sample_size,
-            'loss': total_loss.item()
-        }
+        logging_output['loss'] = total_loss.item()
         total_loss = total_loss * (sample_size or 1)
         return total_loss, logging_output
 

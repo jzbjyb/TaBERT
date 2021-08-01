@@ -36,11 +36,17 @@ class ESWrapper():
             size=topk)['hits']['hits']
         return [(doc['_source'], doc['_score']) for doc in results]
 
-    def build_index(self, doc_iter: Iterator):
+    def build_index(self, doc_iter: Iterator, shards: int = 1, replicas: int = 1):
+        request_body = {
+            'settings': {
+                'number_of_shards': shards,
+                'number_of_replicas': replicas
+            }
+        }
         print('delete index')
         self.es.indices.delete(index=self.index_name, ignore=[400, 404])
         print('create index')
-        print(self.es.indices.create(index=self.index_name, ignore=400))
+        print(self.es.indices.create(index=self.index_name, body=request_body, ignore=400))
         print('add docs')
         print(bulk(self.es, doc_iter))
 
@@ -75,11 +81,11 @@ class ESWrapper():
                 }
 
 
-def retrieve_part(index_name, filename, topk, full_table, two_idx):  # inclusive and exclusive
-    start_idx, end_idx = two_idx
-    results: List[Tuple[int, List, List]] = []
+def retrieve_part(index_name, filename, topk, full_table, two_idx_and_outfile):  # inclusive and exclusive
+    start_idx, end_idx, outfile = two_idx_and_outfile
     es = ESWrapper(index_name)
-    with open(filename, 'r') as fin:
+    format_list = lambda l: ' '.join(['{},{}'.format(i, s) for i, s in l])
+    with open(filename, 'r') as fin, open(outfile, 'w') as fout:
         for idx, l in tqdm(enumerate(fin), total=end_idx - start_idx, disable=start_idx != 0):
             if idx < start_idx:
                 continue
@@ -89,24 +95,20 @@ def retrieve_part(index_name, filename, topk, full_table, two_idx):  # inclusive
             text, table = ESWrapper.format_text(example), ESWrapper.format_table(example, full_table=full_table)
             bytext = [(doc['line_idx'], score) for doc, score in es.get_topk(text, field='text', topk=topk + 1)]
             bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(table, field='table', topk=topk + 1)]
-            results.append((idx, bytext, bytable))
-    return results
+            fout.write('{}\t{}\t{}\n'.format(idx, format_list(bytext), format_list(bytable)))
 
 
-def retrieve(index_name: str, filename: str, output: str, topk: int = 5, threads: int = 1, full_table: bool = False):
+def retrieve(index_name: str, filename: str, output: str, topk: int = 5,
+             threads: int = 1, rank: int = 0, world_size: int = 1, full_table: bool = False):
     total_count = int(subprocess.check_output('wc -l {}'.format(filename), shell=True).split()[0])
     bs = total_count // threads
-    splits = [(i * bs, (i * bs + bs) if i < threads - 1 else total_count) for i in range(threads)]
+    splits = [(i * bs, (i * bs + bs) if i < threads - 1 else total_count, f'{output}.{i}')
+              for i in range(threads)][rank:threads:world_size]
     print('splits:', splits)
+    real_threads = len(splits)
 
-    pool = mp.Pool(threads)
-    results_list = pool.map(partial(retrieve_part, index_name, filename, topk, full_table), splits)
-
-    format_list = lambda l: ' '.join(['{},{}'.format(i, s) for i, s in l])
-    with open(output, 'w') as fout:
-        for results in results_list:
-            for idx, bytext, bytable in results:
-                fout.write('{}\t{}\t{}\n'.format(idx, format_list(bytext), format_list(bytable)))
+    pool = mp.Pool(real_threads)
+    pool.map(partial(retrieve_part, index_name, filename, topk, full_table), splits)
 
 
 def fill_to_at_middle(lst: List, fill_to: int):
@@ -220,13 +222,16 @@ if __name__ == '__main__':
             retrieve(index_name, filename, retrieve_output, topk=topk, threads=10, full_table=True)
 
     elif task[0] == 'tapas':
-        index_name = 'tapas_1m'
+        index_name = 'tapas'
         es = ESWrapper(index_name)
         if 'index' in task[1]:
-            filename = '/home/zhengbao/mnt/root/tapas/data/pretrain/train/preprocessed_1m.jsonl'
-            es.build_index(es.table_text_data_iterator(filename, full_table=True))
+            filename = '/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
+            es.build_index(es.table_text_data_iterator(filename, full_table=True), shards=5)
         if 'ret' in task[1]:
-            topk = 100
-            filename = '/home/zhengbao/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
+            topk = 10
+            threads, rank, world_size = sys.argv[2:4]
+            threads, rank, world_size = int(threads), int(rank), int(world_size)
+            filename = f'/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
             retrieve_output = filename + f'.{index_name}_ret{topk}'
-            retrieve(index_name, filename, retrieve_output, topk=topk, threads=10, full_table=True)
+            retrieve(index_name, filename, retrieve_output, topk=topk,
+                     threads=threads, rank=rank, world_size=world_size, full_table=True)

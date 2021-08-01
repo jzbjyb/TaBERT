@@ -107,9 +107,8 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
 
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
                             bywhich: str, topk: int, nthread: int, batch_size: int = 100,
-                            max_context_len: int = None, max_num_rows: int = None):
+                            max_context_len: int = None, max_num_rows: int = None, remove_self: bool = False):
     assert bywhich in {'context', 'table'}
-    remove_self = target_file == source_file
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
         for idx, l in enumerate(fin):
@@ -120,6 +119,14 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
         example_lines = []
         ret_examples_li = []
         results = []
+        tfin_idx = -1
+        def get_next_target_until(idx):
+            nonlocal tfin_idx
+            l = None
+            while tfin_idx < idx:
+                l = tfin.readline()
+                tfin_idx += 1
+            return l
         for l in tqdm(fin, miniters=50):
             idx, bytext, bytable = l.strip().split('\t')
             idx = int(idx)
@@ -127,7 +134,7 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
             bytable = [int(s.split(',')[0]) for s in bytable.split(' ')][:topk]
             byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
             ret_examples = [idx2example[_idx] for _idx in byall]
-            example_line = tfin.readline()
+            example_line = get_next_target_until(idx)
             ret_examples_li.append(ret_examples)
             example_lines.append(example_line)
             if len(example_lines) >= batch_size:
@@ -222,7 +229,7 @@ def main():
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=20, batch_size=1000,
-                                max_context_len=256, max_num_rows=100)  # used for tapas bytable setting
+                                max_context_len=256, max_num_rows=100, remove_self=False)  # used for tapas setting
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)
     else:

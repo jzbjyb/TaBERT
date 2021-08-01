@@ -3,3 +3,4 @@ Dockerfile
 data
 pretrained_models
 wandb
+*.out

@@ -229,7 +229,7 @@ if __name__ == '__main__':
             es.build_index(es.table_text_data_iterator(filename, full_table=True), shards=5)
         if 'ret' in task[1]:
             topk = 10
-            threads, rank, world_size = sys.argv[2:4]
+            threads, rank, world_size = sys.argv[2:5]
             threads, rank, world_size = int(threads), int(rank), int(world_size)
             filename = f'/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
             retrieve_output = filename + f'.{index_name}_ret{topk}'

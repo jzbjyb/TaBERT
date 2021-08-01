@@ -1,3 +1,6 @@
+import os
+os.environ['WANDB_API_KEY'] = '9caada2c257feff1b6e6a519ad378be3994bc06a'
+
 from typing import List, Dict, Tuple, Set
 import functools
 import time
@@ -228,7 +231,7 @@ def main():
     elif args.data == 'retpair':
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
-                                bywhich=args.split, topk=10, nthread=20, batch_size=1000,
+                                bywhich=args.split, topk=10, nthread=40, batch_size=1000,
                                 max_context_len=256, max_num_rows=100, remove_self=False)  # used for tapas setting
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)

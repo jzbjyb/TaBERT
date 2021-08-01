@@ -86,7 +86,7 @@ def retrieve_part(index_name, filename, topk, full_table, two_idx_and_outfile): 
     es = ESWrapper(index_name)
     format_list = lambda l: ' '.join(['{},{}'.format(i, s) for i, s in l])
     with open(filename, 'r') as fin, open(outfile, 'w') as fout:
-        for idx, l in tqdm(enumerate(fin), total=end_idx - start_idx, disable=start_idx != 0):
+        for idx, l in tqdm(enumerate(fin), total=end_idx - start_idx, disable=False):
             if idx < start_idx:
                 continue
             if idx >= end_idx:

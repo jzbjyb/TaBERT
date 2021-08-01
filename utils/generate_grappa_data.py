@@ -110,7 +110,8 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
 
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
                             bywhich: str, topk: int, nthread: int, batch_size: int = 100,
-                            max_context_len: int = None, max_num_rows: int = None, remove_self: bool = False):
+                            max_context_len: int = None, max_num_rows: int = None,
+                            remove_self: bool = False, only_self: bool = False):
     assert bywhich in {'context', 'table'}
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
@@ -131,11 +132,14 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                 tfin_idx += 1
             return l
         for l in tqdm(fin, miniters=50):
-            idx, bytext, bytable = l.strip().split('\t')
+            idx, bytext, bytable = l.rstrip('\n').split('\t')
             idx = int(idx)
-            bytext = [int(s.split(',')[0]) for s in bytext.split(' ')][:topk]
-            bytable = [int(s.split(',')[0]) for s in bytable.split(' ')][:topk]
-            byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
+            if only_self:
+                byall = [idx]
+            else:
+                bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][:topk]
+                bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][:topk]
+                byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
             ret_examples = [idx2example[_idx] for _idx in byall]
             example_line = get_next_target_until(idx)
             ret_examples_li.append(ret_examples)
@@ -229,10 +233,14 @@ def main():
     elif args.data == 'fakepair':
         find_other_table(args.path[0], args.output_dir, max_count=3)
     elif args.data == 'retpair':
+        only_self = False
+        remove_self = False
+        batch_size = 5000 if only_self else 1000
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
-                                bywhich=args.split, topk=10, nthread=40, batch_size=1000,
-                                max_context_len=256, max_num_rows=100, remove_self=False)  # used for tapas setting
+                                bywhich=args.split, topk=10, nthread=40, batch_size=batch_size,
+                                max_context_len=256, max_num_rows=100,  # used for tapas setting
+                                remove_self=remove_self, only_self=only_self)
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)
     else:

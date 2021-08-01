@@ -594,7 +594,7 @@ class Example(object):
     @classmethod
     def from_dict(cls, entry: Dict, tokenizer: Optional[BertTokenizer], tokenizer_fast: Optional[BertTokenizerFast]=None, suffix=None) -> 'Example':
         def _get_data_source():
-            if 'wiki' in entry['uuid']:
+            if entry['uuid'].startswith('wiki'):
                 return 'wiki'
             if entry['uuid'].startswith('totto_') or entry['uuid'].startswith('wsql_') or entry['uuid'].startswith('tablefact_'):
                 return 'grappa'

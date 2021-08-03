@@ -40,6 +40,9 @@ RUN pip install -r /tmp/scripts/requirements_electra.txt
 # wandb
 RUN pip install wandb==0.10.33
 
+# timeout
+RUN pip install timeout-decorator==0.5.0
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

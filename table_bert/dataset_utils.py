@@ -6,6 +6,7 @@ import re
 import random
 from nltk.corpus import stopwords
 from difflib import SequenceMatcher
+import timeout_decorator
 
 
 class BasicDataset(object):
@@ -107,6 +108,7 @@ class BasicDataset(object):
         return '', -1, -1
 
     @staticmethod
+    @timeout_decorator.timeout(600, use_signals=False)
     def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: List[Tuple[int, int]] = None):
         locations: Set[Tuple[int, int]] = set()  # (inclusive, exclusive)
         context = context.lower()

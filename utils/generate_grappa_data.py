@@ -93,7 +93,11 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
                 context = context[:max_context_len]
             if max_num_rows:
                 table = table[:max_num_rows]
-            locations = BasicDataset.get_mention_locations(context, table)
+            try:
+                locations = BasicDataset.get_mention_locations(context, table)
+            except TimeoutError:
+                print(f'timeout {context} {table}')
+                locations = []
             if best_match_mentions is None or len(locations) > len(best_match_mentions):
                 best_match_mentions = locations
                 best_match = _example

@@ -108,7 +108,7 @@ class BasicDataset(object):
         return '', -1, -1
 
     @staticmethod
-    @timeout_decorator.timeout(600, use_signals=False)
+    @timeout_decorator.timeout(1000, use_signals=False)
     def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: List[Tuple[int, int]] = None):
         locations: Set[Tuple[int, int]] = set()  # (inclusive, exclusive)
         context = context.lower()

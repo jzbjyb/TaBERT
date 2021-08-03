@@ -112,6 +112,18 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
     return examples
 
 
+class NoDaemonProcess(multiprocessing.Process):
+    def _get_daemon(self):
+        return False
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+
+class MyPool(multiprocessing.pool.Pool):
+    Process = NoDaemonProcess
+
+
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
                             bywhich: str, topk: int, nthread: int, batch_size: int = 100,
                             max_context_len: int = None, max_num_rows: int = None,
@@ -121,7 +133,7 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
     with open(source_file, 'r') as fin:
         for idx, l in enumerate(fin):
             idx2example[idx] = json.loads(l)
-    pool = multiprocessing.Pool(processes=nthread)
+    pool = MyPool(processes=nthread)
     start = time.time()
     with open(retrieval_file, 'r') as fin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
         example_lines = []

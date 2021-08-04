@@ -162,6 +162,7 @@ class TableBertConfig(SimpleNamespace):
         seq2seq_format: str = None,
         multi_decode_sep_token: str = '<|>',
         column_wise: bool = False,
+        not_strict_mask: bool = False,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
@@ -213,6 +214,7 @@ class TableBertConfig(SimpleNamespace):
         self.max_context_len = max_context_len
 
         self.do_lower_case = do_lower_case
+        self.not_strict_mask = not_strict_mask
 
         if isinstance(cell_input_template, str):
             if ' ' in cell_input_template:
@@ -321,6 +323,7 @@ class TableBertConfig(SimpleNamespace):
                                      'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument('--column_wise', action='store_true', help='linearize the table by columns')
+        parser.add_argument('--not_strict_mask', action='store_true', help='skip errors during masking')
         parser.add_argument("--do_lower_case", action="store_true")
         parser.set_defaults(do_lower_case=True)
 

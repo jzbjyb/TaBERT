@@ -444,7 +444,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
             stop = False
-            for fm in {'qa', 'sql', 'cell-filling', 'schema-augmentation'}:
+            for fm in {'mlm', 'qa', 'sql', 'cell-filling', 'schema-augmentation'}:
                 # for these formats, do not iterative over context
                 if fm in seq2seq_format:
                     stop = True
@@ -920,8 +920,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         assert len(set(masked_column_token_indices)) == len(masked_column_token_indices), 'duplicate indicies'
 
         masked_token_labels = []
+        masked_indices_rm_oob = []
 
         for index in masked_indices:
+            if self.config.not_strict_mask and index >= len(tokens):
+                continue
             if not self.config.use_electra:  # BERT style masking
                 # 80% of the time, replace with mask
                 if random() < 0.8:
@@ -939,6 +942,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 else:  # 15% of the time, keep original
                     masked_token = tokens[index]
             masked_token_labels.append(tokens[index])
+            masked_indices_rm_oob.append(index)
             # Once we've saved the true label for that token, we can overwrite it with the masked version
             tokens[index] = masked_token
 
@@ -947,7 +951,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'num_context_tokens_to_mask': num_context_tokens_to_mask,
         })
 
-        return tokens, masked_indices, masked_token_labels, info
+        return tokens, masked_indices_rm_oob, masked_token_labels, info
 
     def remove_unecessary_instance_entries(self, instance: Dict):
         del instance['tokens']

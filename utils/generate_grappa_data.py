@@ -1,3 +1,4 @@
+import logging
 import os
 os.environ['WANDB_API_KEY'] = '9caada2c257feff1b6e6a519ad378be3994bc06a'
 
@@ -75,7 +76,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
         print(f'#used_eids {len(used_eids)}')
 
 
-def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str, max_context_len: int, max_num_rows: int):
+def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str, max_context_len: int, max_num_rows: int, batch_id: int = None):
     examples = []
     for i, (example_line, ret_examples) in enumerate(zip(example_lines, ret_examples_li)):
         example = json.loads(example_line)
@@ -110,6 +111,7 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
                 example['context_before'] = best_match['context_before']
                 example['context_before_mentions'] = [best_match_mentions]
         examples.append(example)
+    print(f'batch {batch_id} completed')
     return examples
 
 
@@ -128,7 +130,7 @@ class MyPool(multiprocessing.pool.Pool):
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
                             bywhich: str, topk: int, nthread: int, batch_size: int = 100,
                             max_context_len: int = None, max_num_rows: int = None,
-                            remove_self: bool = False, only_self: bool = False):
+                            remove_self: bool = False, only_self: bool = False, timeout: int = None):
     assert bywhich in {'context', 'table'}
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
@@ -137,6 +139,7 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
     #pool = MyPool(processes=nthread)
     pool = multiprocessing.Pool(processes=nthread)
     start = time.time()
+    batch_id = 0
     with open(retrieval_file, 'r') as fin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
         example_lines = []
         ret_examples_li = []
@@ -165,26 +168,33 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
             if len(example_lines) >= batch_size:
                 r = pool.apply_async(
                     functools.partial(_generate_retrieval_data_single,
-                                      bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows),
+                                      bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows, batch_id=batch_id),
                     (example_lines, ret_examples_li))
                 results.append(r)
                 example_lines = []
                 ret_examples_li = []
                 if len(results) == nthread:
                     for r in results:
-                        for e in r.get():
-                            fout.write(json.dumps(e) + '\n')
+                        try:
+                            for e in r.get(timeout):
+                                fout.write(json.dumps(e) + '\n')
+                        except multiprocessing.TimeoutError:
+                            logging.warning(f'batch {batch_id} timeout')
                     results = []
+                    batch_id += 1
         if len(example_lines) >= 0:
             r = pool.apply_async(
                 functools.partial(_generate_retrieval_data_single,
-                                  bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows),
+                                  bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows, batch_id=batch_id),
                 (example_lines, ret_examples_li))
             results.append(r)
         if len(results) > 0:
             for r in results:
-                for e in r.get():
-                    fout.write(json.dumps(e) + '\n')
+                try:
+                    for e in r.get(timeout):
+                        fout.write(json.dumps(e) + '\n')
+                except multiprocessing.TimeoutError:
+                    logging.warning(f'batch {batch_id} timeout')
     end = time.time()
     print(f'total time {end - start}')
 
@@ -254,12 +264,13 @@ def main():
         only_self = False
         remove_self = False
         batch_size = 5000 if only_self else 1000
+        timeout = batch_size * 1  # 1s per example
         nthread=40
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
                                 max_context_len=256, max_num_rows=100,  # used for tapas setting
-                                remove_self=remove_self, only_self=only_self)
+                                remove_self=remove_self, only_self=only_self, timeout=timeout)
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)
     else:

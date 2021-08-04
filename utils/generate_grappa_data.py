@@ -16,6 +16,7 @@ from collections import defaultdict
 from tqdm import tqdm
 import multiprocessing
 from timeout_decorator.timeout_decorator import TimeoutError
+import faiss
 from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
@@ -130,7 +131,8 @@ class MyPool(multiprocessing.pool.Pool):
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
                             bywhich: str, topk: int, nthread: int, batch_size: int = 100,
                             max_context_len: int = None, max_num_rows: int = None,
-                            remove_self: bool = False, only_self: bool = False, timeout: int = None):
+                            remove_self: bool = False, only_self: bool = False,
+                            timeout: float = None, use_top1: str = None):
     assert bywhich in {'context', 'table'}
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
@@ -160,7 +162,18 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
             else:
                 bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][:topk]
                 bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][:topk]
-                byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
+                if use_top1 == 'context':
+                    byall = bytext[:1]
+                    if remove_self and idx in byall:
+                        byall = bytext[1:2]
+                elif use_top1 == 'table':
+                    byall = bytable[:1]
+                    if remove_self and idx in byall:
+                        byall = bytable[1:2]
+                elif use_top1 is None:
+                    byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
+                else:
+                    raise NotImplementedError
             ret_examples = [idx2example[_idx] for _idx in byall]
             example_line = get_next_target_until(idx)
             ret_examples_li.append(ret_examples)
@@ -174,11 +187,13 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                 example_lines = []
                 ret_examples_li = []
                 if len(results) == nthread:
+                    _timeout = timeout
                     for r in results:
                         try:
-                            for e in r.get(timeout):
+                            for e in r.get(_timeout):
                                 fout.write(json.dumps(e) + '\n')
                         except multiprocessing.TimeoutError:
+                            _timeout = max(_timeout // 4, 60)
                             logging.warning(f'batch {batch_id} timeout')
                     results = []
                     batch_id += 1
@@ -189,11 +204,13 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                 (example_lines, ret_examples_li))
             results.append(r)
         if len(results) > 0:
+            _timeout = timeout
             for r in results:
                 try:
                     for e in r.get(timeout):
                         fout.write(json.dumps(e) + '\n')
                 except multiprocessing.TimeoutError:
+                    _timeout = max(_timeout // 4, 60)
                     logging.warning(f'batch {batch_id} timeout')
     end = time.time()
     print(f'total time {end - start}')
@@ -202,9 +219,9 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
-        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'overlap', 'fakepair', 'retpair', 'tableshuffle'])
+        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
-    parser.add_argument('--output_dir', type=Path, required=True)
+    parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
     args = parser.parse_args()
 
@@ -263,16 +280,40 @@ def main():
     elif args.data == 'retpair':
         only_self = False
         remove_self = False
+        use_top1 = None
         batch_size = 5000 if only_self else 1000
-        timeout = batch_size * 1  # 1s per example
+        timeout = batch_size * 0.5  # 0.5s per example
         nthread=40
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
                                 max_context_len=256, max_num_rows=100,  # used for tapas setting
-                                remove_self=remove_self, only_self=only_self, timeout=timeout)
+                                remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1)
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)
+    elif args.data == 'faiss':
+        repr_file = args.path[0]
+        topk = 10
+        repr = np.load(repr_file)
+        ret_results = []
+        for index_name, query_name in [('table', 'context'), ('context', 'table')]:
+            index_emb = repr[index_name].astype('float32')
+            query_emb = repr[query_name].astype('float32')
+            emb_size = index_emb.shape[1]
+            index = faiss.IndexHNSWFlat(emb_size, 512, faiss.METRIC_INNER_PRODUCT)
+            print(f'indexing {index_name} with shape {index_emb.shape} ...')
+            print(f'matrix sampe {index_emb[:5]}')
+            index.add(index_emb)
+            print('indexing done')
+            print(f'retrieving ...')
+            D, I = index.search(query_emb, topk + 1)  # add 1 for self retrieval
+            ret_results.append((I, D))
+            print('retrieving done')
+        format_list = lambda inds, scores: ' '.join(['{},{}'.format(i, s) for i, s in zip(inds, scores)])
+        with open(f'{repr_file}.ret_top{topk}', 'w') as fout:
+            for idx, (bycontext_inds, bycontext_scores, bytable_inds, bytable_scores) in enumerate(zip(*(ret_results[0] + ret_results[1]))):
+                fout.write('{}\t{}\t{}\n'.format(
+                    idx, format_list(bycontext_inds, bycontext_scores), format_list(bytable_inds, bytable_scores)))
     else:
         raise NotImplementedError
 

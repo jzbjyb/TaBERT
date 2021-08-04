@@ -1,5 +1,5 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention_retbycontext
-input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_retbycontext.jsonl.data0
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbycontext_dpr
+input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention_dpr_retbycontext.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=100

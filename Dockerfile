@@ -43,6 +43,9 @@ RUN pip install wandb==0.10.33
 # timeout
 RUN pip install timeout-decorator==0.5.0
 
+# faiss
+RUN conda install -c pytorch faiss-gpu==1.6.3 cudatoolkit=10.0
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

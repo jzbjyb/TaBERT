@@ -1150,6 +1150,19 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbycontext_tapas/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
 
+# 3merge wholetabel (mlm context mention ret bycontext dpr)
+- name: wholetable_3merge_bart_mlm_contextmention_retbycontext_dpr
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbycontext_dpr
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbycontext_dpr seq2seq 24 5 null
+    --gradient-accumulation-steps 3
+
 # 3merge wholetabel (mlm context mention tapas continue)
 - name: wholetable_tapas_bart_mlm_contextmention_data0_continue
   sku: G8
@@ -1654,6 +1667,19 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbytable_tapas/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
 
+# 3merge wholetabel (mlm context mention ret bytable dpr)
+- name: wholetable_3merge_bart_mlm_contextmention_retbytable_dpr
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbytable_dpr
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbytable_dpr seq2seq 24 5 null
+    --gradient-accumulation-steps 3
+
 # 3merge wholetabel (mlm context mention column wise)
 - name: wholetable_3merge_bart_mlm_contextmention_columnwise
   sku: G8
@@ -1942,3 +1968,16 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wholetable_3merge_bert_mlm
     /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert contrastive_mlm 16 10
     '"/mnt/root/TaBERT/data/runs/tabert_base_k1/model.bin"'
+
+# bert ret wholetable (separate-bin)
+- name: ret_wholetable_3merge_1pos3neg_bert
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_1pos3neg_bert_mlm
+    /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_1pos3neg_bert separate-bin_mlm 16 5
+    '"/mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert/pytorch_model_epoch09.bin"'

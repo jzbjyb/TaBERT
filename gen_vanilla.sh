@@ -1,4 +1,4 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bert_mlm_contextmention_1pos3neg
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_1pos3neg_bert_mlm
 input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl.1pos3neg
 # --no_shuffle is needed for dev/test
 additional_row_count=0

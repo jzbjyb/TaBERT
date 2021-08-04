@@ -203,7 +203,7 @@ class TableBertConfig(SimpleNamespace):
         assert objective_function in {
             'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm',
             'table2text_mlm', 'text2table_mlm', 'table2text_text2table', 'table2text_text2table_mlm',  # bart
-            'binary_mlm',
+            'binary_mlm', 'separate-bin_mlm',
             'seq2seq',  # bart
         }
         self.contrastive_emb_size = contrastive_emb_size

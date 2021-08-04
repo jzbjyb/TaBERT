@@ -281,7 +281,7 @@ class TableDataset(Dataset):
                     self.only_table(example)
 
                 obj = self.config.objective_function
-                if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj:
+                if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj or 'separate-bin' in obj:
                     # use cls for the first position for seq2seq objective
                     self.add_for_contrastive(example, same_first_token=True)
                 elif 'contrast-concat' in obj or 'nsp' in obj:

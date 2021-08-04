@@ -43,7 +43,7 @@ class VanillaTableBert(TableBertModel):
         obj = self.config.objective_function
         if 'contrastive' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
-        elif 'contrast-concat' in obj:
+        elif 'contrast-concat' in obj or 'separate-bin' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
         elif 'nsp' in obj or 'binary' in obj:
             self.nsp_loss = CrossEntropyLoss(ignore_index=-1, reduction='mean')
@@ -76,13 +76,13 @@ class VanillaTableBert(TableBertModel):
         self._electra_loss = ELECTRALoss()
 
     def load_roberta(self):
-        for loss_fct in ['nsp', 'binary', 'seq2seq']:
+        for loss_fct in ['nsp', 'binary', 'separate-bin', 'seq2seq']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_bart(self):
-        for loss_fct in ['nsp', 'binary', 'contrastive', 'contrast-concat']:
+        for loss_fct in ['nsp', 'binary', 'separate-bin', 'contrastive', 'contrast-concat']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._bart = BartForConditionalGeneration.from_pretrained(self.config.base_model_name)
@@ -110,7 +110,7 @@ class VanillaTableBert(TableBertModel):
                 binary_label = 1 - kwargs['is_positives']  # 0 => next sentence is the continuation, 1 => next sentence is a random sentence
                 binary_loss = self.nsp_loss(seq_relationship_score.view(-1, 2), binary_label.view(-1))
                 total_loss += binary_loss
-        if 'contrastive' in obj:
+        if 'contrastive' in obj or 'separate-bin' in obj:
             # use the representation corresponding to the first token (cls or sep)
             context_repr = self._bert_model.bert(
                 kwargs['context_input_ids'], kwargs['context_token_type_ids'], kwargs['context_attention_mask'],
@@ -118,7 +118,12 @@ class VanillaTableBert(TableBertModel):
             table_repr = self._bert_model.bert(
                 kwargs['table_input_ids'], kwargs['table_token_type_ids'], kwargs['table_attention_mask'],
                 output_all_encoded_layers=False)[0][:, 0, :]
-            contrastive_loss = self.contrastive_loss(context_repr, table_repr)
+            if 'contrastive' in obj:
+                contrastive_loss = self.contrastive_loss(context_repr, table_repr)
+            elif 'separate-bin' in obj:
+                contrastive_loss = self.contrastive_loss(context_repr, table_repr, labels=kwargs['is_positives'])
+            else:
+                raise ValueError
             total_loss += contrastive_loss
             logging_output['contrastive_loss'] = contrastive_loss.item()
         if 'contrast-concat' in obj:

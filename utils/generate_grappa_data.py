@@ -77,7 +77,9 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
         print(f'#used_eids {len(used_eids)}')
 
 
-def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str, max_context_len: int, max_num_rows: int, batch_id: int = None):
+def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]],
+                                    bywhich: str, max_context_len: int, max_num_rows: int, batch_id: int = None, op: str = 'max'):
+    assert op in {'max', 'min'}
     examples = []
     for i, (example_line, ret_examples) in enumerate(zip(example_lines, ret_examples_li)):
         example = json.loads(example_line)
@@ -101,17 +103,21 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
             except TimeoutError:
                 print(f'timeout {context} {table}')
                 locations = []
-            if best_match_mentions is None or len(locations) > len(best_match_mentions):
+            if best_match_mentions is None or \
+                    (op == 'max' and len(locations) > len(best_match_mentions)) or \
+                    (op == 'min' and len(locations) < len(best_match_mentions)):
                 best_match_mentions = locations
                 best_match = _example
         if best_match is not None:
             if bywhich == 'context':
                 example['table'] = best_match['table']
                 example['context_before_mentions'] = [best_match_mentions]
+                if op == 'min': example['is_positive'] = False
             elif bywhich == 'table':
                 example['context_before'] = best_match['context_before']
                 example['context_before_mentions'] = [best_match_mentions]
-        examples.append(example)
+                if op == 'min': example['is_positive'] = False
+        examples.append(example)  # use the original if there is no retrieved examples
     print(f'batch {batch_id} completed')
     return examples
 
@@ -128,12 +134,25 @@ class MyPool(multiprocessing.pool.Pool):
     Process = NoDaemonProcess
 
 
+def output_example(results, fout, batch_id, timeout, num_mentions):
+    _timeout = timeout
+    for r in results:
+        try:
+            for e in r.get(_timeout):
+                num_mentions.append(len(e['context_before_mentions'][0]))
+                fout.write(json.dumps(e) + '\n')
+        except multiprocessing.TimeoutError:
+            _timeout = max(_timeout // 4, 60)
+            logging.warning(f'batch {batch_id} timeout')
+
+
 def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: str, output_file: str,
-                            bywhich: str, topk: int, nthread: int, batch_size: int = 100,
+                            bywhich: str, topk: int = 0, botk: int = 0, nthread: int = 1, batch_size: int = 100,
                             max_context_len: int = None, max_num_rows: int = None,
                             remove_self: bool = False, only_self: bool = False,
-                            timeout: float = None, use_top1: str = None):
+                            timeout: float = None, use_top1: str = None, op: str = 'max'):
     assert bywhich in {'context', 'table'}
+    assert topk or botk, 'either topk or botk must be specified'
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
         for idx, l in tqdm(enumerate(fin), desc='build index'):
@@ -142,6 +161,7 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
     pool = multiprocessing.Pool(processes=nthread)
     start = time.time()
     batch_id = 0
+    num_mentions: List[int] = []
     with open(retrieval_file, 'r') as fin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
         example_lines = []
         ret_examples_li = []
@@ -160,8 +180,12 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
             if only_self:
                 byall = [idx]
             else:
-                bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][:topk]
-                bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][:topk]
+                if topk:
+                    bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][:topk]
+                    bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][:topk]
+                elif botk:
+                    bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][-botk:]
+                    bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][-botk:]
                 if use_top1 == 'context':
                     byall = bytext[:1]
                     if remove_self and idx in byall:
@@ -171,7 +195,10 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                     if remove_self and idx in byall:
                         byall = bytable[1:2]
                 elif use_top1 is None:
-                    byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
+                    if topk:
+                        byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
+                    elif botk:
+                        byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[-botk:]
                 else:
                     raise NotImplementedError
             ret_examples = [idx2example[_idx] for _idx in byall]
@@ -181,45 +208,46 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
             if len(example_lines) >= batch_size:
                 r = pool.apply_async(
                     functools.partial(_generate_retrieval_data_single,
-                                      bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows, batch_id=batch_id),
+                                      bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows, batch_id=batch_id, op=op),
                     (example_lines, ret_examples_li))
                 results.append(r)
                 example_lines = []
                 ret_examples_li = []
                 if len(results) == nthread:
-                    _timeout = timeout
-                    for r in results:
-                        try:
-                            for e in r.get(_timeout):
-                                fout.write(json.dumps(e) + '\n')
-                        except multiprocessing.TimeoutError:
-                            _timeout = max(_timeout // 4, 60)
-                            logging.warning(f'batch {batch_id} timeout')
+                    output_example(results, fout, batch_id, timeout, num_mentions)
                     results = []
                     batch_id += 1
         if len(example_lines) >= 0:
             r = pool.apply_async(
                 functools.partial(_generate_retrieval_data_single,
-                                  bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows, batch_id=batch_id),
+                                  bywhich=bywhich, max_context_len=max_context_len, max_num_rows=max_num_rows, batch_id=batch_id, op=op),
                 (example_lines, ret_examples_li))
             results.append(r)
         if len(results) > 0:
-            _timeout = timeout
-            for r in results:
-                try:
-                    for e in r.get(timeout):
-                        fout.write(json.dumps(e) + '\n')
-                except multiprocessing.TimeoutError:
-                    _timeout = max(_timeout // 4, 60)
-                    logging.warning(f'batch {batch_id} timeout')
+            output_example(results, fout, batch_id, timeout, num_mentions)
     end = time.time()
-    print(f'total time {end - start}')
+    print(f'total time {end - start}, with avg #mentions {np.mean(num_mentions)}')
+
+
+def generate_random_neg(input_file: str, output_file: str, num_neg: int = 1):
+    examples = []
+    with open(input_file, 'r') as fin, open(output_file, 'w') as fout:
+        for l in fin:
+            e = json.loads(l)
+            examples.append(e)
+        inds = list(range(len(examples)))
+        for i, e in enumerate(examples):
+            for j in list(set(random.sample(inds, num_neg + 1)) - {i})[:num_neg]:
+                ne = copy.deepcopy(e)
+                ne['table'] = examples[j]['table']
+                ne['is_positive'] = False
+                fout.write(json.dumps(ne) + '\n')
 
 
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
-        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss'])
+        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'random_neg'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
@@ -281,6 +309,7 @@ def main():
         only_self = False
         remove_self = False
         use_top1 = None
+        op = 'max'
         batch_size = 5000 if only_self else 1000
         timeout = batch_size * 0.5  # 0.5s per example
         nthread=40
@@ -288,7 +317,9 @@ def main():
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
                                 max_context_len=256, max_num_rows=100,  # used for tapas setting
-                                remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1)
+                                remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1, op=op)
+    elif args.data == 'random_neg':
+        generate_random_neg(args.path[0], args.output_dir)
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)
     elif args.data == 'faiss':

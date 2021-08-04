@@ -13,6 +13,7 @@ import numpy as np
 from fairseq import distributed_utils
 from tqdm import tqdm
 import json
+import os
 import torch
 from torch.nn import CrossEntropyLoss
 from torch_scatter import scatter_max, scatter_mean
@@ -39,10 +40,6 @@ class VanillaTableBert(TableBertModel):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
         getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
-        if config.load_model_from is not None:
-            print('init from {}'.format(config.load_model_from))
-            state_dict = torch.load(config.load_model_from, map_location='cpu')
-            self.load_state_dict(state_dict, strict=True)
         obj = self.config.objective_function
         if 'contrastive' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
@@ -50,6 +47,10 @@ class VanillaTableBert(TableBertModel):
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
         elif 'nsp' in obj or 'binary' in obj:
             self.nsp_loss = CrossEntropyLoss(ignore_index=-1, reduction='mean')
+        if config.load_model_from is not None:
+            print('init from {}'.format(config.load_model_from))
+            state_dict = torch.load(config.load_model_from, map_location='cpu')
+            self.load_state_dict(state_dict, strict=True)
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
@@ -157,6 +158,16 @@ class VanillaTableBert(TableBertModel):
             result = {'tgt': tgt, 'pred': pred, 'gold': gold}
             results.append(result)
         return results
+
+    def represent_bert(self, batch):
+        context_repr = self._bert_model.bert(
+            batch['context_input_ids'], batch['context_token_type_ids'], batch['context_attention_mask'],
+            output_all_encoded_layers=False)[0][:, 0, :]
+        table_repr = self._bert_model.bert(
+            batch['table_input_ids'], batch['table_token_type_ids'], batch['table_attention_mask'],
+            output_all_encoded_layers=False)[0][:, 0, :]
+        context_repr, table_repr = self.contrastive_loss(context_repr, table_repr, return_repr=True)
+        return context_repr, table_repr
 
     def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
@@ -533,6 +544,29 @@ class VanillaTableBert(TableBertModel):
             } if len(stats) > 0 else {}
 
         return stats
+
+    def represent(self, data_loader, args):
+        was_training = self.training
+        self.eval()
+
+        output_file = os.path.join(args.output_file, 'repr.npz')
+        context_li = []
+        table_li = []
+
+        with torch.no_grad():
+            with tqdm(total=len(data_loader), desc='Representing', file=sys.stdout) as pbar:
+                for step, batch in enumerate(data_loader):
+                    c, t = getattr(self, f'represent_{self.config.model_type.value}')(batch)
+                    context_li.append(c.detach().cpu().numpy())
+                    table_li.append(t.detach().cpu().numpy())
+                    pbar.update(1)
+
+        context_li = np.concatenate(context_li, 0)
+        table_li = np.concatenate(table_li, 0)
+        np.savez(output_file, context=context_li, table=table_li)
+
+        if was_training:
+            self.train()
 
     def evaluate(self, data_loader, args):
         output_file = 'evaluation.jsonl' if args.output_file is None else args.output_file

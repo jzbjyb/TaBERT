@@ -42,10 +42,13 @@ class CLIPLoss(nn.Module):
 
     def forward_normal(self,
                        source,  # (B, emb_size)
-                       target):  # (B, emb_size)
+                       target,  # (B, emb_size)
+                       return_repr: bool = False):
         # projection and normalize
         source = self.preprocess(source, self.source_projection)
         target = self.preprocess(target, self.target_projection)
+        if return_repr:
+            return source, target
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
@@ -64,10 +67,13 @@ class CLIPLoss(nn.Module):
     def forward_paired(self,
                        source,  # (B, emb_size)
                        target,  # (B, emb_size)
-                       labels=None):  # (B, )
+                       labels=None,  # (B, )
+                       return_repr: bool = False):
         # projection and normalize
         source = self.preprocess(source, self.source_projection)
         target = self.preprocess(target, self.target_projection)
+        if return_repr:
+            return source, target
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()

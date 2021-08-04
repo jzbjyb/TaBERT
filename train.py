@@ -122,7 +122,9 @@ def parse_train_arg():
 
     # test details
     parser.add_argument('--only_test', action='store_true')
-    parser.add_argument('--mode', type=str, choices=['generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev', None], default=None)
+    parser.add_argument('--mode', type=str, choices=[
+        'generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev', 'represent-test',
+        'represent-dev', 'represent-train', None], default=None)
     parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
     parser.add_argument('--max_generate_length', type=int, default=MAX_TARGET_LENGTH, help='max number of tokens generated for the generate mode')
     parser.add_argument('--min_generate_length', type=int, default=None, help='min number of tokens generated for the generate mode')
@@ -288,6 +290,10 @@ def main():
     if args.only_test:
         assert args.mode is not None, 'need to set mode for only_test'
         mode, which_part = args.mode.split('-')
+        if which_part == 'train':  # load train dataset without shuffle
+            train_set = dataset_cls(
+                epoch=0, training_path=args.data_dir / 'train_noshuf', tokenizer=model_ptr.tokenizer,
+                config=table_bert_config, multi_gpu=False, debug=args.debug_dataset)
         trainer.test(eval(f'{which_part}_set'), mode=mode)
         exit()
 

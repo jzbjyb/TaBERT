@@ -224,6 +224,8 @@ class Trainer(object):
             result = model.generate(data_loader, self.args)
         elif mode == 'evaluate':
             result = model.evaluate(data_loader, self.args)
+        elif mode == 'represent':
+            result = model.represent(data_loader, self.args)
         else:
             raise NotImplementedError
         return result

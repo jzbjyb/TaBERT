@@ -14,6 +14,7 @@ import copy
 from collections import defaultdict
 from tqdm import tqdm
 import multiprocessing
+from timeout_decorator.timeout_decorator import TimeoutError
 from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
@@ -76,7 +77,7 @@ def find_other_table(prep_file: str, output_file: str, max_count: int):
 
 def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: List[List[Dict]], bywhich: str, max_context_len: int, max_num_rows: int):
     examples = []
-    for example_line, ret_examples in zip(example_lines, ret_examples_li):
+    for i, (example_line, ret_examples) in enumerate(zip(example_lines, ret_examples_li)):
         example = json.loads(example_line)
         best_match_mentions = None
         best_match = None
@@ -131,9 +132,10 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
     assert bywhich in {'context', 'table'}
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
-        for idx, l in enumerate(fin):
+        for idx, l in tqdm(enumerate(fin), desc='build index'):
             idx2example[idx] = json.loads(l)
-    pool = MyPool(processes=nthread)
+    #pool = MyPool(processes=nthread)
+    pool = multiprocessing.Pool(processes=nthread)
     start = time.time()
     with open(retrieval_file, 'r') as fin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
         example_lines = []
@@ -252,9 +254,10 @@ def main():
         only_self = False
         remove_self = False
         batch_size = 5000 if only_self else 1000
+        nthread=40
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
-                                bywhich=args.split, topk=10, nthread=40, batch_size=batch_size,
+                                bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
                                 max_context_len=256, max_num_rows=100,  # used for tapas setting
                                 remove_self=remove_self, only_self=only_self)
     elif args.data == 'tableshuffle':

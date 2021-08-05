@@ -554,6 +554,7 @@ class VanillaTableBert(TableBertModel):
         was_training = self.training
         self.eval()
 
+        os.makedirs(args.output_file, exist_ok=True)
         output_file = os.path.join(args.output_file, 'repr.npz')
         context_li = []
         table_li = []

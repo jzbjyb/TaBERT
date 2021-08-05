@@ -244,10 +244,27 @@ def generate_random_neg(input_file: str, output_file: str, num_neg: int = 1):
                 fout.write(json.dumps(ne) + '\n')
 
 
+def compute_ret_mrr(filename: str):
+    text_mrrs = []
+    table_mrrs = []
+    with open(filename, 'r') as fin:
+        for l in fin:
+            idx, bytext, bytable = l.rstrip('\n').split('\t')
+            for by, mrrs in [(bytext, text_mrrs), (bytable, table_mrrs)]:
+                mrr = 0
+                for i, t in enumerate(by.split(' ')):
+                    if t.split(',')[0] == idx:
+                        mrr = 1 / (i + 1)
+                        break
+                mrrs.append(mrr)
+        print(f'text mrr {np.mean(text_mrrs)}, table mrr {np.mean(table_mrrs)}')
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
-        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'random_neg'])
+        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
+        'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'random_neg', 'mrr'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
@@ -307,16 +324,16 @@ def main():
         find_other_table(args.path[0], args.output_dir, max_count=3)
     elif args.data == 'retpair':
         only_self = False
-        remove_self = False
+        remove_self = True
         use_top1 = None
         op = 'max'
         batch_size = 5000 if only_self else 1000
         timeout = batch_size * 0.5  # 0.5s per example
-        nthread=40
+        nthread=20
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
-                                max_context_len=256, max_num_rows=100,  # used for tapas setting
+                                max_context_len=None, max_num_rows=None,  # used for tapas setting
                                 remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1, op=op)
     elif args.data == 'random_neg':
         generate_random_neg(args.path[0], args.output_dir)
@@ -345,6 +362,8 @@ def main():
             for idx, (bycontext_inds, bycontext_scores, bytable_inds, bytable_scores) in enumerate(zip(*(ret_results[0] + ret_results[1]))):
                 fout.write('{}\t{}\t{}\n'.format(
                     idx, format_list(bycontext_inds, bycontext_scores), format_list(bytable_inds, bytable_scores)))
+    elif args.data == 'mrr':
+        compute_ret_mrr(args.path[0])
     else:
         raise NotImplementedError
 

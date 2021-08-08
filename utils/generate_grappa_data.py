@@ -260,20 +260,23 @@ def compute_ret_mrr(filename: str):
         print(f'text mrr {np.mean(text_mrrs)}, table mrr {np.mean(table_mrrs)}')
 
 
-def filter_mention(input_file: str, out_file: str, topk: int):
+def filter_mention(input_file: str, out_file: str, topk: int = 0, sort: bool = False):
     examples = []
     nms = []
     with open(input_file, 'r') as fin, open(out_file, 'w') as fout:
         for i, l in enumerate(fin):
             examples.append(l)
             nms.append(len(json.loads(l)['context_before_mentions'][0]))
-        rank = np.argsort(-np.array(nms))
+        if sort:
+            print('sort')
+            rank = np.argsort(-np.array(nms))
+        else:
+            rank = list(range(len(examples)))
         if topk:
             rank = rank[:topk]
-        print(f'mean # {np.mean(nms)}')
         for i in rank:
             fout.write(examples[i])
-
+        print(f'mean # {np.mean([nms[i] for i in rank])}')
 
 def main():
     parser = ArgumentParser()
@@ -380,7 +383,7 @@ def main():
     elif args.data == 'mrr':
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':
-        filter_mention(args.path[0], args.output_dir, topk=None)
+        filter_mention(args.path[0], args.output_dir, topk=0, sort=True)
     else:
         raise NotImplementedError
 

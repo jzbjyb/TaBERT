@@ -24,6 +24,7 @@ sleep 1m  # wait elasticsearch to start
 popd
 echo 'build index'
 python -m table_bert.retrieval tapas-index
+sleep 1m  # wait
 
 echo 'retrieval'
 nthreads=$1

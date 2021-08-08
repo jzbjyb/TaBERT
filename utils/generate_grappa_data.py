@@ -181,11 +181,11 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                 byall = [idx]
             else:
                 if topk:
-                    bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][:topk]
-                    bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][:topk]
+                    bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][:topk + 1]
+                    bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][:topk + 1]
                 elif botk:
-                    bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][-botk:]
-                    bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][-botk:]
+                    bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0][-botk - 1:]
+                    bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0][-botk - 1:]
                 if use_top1 == 'context':
                     byall = bytext[:1]
                     if remove_self and idx in byall:
@@ -196,9 +196,9 @@ def generate_retrieval_data(retrieval_file: str, target_file: str, source_file: 
                         byall = bytable[1:2]
                 elif use_top1 is None:
                     if topk:
-                        byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:topk]
+                        byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[:2 * topk]
                     elif botk:
-                        byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[-botk:]
+                        byall = list(set(bytext + bytable) - ({idx} if remove_self else set()))[-2 * botk:]
                 else:
                     raise NotImplementedError
             ret_examples = [idx2example[_idx] for _idx in byall]
@@ -329,11 +329,11 @@ def main():
         op = 'max'
         batch_size = 5000 if only_self else 1000
         timeout = batch_size * 0.5  # 0.5s per example
-        nthread=20
+        nthread=40
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
-                                max_context_len=None, max_num_rows=None,  # used for tapas setting
+                                max_context_len=None, max_num_rows=100,  # used for tapas setting
                                 remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1, op=op)
     elif args.data == 'random_neg':
         generate_random_neg(args.path[0], args.output_dir)

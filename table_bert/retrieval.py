@@ -17,8 +17,8 @@ class ESWrapper():
     MAX_QUERY_LEN = 1024
     PUNCT_TO_SPACE = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
 
-    def __init__(self, index_name: str):
-        self.es = Elasticsearch()
+    def __init__(self, index_name: str, timeout: int=300):
+        self.es = Elasticsearch(timeout=timeout)
         self.index_name = index_name
 
     def lucene_format(self, query_str: str, field: str):

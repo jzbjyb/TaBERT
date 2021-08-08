@@ -260,11 +260,26 @@ def compute_ret_mrr(filename: str):
         print(f'text mrr {np.mean(text_mrrs)}, table mrr {np.mean(table_mrrs)}')
 
 
+def filter_mention(input_file: str, out_file: str, topk: int):
+    examples = []
+    nms = []
+    with open(input_file, 'r') as fin, open(out_file, 'w') as fout:
+        for i, l in enumerate(fin):
+            examples.append(l)
+            nms.append(len(json.loads(l)['context_before_mentions'][0]))
+        rank = np.argsort(-np.array(nms))
+        if topk:
+            rank = rank[:topk]
+        print(f'mean # {np.mean(nms)}')
+        for i in rank:
+            fout.write(examples[i])
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
-        'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'random_neg', 'mrr'])
+        'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'random_neg', 'mrr', 'filter_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
@@ -364,6 +379,8 @@ def main():
                     idx, format_list(bycontext_inds, bycontext_scores), format_list(bytable_inds, bytable_scores)))
     elif args.data == 'mrr':
         compute_ret_mrr(args.path[0])
+    elif args.data == 'filter_mention':
+        filter_mention(args.path[0], args.output_dir, topk=None)
     else:
         raise NotImplementedError
 

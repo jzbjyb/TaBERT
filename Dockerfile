@@ -46,6 +46,9 @@ RUN pip install timeout-decorator==0.5.0
 # faiss
 RUN conda install -c pytorch faiss-gpu==1.6.3 cudatoolkit=10.0
 
+# nltk
+RUN python -m nltk.downloader stopwords
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

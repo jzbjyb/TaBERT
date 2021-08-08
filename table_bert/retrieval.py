@@ -1,4 +1,4 @@
-from typing import List, Tuple, Set, Dict
+from typing import List, Tuple, Set, Dict, Union
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 import string
@@ -80,8 +80,19 @@ class ESWrapper():
                     'table': table
                 }
 
+    def sentence_iterator(self, filename: str):
+        with open(filename, 'r') as fin:
+            for idx, l in tqdm(enumerate(fin)):
+                l = l.strip()
+                yield {
+                    '_index': self.index_name,
+                    '_type': 'document',
+                    'line_idx': idx,
+                    'text': l,
+                }
 
-def retrieve_part(index_name, filename, topk, full_table, two_idx_and_outfile):  # inclusive and exclusive
+
+def retrieve_part(index_name, filename, topk, full_table, cross_format, two_idx_and_outfile):  # inclusive and exclusive
     start_idx, end_idx, outfile = two_idx_and_outfile
     es = ESWrapper(index_name)
     format_list = lambda l: ' '.join(['{},{}'.format(i, s) for i, s in l])
@@ -92,14 +103,20 @@ def retrieve_part(index_name, filename, topk, full_table, two_idx_and_outfile): 
             if idx >= end_idx:
                 break
             example = json.loads(l)
-            text, table = ESWrapper.format_text(example), ESWrapper.format_table(example, full_table=full_table)
+            text = ESWrapper.format_text(example)
             bytext = [(doc['line_idx'], score) for doc, score in es.get_topk(text, field='text', topk=topk + 1)]
-            bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(table, field='table', topk=topk + 1)]
+            bytable = []
+            if cross_format:  # use text to retrieve table
+                bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(text, field='table', topk=topk + 1)]
+            elif full_table is not None:  # use table to retrieve table
+                table = ESWrapper.format_table(example, full_table=full_table)
+                bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(table, field='table', topk=topk + 1)]
             fout.write('{}\t{}\t{}\n'.format(idx, format_list(bytext), format_list(bytable)))
 
 
 def retrieve(index_name: str, filename: str, output: str, topk: int = 5,
-             threads: int = 1, rank: int = 0, world_size: int = 1, full_table: bool = False):
+             threads: int = 1, rank: int = 0, world_size: int = 1,
+             full_table: Union[bool, None] = False, cross_format: bool = False):
     total_count = int(subprocess.check_output('wc -l {}'.format(filename), shell=True).split()[0])
     bs = total_count // threads
     splits = [(i * bs, (i * bs + bs) if i < threads - 1 else total_count, f'{output}.{i}')
@@ -108,7 +125,7 @@ def retrieve(index_name: str, filename: str, output: str, topk: int = 5,
     real_threads = len(splits)
 
     pool = mp.Pool(real_threads)
-    pool.map(partial(retrieve_part, index_name, filename, topk, full_table), splits)
+    pool.map(partial(retrieve_part, index_name, filename, topk, full_table, cross_format), splits)
 
 
 def fill_to_at_middle(lst: List, fill_to: int):
@@ -193,8 +210,37 @@ def combine_negative(data_file: str, neg_file: str, output: str, fill_to: int, n
                 fout.write(json.dumps(neg_example) + '\n')
 
 
+def fake_example(target_file: str, ret_file: str, source_file: str, out_file: str, topk: int):
+    id2sent = {}
+    with open(source_file, 'r') as fin:
+        for i, l in enumerate(fin):
+            id2sent[i] = l.strip()
+    with open(target_file, 'r') as tfin, open(ret_file, 'r') as rfin, open(out_file, 'w') as fout:
+        for l in tfin:
+            example = json.loads(l)
+            example_sent = example['context_before'][0]
+            _, bytext = rfin.readline().strip().split('\t')
+            count = 0
+            for i, idx in enumerate([int(b.split(',')[0]) for b in bytext.split(' ')]):
+                sent = id2sent[idx]
+                if sent.lower() == example_sent.lower():
+                    continue
+                td = {
+                    'uuid': f"fakewikisent_{example['uuid']}_{idx}",
+                    'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
+                    'context_before': [sent],
+                    'context_before_mentions': [],
+                    'context_after': []
+                }
+                fout.write(json.dumps(td) + '\n')
+                count += 1
+                if count >= topk:
+                    break
+
+
 if __name__ == '__main__':
     task = sys.argv[1].split('-')
+    merge3_filename = '/home/zhengbao/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
 
     if task[0] == 'totto':
         # index and search
@@ -211,15 +257,14 @@ if __name__ == '__main__':
         combine_negative(filename, neg_file, final_file, topk, 3, 3, 3)
 
     elif task[0] == '3merge':  # TOTTO, TableFact, WikiSQL
-        filename = '/home/zhengbao/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
         index_name = '3merge'
         es = ESWrapper(index_name)
         if task[1] == 'index':
-            es.build_index(es.table_text_data_iterator(filename, full_table=True))
+            es.build_index(es.table_text_data_iterator(merge3_filename, full_table=True))
         elif task[1] == 'ret':
             topk = 100
-            retrieve_output = filename + f'.ret{topk}'
-            retrieve(index_name, filename, retrieve_output, topk=topk, threads=10, full_table=True)
+            retrieve_output = merge3_filename + f'.ret{topk}'
+            retrieve(index_name, merge3_filename, retrieve_output, topk=topk, threads=10, full_table=True)
 
     elif task[0] == 'tapas':
         index_name = 'tapas'
@@ -235,3 +280,26 @@ if __name__ == '__main__':
             retrieve_output = filename + f'.{index_name}_ret{topk}'
             retrieve(index_name, filename, retrieve_output, topk=topk,
                      threads=threads, rank=rank, world_size=world_size, full_table=True)
+
+    elif task[0] == 'wikipedia':
+        index_name = 'wikipedia_sent'
+        es = ESWrapper(index_name)
+        topk = 100
+        wiki_filename = '/mnt/root/TaBERT/data/wikipedia_sent/wikisent2.txt'
+        wiki_ret_filename = merge3_filename + f'.{index_name}_ret{topk}'
+        wiki_fake_example_filename = '/mnt/root/TaBERT/data/wikipedia_sent/wikisent2_3merge.jsonl'
+        if 'index' in task[1]:
+            es.build_index(es.sentence_iterator(wiki_filename), shards=5)
+        if 'ret' in task[1]:
+            retrieve(index_name, merge3_filename, wiki_ret_filename, topk=topk, threads=10, full_table=None)
+        if 'fake' in task[1]:
+            fake_example(merge3_filename, wiki_ret_filename, wiki_filename, wiki_fake_example_filename, topk=10)
+        if 'extend' in task[1]:
+            index_name = 'tapas'
+            es = ESWrapper(index_name)
+            topk = 10
+            threads, rank, world_size = sys.argv[2:5]
+            threads, rank, world_size = int(threads), int(rank), int(world_size)
+            retrieve_output = wiki_fake_example_filename + f'.{index_name}_ret{topk}'
+            retrieve(index_name, wiki_fake_example_filename, retrieve_output, topk=topk,
+                     threads=threads, rank=rank, world_size=world_size, full_table=None, cross_format=True)

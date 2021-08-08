@@ -799,6 +799,16 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention seq2seq 24 10 null
+- name: wholetable_3merge_bart_mlm_contextmention_ep20
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_ep20
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_ep20 seq2seq 24 20 null
 - name: bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention
   sku: G4
   sku_count: 1
@@ -1607,6 +1617,29 @@ jobs:
     /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_tapas_data0_mlm_contextmention_retbycontext_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
+
+- name: wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue_defaultparallel
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention_data0
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue_defaultparallel seq2seq 24 5
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_data0/pytorch_model_epoch04.bin"'
+- name: wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue_defaultparallel_continue
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue_defaultparallel_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue_defaultparallel/pytorch_model_epoch04.bin"'
 
 # 3merge wholetabel (mlm context mention ret bytable)
 - name: wholetable_3merge_bart_mlm_contextmention_retbytable

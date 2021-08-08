@@ -1,0 +1,35 @@
+description: retrieval
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wiki_ret_0
+  sku: C40
+  sku_count: 1
+  command:
+  - ./retrieval.sh 30 0 3
+- name: wiki_ret_1
+  sku: G0
+  sku_count: 1
+  command:
+  - ./retrieval.sh 30 1 3
+- name: wiki_ret_2
+  sku: G0
+  sku_count: 1
+  command:
+  - ./retrieval.sh 30 2 3

@@ -1,1 +1,2 @@
 NGPU=8
+WANDB_API_KEY=9caada2c257feff1b6e6a519ad378be3994bc06a

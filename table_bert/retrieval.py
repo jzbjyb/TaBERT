@@ -210,11 +210,12 @@ def combine_negative(data_file: str, neg_file: str, output: str, fill_to: int, n
                 fout.write(json.dumps(neg_example) + '\n')
 
 
-def fake_example(target_file: str, ret_file: str, source_file: str, out_file: str, topk: int):
+def fake_example(target_file: str, ret_file: str, source_file: str, out_file: str, topk: int, dedup: bool = False):
     id2sent = {}
     with open(source_file, 'r') as fin:
         for i, l in enumerate(fin):
             id2sent[i] = l.strip()
+    used_ids: Set[int] = set()
     with open(target_file, 'r') as tfin, open(ret_file, 'r') as rfin, open(out_file, 'w') as fout:
         for l in tfin:
             example = json.loads(l)
@@ -223,6 +224,8 @@ def fake_example(target_file: str, ret_file: str, source_file: str, out_file: st
             count = 0
             for i, idx in enumerate([int(b.split(',')[0]) for b in bytext.split(' ')]):
                 sent = id2sent[idx]
+                if idx in used_ids:
+                    continue
                 if sent.lower() == example_sent.lower():
                     continue
                 td = {
@@ -234,13 +237,16 @@ def fake_example(target_file: str, ret_file: str, source_file: str, out_file: st
                 }
                 fout.write(json.dumps(td) + '\n')
                 count += 1
+                used_ids.add(idx)
                 if count >= topk:
                     break
 
 
 if __name__ == '__main__':
     task = sys.argv[1].split('-')
-    merge3_filename = '/home/zhengbao/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
+    use_home = False
+    home = '/home/zhengbao' if use_home else ''
+    merge3_filename = f'{home}/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl'
 
     if task[0] == 'totto':
         # index and search
@@ -270,13 +276,13 @@ if __name__ == '__main__':
         index_name = 'tapas'
         es = ESWrapper(index_name)
         if 'index' in task[1]:
-            filename = '/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
+            filename = f'{home}/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
             es.build_index(es.table_text_data_iterator(filename, full_table=True), shards=5)
         if 'ret' in task[1]:
             topk = 10
             threads, rank, world_size = sys.argv[2:5]
             threads, rank, world_size = int(threads), int(rank), int(world_size)
-            filename = f'/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
+            filename = f'{home}/mnt/root/tapas/data/pretrain/train/preprocessed.jsonl'
             retrieve_output = filename + f'.{index_name}_ret{topk}'
             retrieve(index_name, filename, retrieve_output, topk=topk,
                      threads=threads, rank=rank, world_size=world_size, full_table=True)
@@ -285,15 +291,15 @@ if __name__ == '__main__':
         index_name = 'wikipedia_sent'
         es = ESWrapper(index_name)
         topk = 100
-        wiki_filename = '/mnt/root/TaBERT/data/wikipedia_sent/wikisent2.txt'
+        wiki_filename = f'{home}/mnt/root/TaBERT/data/wikipedia_sent/wikisent2.txt'
         wiki_ret_filename = merge3_filename + f'.{index_name}_ret{topk}'
-        wiki_fake_example_filename = '/mnt/root/TaBERT/data/wikipedia_sent/wikisent2_3merge.jsonl'
+        wiki_fake_example_filename = f'{home}/mnt/root/TaBERT/data/wikipedia_sent/wikisent2_3merge_dedup.jsonl'
         if 'index' in task[1]:
             es.build_index(es.sentence_iterator(wiki_filename), shards=5)
         if 'ret' in task[1]:
             retrieve(index_name, merge3_filename, wiki_ret_filename, topk=topk, threads=10, full_table=None)
         if 'fake' in task[1]:
-            fake_example(merge3_filename, wiki_ret_filename, wiki_filename, wiki_fake_example_filename, topk=10)
+            fake_example(merge3_filename, wiki_ret_filename, wiki_filename, wiki_fake_example_filename, topk=10, dedup=True)
         if 'extend' in task[1]:
             index_name = 'tapas'
             es = ESWrapper(index_name)

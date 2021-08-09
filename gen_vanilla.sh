@@ -1,22 +1,22 @@
-output_dir=~/mnt/root/TaBERT/data/train_data/wholetable_3merge_bert_mlm_train
-input_dir=~/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_retbycontext_dpr_span_1m
+input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention_dpr_span_1m_retbycontext.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=100
 max_num_mention_per_example=3
-column_delimiter='/'
+column_delimiter='//'
 row_delimiter="[SEP]"
 mkdir -p ${output_dir}
-worldsize=10
+worldsize=40
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
   python -m utils.generate_vanilla_tabert_training_data \
     --output_dir ${output_dir} \
     --train_corpus ${input_dir} \
-    --base_model_name bert-base-uncased \
+    --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 1 \
+    --epochs_to_generate 10 \
     --max_context_len 128 \
     --max_column_len 15 \
     --max_cell_len 15 \
@@ -37,10 +37,8 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format mlm \
+    --seq2seq_format mlm_mention-context \
     --dev_num 0 \
-    --global_rank $i \
-    --no_shuffle \
-    --not_strict_mask &
+    --global_rank $i &
 done
 wait

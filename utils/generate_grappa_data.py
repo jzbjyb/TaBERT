@@ -278,14 +278,82 @@ def filter_mention(input_file: str, out_file: str, topk: int = 0, sort: bool = F
             fout.write(examples[i])
         print(f'mean # {np.mean([nms[i] for i in rank])}')
 
+
+def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int = None, index_emb_size: int = 512):
+    print('loading ...')
+    repr = np.load(repr_file, allow_pickle=True)
+    ret_results = []
+    queryidx2retscores: Dict[int, Dict[int, List[float]]] = defaultdict(lambda: defaultdict(list))
+    for index_name, query_name in [('table', 'context')]:
+        # load
+        index_emb = repr[f'{index_name}_repr'].astype('float32')
+        index_index = repr[f'{index_name}_index']
+        index_text = repr[f'{index_name}_text']
+        if index_subsample:
+            print('subsample')
+            sample_inds = np.random.choice(index_emb.shape[0], index_subsample, replace=False)
+            index_emb = index_emb[sample_inds]
+            index_index = index_index[sample_inds]
+            index_text = index_text[sample_inds]
+        query_emb = repr[f'{query_name}_repr'].astype('float32')
+        query_index = repr[f'{query_name}_index']
+        query_text = repr[f'{query_name}_text']
+
+        # normalize
+        index_emb = index_emb / np.sqrt((index_emb * index_emb).sum(-1, keepdims=True))
+        query_emb = query_emb / np.sqrt((query_emb * query_emb).sum(-1, keepdims=True))
+
+        # index
+        emb_size = index_emb.shape[1]
+        index = faiss.IndexHNSWFlat(emb_size, index_emb_size, faiss.METRIC_INNER_PRODUCT)
+        print(f'query with {query_name} with shape {query_emb.shape} ...')
+        print(f'indexing {index_name} with shape {index_emb.shape} ...')
+        print(f'matrix sampe {index_emb[:5]}')
+        index.add(index_emb)
+        print('indexing done')
+
+        # query
+        print(f'retrieving ...')
+        '''
+        for i in range(query_emb.shape[0]):
+            D, I = index.search(query_emb[i:i+1], topk + 1)
+            print('--->', query_text[i])
+            for j in I[0]:
+                print(index_text[j])
+            input()
+        '''
+        D, I = index.search(query_emb, topk + 1)  # add 1 for self retrieval
+        ret_results.append((I, D))
+        print('retrieving done')
+
+        print('aggregate scores')
+        for i in range(query_emb.shape[0]):
+            qid = query_index[i]
+            for id, score in zip(I[i], D[i]):
+                rid = index_index[id]
+                queryidx2retscores[qid][rid].append(score)
+        print(f'max query id is {np.max(list(queryidx2retscores.keys()))}')
+
+        print('output')
+        format_list = lambda indscores: ' '.join(['{},{}'.format(i, s) for i, s in indscores])
+        with open(ouput_file, 'w') as fout:
+            for qid in sorted(queryidx2retscores.keys()):
+                rid2scores = queryidx2retscores[qid]
+                rid2sumscore = sorted([(rid, np.sum(scores)) for rid, scores in rid2scores.items()],
+                                      key=lambda x: -x[1])[:topk]
+                fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
-        'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'random_neg', 'mrr', 'filter_mention'])
+        'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'span_faiss', 'random_neg', 'mrr', 'filter_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
+    parser.add_argument('--model_type', type=str)
+    parser.add_argument('--faiss_size', type=int, default=512)
     args = parser.parse_args()
 
     random.seed(2021)
@@ -366,7 +434,7 @@ def main():
             index_emb = repr[index_name].astype('float32')
             query_emb = repr[query_name].astype('float32')
             emb_size = index_emb.shape[1]
-            index = faiss.IndexHNSWFlat(emb_size, 512, faiss.METRIC_INNER_PRODUCT)
+            index = faiss.IndexHNSWFlat(emb_size, args.faiss_size, faiss.METRIC_INNER_PRODUCT)
             print(f'indexing {index_name} with shape {index_emb.shape} ...')
             print(f'matrix sampe {index_emb[:5]}')
             index.add(index_emb)
@@ -380,6 +448,11 @@ def main():
             for idx, (bycontext_inds, bycontext_scores, bytable_inds, bytable_scores) in enumerate(zip(*(ret_results[0] + ret_results[1]))):
                 fout.write('{}\t{}\t{}\n'.format(
                     idx, format_list(bycontext_inds, bycontext_scores), format_list(bytable_inds, bytable_scores)))
+    elif args.data == 'span_faiss':
+        repr_file = args.path[0]
+        topk = 10
+        subsample = 1000000
+        span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=256)
     elif args.data == 'mrr':
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':

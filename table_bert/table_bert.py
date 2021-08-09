@@ -50,6 +50,7 @@ class TableBertModel(nn.Module):
 
         self._bert_model = bert_model
         self.tokenizer = config.tokenizer_cls.from_pretrained(config.base_model_name)
+        self.tokenizer_fast = config.tokenizer_fast_cls.from_pretrained(config.base_model_name)
         self.config = config
 
     @property

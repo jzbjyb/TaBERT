@@ -221,14 +221,22 @@ class TableDataset(Dataset):
             # assume there is a sep in between and make sure that the sep is included in both
             # use deepcopy because they have overlappings
             context, table = copy.deepcopy(raw_input_ids[:al]), copy.deepcopy(raw_input_ids[al - 1:])
+            if 'column_token_to_column_id' in example:
+                table_ct2ci = example['column_token_to_column_id'][al - 1:]
         else:
             # assume there is a sep in between and make sure that the sep is included in context
             context, table = raw_input_ids[:al], raw_input_ids[al:]
+            if 'column_token_to_column_id' in example:
+                table_ct2ci = example['column_token_to_column_id'][al:]
             example['contrastive_concat'] = True
         if same_first_token:
             table[0] = context[0]
         example['context_token_ids'] = context
         example['table_token_ids'] = table
+        if 'column_token_to_column_id' in example:
+            example['table_column_token_to_column_id'] = table_ct2ci
+        if 'context_token_to_mention_id' in example:
+            example['context_context_token_to_mention_id'] = example['context_token_to_mention_id'][:al]
         assert len(example['context_token_ids']) == al, 'context length inconsistent with sequence_a_length'
 
     def load_epoch(self, file_prefix: Path, shard_num: int, valid_indices: Set = None):
@@ -251,6 +259,8 @@ class TableDataset(Dataset):
             is_positives = data['is_positives'] if 'is_positives' in data else None
             target_sequences = data['target_sequences'] if 'target_sequences' in data else None
             target_sequence_offsets = data['target_sequence_offsets'] if 'target_sequence_offsets' in data else None
+            column_token_to_column_id = data['column_token_to_column_id'] if 'column_token_to_column_id' in data else None
+            context_token_to_mention_id = data['context_token_to_mention_id'] if 'context_token_to_mention_id' in data else None
 
             shard_size = len(segment_a_lengths)
 
@@ -264,6 +274,10 @@ class TableDataset(Dataset):
 
                 seq_begin, seq_end = sequence_offsets[i]
                 example['token_ids'] = sequences[seq_begin: seq_end]
+                if column_token_to_column_id is not None:
+                    example['column_token_to_column_id'] = column_token_to_column_id[seq_begin:seq_end]
+                if context_token_to_mention_id is not None:
+                    example['context_token_to_mention_id'] = context_token_to_mention_id[seq_begin:seq_end]
                 if target_sequence_offsets is not None:
                     t_seq_begin, t_seq_end = target_sequence_offsets[i]
                     example['target_token_ids'] = target_sequences[t_seq_begin: t_seq_end]
@@ -308,6 +322,8 @@ class TableDataset(Dataset):
         has_contrastive_concat = False
         has_is_positive = False
         has_target = False
+        has_ct2ci = False
+        has_ct2mi = False
         for e in examples:  # use the first one to check
             if 'context_token_ids' in e and 'contrastive_concat' not in e:
                 has_contrastive = True
@@ -317,6 +333,10 @@ class TableDataset(Dataset):
                 has_is_positive = True
             if 'target_token_ids' in e:
                 has_target = True
+            if 'column_token_to_column_id' in e:
+                has_ct2ci = True
+            if 'context_token_to_mention_id' in e:
+                has_ct2mi = True
             break
         if has_target:
             max_target_len = max(len(e['target_token_ids']) for e in examples)
@@ -327,6 +347,10 @@ class TableDataset(Dataset):
         input_array = np.full((batch_size, max_len), dtype=np.int, fill_value=pad_id)
         mask_array = np.zeros((batch_size, max_len), dtype=np.bool)
         segment_array = np.zeros((batch_size, max_len), dtype=np.bool)
+        if has_ct2ci:
+            column_token_to_column_id = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
+        if has_ct2mi:
+            context_token_to_mention_id = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
         if has_target:
             lm_label_array = np.full((batch_size, max_target_len), dtype=np.int, fill_value=-1)
             target_input_array = np.full((batch_size, max_target_len), dtype=np.int, fill_value=pad_id)
@@ -340,6 +364,10 @@ class TableDataset(Dataset):
             table_mask_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
             context_segment_array = np.zeros((batch_size, max_context_len), dtype=np.bool)
             table_segment_array = np.zeros((batch_size, max_table_len), dtype=np.bool)
+            if has_ct2ci:
+                table_column_token_to_column_id = np.full((batch_size, max_table_len), dtype=np.int, fill_value=-1)
+            if has_ct2mi:
+                context_context_token_to_mention_id = np.full((batch_size, max_context_len), dtype=np.int, fill_value=-1)
         elif has_contrastive_concat:
             d_bs = batch_size * batch_size
             max_len = min(max_context_len + max_table_len, max_allow_len)  # might exceed max allowed length
@@ -369,6 +397,12 @@ class TableDataset(Dataset):
                     lm_label_array[e_id, :len(example['target_token_ids'])] = example['target_token_ids']  # target as labels
                     is_mlm_array[e_id] = False
 
+            if has_ct2ci:
+                ct2ci = example['column_token_to_column_id']
+                column_token_to_column_id[e_id, :len(ct2ci)] = ct2ci
+            if has_ct2mi:
+                ct2mi = example['context_token_to_mention_id']
+                context_token_to_mention_id[e_id, :len(ct2mi)] = ct2mi
             if has_target:
                 target_input_array[e_id, :len(example['target_token_ids'])] = example['target_token_ids']
             if has_contrastive:
@@ -378,6 +412,12 @@ class TableDataset(Dataset):
                 table_input_array[e_id, :len(table_token_ids)] = table_token_ids
                 context_mask_array[e_id, :len(context_token_ids)] = 1
                 table_mask_array[e_id, :len(table_token_ids)] = 1
+                if has_ct2ci:
+                    tct2ci = example['table_column_token_to_column_id']
+                    table_column_token_to_column_id[e_id, :len(tct2ci)] = tct2ci
+                if has_ct2mi:
+                    cct2mi = example['context_context_token_to_mention_id']
+                    context_context_token_to_mention_id[e_id, :len(cct2mi)] = cct2mi
             elif has_contrastive_concat:
                 context_token_ids = example['context_token_ids']
                 for e_id2, example2 in enumerate(examples):
@@ -404,6 +444,10 @@ class TableDataset(Dataset):
         if has_target:
             result['target_input_ids'] = torch.tensor(target_input_array.astype(np.int64))
             result['is_mlm'] = torch.tensor(is_mlm_array)
+        if has_ct2ci:
+            result['column_token_to_column_id'] = torch.tensor(column_token_to_column_id.astype(np.int64))
+        if has_ct2mi:
+            result['context_token_to_mention_id'] = torch.tensor(context_token_to_mention_id.astype(np.int64))
 
         if has_contrastive:
             result['context_input_ids'] = torch.tensor(context_input_array.astype(np.int64))
@@ -412,6 +456,10 @@ class TableDataset(Dataset):
             result['table_attention_mask'] = torch.tensor(table_mask_array.astype(np.int64))
             result['context_token_type_ids'] = torch.tensor(context_segment_array.astype(np.int64))
             result['table_token_type_ids'] = torch.tensor(table_segment_array.astype(np.int64))
+            if has_ct2ci:
+                result['table_column_token_to_column_id'] = torch.tensor(table_column_token_to_column_id.astype(np.int64))
+            if has_ct2mi:
+                result['context_context_token_to_mention_id'] = torch.tensor(context_context_token_to_mention_id.astype(np.int64))
         elif has_contrastive_concat:
             result['concat_input_ids'] = torch.tensor(concat_input_array.astype(np.int64))
             result['concat_attention_mask'] = torch.tensor(concat_mask_array.astype(np.int64))

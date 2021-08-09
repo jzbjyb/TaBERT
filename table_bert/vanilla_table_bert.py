@@ -8,12 +8,13 @@
 import logging
 import math
 import sys
-from typing import List, Any, Tuple, Dict
+from typing import List, Any, Tuple, Dict, Union
 import numpy as np
 from fairseq import distributed_utils
 from tqdm import tqdm
 import json
 import os
+from collections import defaultdict
 import torch
 from torch.nn import CrossEntropyLoss
 from torch_scatter import scatter_max, scatter_mean
@@ -173,6 +174,53 @@ class VanillaTableBert(TableBertModel):
             output_all_encoded_layers=False)[0][:, 0, :]
         context_repr, table_repr = self.contrastive_loss(context_repr, table_repr, return_repr=True)
         return context_repr, table_repr
+
+    def get_group_token_ids(self, token_ids, token_to_group_map):
+        batchgroup2tokens: Dict[Tuple[int, int], Union[List, str]] = defaultdict(list)
+        for b in range(token_ids.size(0)):
+            for t in range(token_ids.size(1)):
+                g = token_to_group_map[b, t].item()
+                if g == -1:
+                    continue
+                batchgroup2tokens[(b, g)].append(token_ids[b, t])
+        for b, g in batchgroup2tokens:
+            batchgroup2tokens[(b, g)] = self.tokenizer_fast.decode(batchgroup2tokens[(b, g)])
+        return batchgroup2tokens
+
+    def represent_span_bert(self, batch, field: str):
+        assert field in {'table', 'context'}
+        input_ids = batch[f'{field}_input_ids']
+        if field == 'table':
+            t2i = batch['table_column_token_to_column_id'] # (batch_size, seq_len)
+        elif field == 'context':
+            t2i = batch['context_context_token_to_mention_id']  # (batch_size, seq_len)
+        else:
+            raise ValueError(f'{field} not supported')
+
+        # get representation
+        token_repr = self._bert_model.bert(
+            input_ids, batch[f'{field}_token_type_ids'], batch[f'{field}_attention_mask'],
+            output_all_encoded_layers=False)[0]
+
+        # get text
+        batchgroup2tokens = self.get_group_token_ids(input_ids, t2i)
+
+        # build tensors
+        agg_func = scatter_mean
+        t2i_mask = t2i.ne(-1)  # (batch_size, seq_len)
+        num_spans = torch.clamp(t2i.max(-1)[0] + 1, min=0)  # (batch_size,)
+        max_num_spans = int(num_spans.max().item())
+        span_mask = torch.arange(max_num_spans).unsqueeze(0).to(t2i.device) < num_spans.unsqueeze(-1)  # (batch_size, seq_len)
+        t2i_noneg = t2i * t2i_mask + (~t2i_mask) * num_spans.unsqueeze(-1)  # (batch_size, seq_len)
+
+        # (batch_size, max_num_spans + 1, emb_size)
+        span_repr = agg_func(token_repr, t2i_noneg.unsqueeze(-1).expand(
+            -1, -1, token_repr.size(-1)), dim=1, dim_size=max_num_spans + 1)
+
+        # remove the last "garbage collection" entry, mask out padding spans
+        span_repr = span_repr[:, :-1] * span_mask.float().unsqueeze(-1)
+
+        return span_repr, span_mask, batchgroup2tokens
 
     def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
@@ -559,17 +607,43 @@ class VanillaTableBert(TableBertModel):
         context_li = []
         table_li = []
 
+        span_overall = {
+            'table': {'repr_li': [], 'index_li': [], 'text_li': [], 'overall_index': 0},
+            'context': {'repr_li': [], 'index_li': [], 'text_li': [], 'overall_index': 0}
+        }
+
         with torch.no_grad():
             with tqdm(total=len(data_loader), desc='Representing', file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
-                    c, t = getattr(self, f'represent_{self.config.model_type.value}')(batch)
-                    context_li.append(c.detach().cpu().numpy())
-                    table_li.append(t.detach().cpu().numpy())
+                    if args.index_repr == 'whole':
+                        c, t = getattr(self, f'represent_{self.config.model_type.value}')(batch)
+                        context_li.append(c.detach().cpu().numpy())
+                        table_li.append(t.detach().cpu().numpy())
+                    elif args.index_repr == 'span':
+                        for field in ['table', 'context']:
+                            repre, mask, bg2text = getattr(
+                                self, f'represent_span_{self.config.model_type.value}')(batch, field=field)
+                            repre = repre.detach().cpu().numpy()
+                            mask = mask.detach().cpu().numpy()
+                            for b_idx, spans in enumerate(repre):
+                                for c_idx, span in enumerate(spans):
+                                    if not mask[b_idx, c_idx]:
+                                        continue
+                                    span_overall[field]['repr_li'].append(span)
+                                    span_overall[field]['index_li'].append(span_overall[field]['overall_index'])
+                                    span_overall[field]['text_li'].append(bg2text[b_idx, c_idx])
+                                span_overall[field]['overall_index'] += 1
+                    else:
+                        raise NotImplementedError
                     pbar.update(1)
 
-        context_li = np.concatenate(context_li, 0)
-        table_li = np.concatenate(table_li, 0)
-        np.savez(output_file, context=context_li, table=table_li)
+        if args.index_repr == 'whole':
+            context_li = np.concatenate(context_li, 0)
+            table_li = np.concatenate(table_li, 0)
+            np.savez(output_file, context=context_li, table=table_li)
+        elif args.index_repr == 'span':
+            savekw = {f'{field}_{k}': np.array(span_overall[field][f'{k}_li']) for field in span_overall for k in ['repr', 'index', 'text']}
+            np.savez(output_file, **savekw)
 
         if was_training:
             self.train()

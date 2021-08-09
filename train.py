@@ -125,6 +125,7 @@ def parse_train_arg():
     parser.add_argument('--mode', type=str, choices=[
         'generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev', 'represent-test',
         'represent-dev', 'represent-train', None], default=None)
+    parser.add_argument('--index_repr', type=str, choices=['whole', 'span'], default='whole', help='how to build representations for index')
     parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
     parser.add_argument('--max_generate_length', type=int, default=MAX_TARGET_LENGTH, help='max number of tokens generated for the generate mode')
     parser.add_argument('--min_generate_length', type=int, default=None, help='min number of tokens generated for the generate mode')

@@ -10,6 +10,7 @@ from random import choice, shuffle, sample, random, randint
 from typing import List, Callable, Dict, Any, Union, Set, Tuple
 import copy
 from collections import defaultdict
+import numpy as np
 
 from table_bert.utils import BertTokenizer
 from table_bert.table_bert import MAX_BERT_INPUT_LENGTH, MAX_TARGET_LENGTH
@@ -309,18 +310,38 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             context_span = (len(row_input_tokens) + 1, len(row_input_tokens) + 1 + 1 + len(context) + 1)
             # context_token_indices = list(range(len(row_input_tokens) + 1, len(row_input_tokens) + 1 + 1 + len(context) + 1))
 
+        # get column_token_to_column_id
+        column_token_to_column_id = np.full(len(sequence), dtype=np.int, fill_value=-1)  # init with -1
+        span_key = 'whole_span'
+
+        for col_id, span in enumerate(column_token_span_maps):
+            col_start, col_end = span[span_key]
+            column_token_to_column_id[col_start:col_end] = col_id
+
         instance = {
             'tokens': sequence,
             #'token_ids': self.tokenizer.convert_tokens_to_ids(sequence),
             'segment_a_length': segment_a_length,
             # 'segment_ids': segment_ids,
             'column_spans': column_token_span_maps,
+            'column_token_to_column_id': column_token_to_column_id.tolist(),
             'context_length': 1 + len(context),  # beginning cls/sep + input question
             'context_span': context_span,
             # 'context_token_indices': context_token_indices
         }
 
         return instance
+
+    def get_context_token_to_mention_id(self, context: List[str], context_mentions: List[Tuple[int, int]], size: int):
+        if not self.config.context_first:
+            raise NotImplementedError
+        offset = 1  # cls token
+        context_token_to_mention_id = np.full(size, dtype=np.int, fill_value=-1)  # init with -1
+        for idx, (start, end) in enumerate(context_mentions):
+            if end > len(context):
+                continue
+            context_token_to_mention_id[start + offset:end + offset] = idx
+        return context_token_to_mention_id.tolist()
 
     def get_multiple_rows(self, example, keep_num_rows: int, exclude: Set[int]={}, use_sample: bool = True, skip_empty: bool = True):
         additional_rows = []
@@ -415,6 +436,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instance = self.create_pretraining_instance(context, example.header, additional_rows)
                     instance['source'] = example.source
                     instance['target_token_ids'] = instance['token_ids']
+                    instance['context_token_to_mention_id'] = self.get_context_token_to_mention_id(context, context_mentions, size=len(instance['tokens']))
                     instances.append(instance)
                 if 'single' in seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
@@ -866,6 +888,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         instance = {
             "tokens": masked_sequence,
             "token_ids": self.tokenizer.convert_tokens_to_ids(masked_sequence),
+            "column_token_to_column_id": input_instance["column_token_to_column_id"],
             "segment_a_length": input_instance['segment_a_length'],
             "masked_lm_positions": masked_lm_positions,
             "masked_lm_labels": masked_lm_labels,

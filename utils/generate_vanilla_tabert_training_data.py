@@ -51,6 +51,8 @@ def generate_for_epoch(table_db: TableDatabase,
         f_dbg = open(debug_file, 'w')
 
     sequences = []
+    column_token_to_column_id = []
+    context_token_to_mention_id = []
     segment_a_lengths = []
     sequence_offsets = []
     masked_lm_positions = []
@@ -73,12 +75,18 @@ def generate_for_epoch(table_db: TableDatabase,
         if len(target_sequences) > 0:  # has target
             data['target_sequences'] = np.uint16(target_sequences)
             data['target_sequence_offsets'] = np.uint64(target_sequence_offsets)
+        if len(column_token_to_column_id) > 0:
+            data['column_token_to_column_id'] = np.int16(column_token_to_column_id)
+        if len(context_token_to_mention_id) > 0:
+            data['context_token_to_mention_id'] = np.int16(context_token_to_mention_id)
 
         with h5py.File(str(epoch_file), 'w') as f:
             for key, val in data.items():
                 f.create_dataset(key, data=val)
 
         del sequences[:]
+        del column_token_to_column_id[:]
+        del context_token_to_mention_id[:]
         del segment_a_lengths[:]
         del sequence_offsets[:]
         del masked_lm_positions[:]
@@ -109,6 +117,10 @@ def generate_for_epoch(table_db: TableDatabase,
                     target_sequence_offsets.append(
                         [len(target_sequences), len(target_sequences) + len(instance['target_token_ids'])])
                     target_sequences.extend(instance['target_token_ids'])
+                if 'column_token_to_column_id' in instance:
+                    column_token_to_column_id.extend(instance['column_token_to_column_id'])
+                if 'context_token_to_mention_id' in instance:
+                    context_token_to_mention_id.extend(instance['context_token_to_mention_id'])
 
                 cur_pos = len(masked_lm_positions)
                 lm_mask_len = len(instance['masked_lm_positions'])

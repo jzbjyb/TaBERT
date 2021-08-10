@@ -419,7 +419,7 @@ def main():
         retrieval_file, target_file, source_file = args.path
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
                                 bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
-                                max_context_len=None, max_num_rows=100,  # used for tapas setting
+                                max_context_len=512, max_num_rows=100,  # used for tapas setting
                                 remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1, op=op)
     elif args.data == 'random_neg':
         generate_random_neg(args.path[0], args.output_dir)

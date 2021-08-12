@@ -15,6 +15,7 @@ import copy
 from collections import defaultdict
 from tqdm import tqdm
 import multiprocessing
+import logging
 from timeout_decorator.timeout_decorator import TimeoutError
 import faiss
 from table_bert.totto import Totto
@@ -25,6 +26,7 @@ from table_bert.turl import TurlData
 from table_bert.tapas import TapasTables
 from table_bert.dataset_utils import BasicDataset
 from table_bert.dataset import Example
+from table_bert.faiss_utils import FaissUtils
 
 
 def tableshuffle(prep_file: str, output_file: str):
@@ -344,11 +346,74 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
                 fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
 
 
+def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str, topk: int, index_emb_size: int, batch_size: int = 1, use_str_match: bool = False):
+    findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
+    findex.load_span_faiss(repr_file, index_name='table', query_name='context')
+    idx2example: Dict[int, Dict] = {}
+    with open(source_file, 'r') as fin:
+        for idx, l in tqdm(enumerate(fin), desc='build map'):
+            idx2example[idx] = json.loads(l)
+
+    with open(ret_file, 'r') as rfin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
+        tfin_idx = -1
+        def get_next_target_until(idx):
+            nonlocal tfin_idx
+            l = None
+            while tfin_idx < idx:
+                l = tfin.readline()
+                tfin_idx += 1
+            return l
+        idx_li: List[int] = []
+        byall_li: List[int] = []
+        num_mention_li: List[int] = []
+        with tqdm(miniters=50) as pbar:
+            for l in rfin:
+                pbar.update(1)
+                pbar.set_postfix_str(f'{np.mean(num_mention_li)}')
+                idx, bytext, bytable = l.rstrip('\n').split('\t')
+                idx = int(idx)
+                bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0]
+                bytable = [int(s.split(',')[0]) for s in bytable.split(' ') if len(s) > 0]
+                byall = list(set(bytext + bytable) - {idx})  # always remove self
+                idx_li.append(idx)
+                byall_li.extend(byall)
+                if len(idx_li) >= batch_size:
+                    query_dict = findex.get_subset_query_emb(idx_li)
+                    li_retid2textscore = findex.query_from_subset(query_dict['emb'], byall_li, topk=topk, use_faiss=False)
+                    # visualize
+                    #for qtext, r2ts in zip(query_dict['text'], li_retid2textscore):
+                    #    print(qtext)
+                    #    print(set(t for r, tss in r2ts.items() for t, s in tss))
+                    #input()
+                    # find the one with the most scores
+                    qid2rid2score: Dict[int, Dict[int, float]] = defaultdict(lambda: defaultdict(lambda: 0))
+                    for qid, r2ts in zip(query_dict['index'], li_retid2textscore):
+                        for rid, tss in r2ts.items():
+                            qid2rid2score[qid][rid] += np.sum([s for t, s in tss])
+                    for qid in sorted(qid2rid2score.keys()):
+                        rid2score = qid2rid2score[qid]
+                        if len(rid2score) <= 0:
+                            logging.warning(f'query {qid} has no retrieval results')
+                            continue
+                        rid = sorted(rid2score.items(), key=lambda x: -x[1])[0][0]
+                        example = json.loads(get_next_target_until(qid))
+                        ret_example =  idx2example[rid]
+                        example['table'] = ret_example['table']
+                        if use_str_match:
+                            locations = BasicDataset.get_mention_locations(example['context_before'][0], ret_example['table']['data'])
+                            example['context_before_mentions'] = [locations]
+                        num_mention_li.append(len(example['context_before_mentions'][0]))
+                        fout.write(json.dumps(example) + '\n')
+                    idx_li = []
+                    byall_li = []
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
-        'overlap', 'fakepair', 'retpair', 'tableshuffle', 'faiss', 'span_faiss', 'random_neg', 'mrr', 'filter_mention'])
+        'overlap', 'fakepair', 'retpair', 'tableshuffle',
+        'faiss', 'span_faiss', 'ret_faiss', 'random_neg', 'mrr', 'filter_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
@@ -451,8 +516,17 @@ def main():
     elif args.data == 'span_faiss':
         repr_file = args.path[0]
         topk = 10
+        index_emb_size = 256
         subsample = 1000000
-        span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=256)
+        span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=index_emb_size)
+    elif args.data == 'ret_faiss':
+        repr_file, ret_file, prep_file = args.path
+        topk = 10
+        index_emb_size = 256
+        batch_size = 64
+        use_str_match = True
+        ret_faiss(repr_file, ret_file, prep_file, prep_file, args.output_dir,
+                  topk=topk, index_emb_size=index_emb_size, batch_size=batch_size, use_str_match=use_str_match)
     elif args.data == 'mrr':
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':

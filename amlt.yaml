@@ -1651,7 +1651,7 @@ jobs:
     /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
     /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_tapas_mlm_contextmention_ep20_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_continue_ep20_8gpu/pytorch_model_epoch19.bin"'
-    --mode evaluate-test --output_file evaluation_ep9.jsonl
+    --mode evaluate-test --output_file evaluation_ep19.jsonl
 - name: bart_turl_sa_mlm_pretrain_tapas_mlm_contextmention_ep20_continue
   sku: G4
   sku_count: 1
@@ -1663,7 +1663,7 @@ jobs:
     /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
     /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_tapas_mlm_contextmention_ep20_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_continue_ep20_8gpu/pytorch_model_epoch19.bin"'
-    --mode evaluate-test --output_file evaluation_ep9.jsonl
+    --mode evaluate-test --output_file evaluation_ep19.jsonl
 - name: bart_wikisql_qa_add30_pretrain_tapas_mlm_contextmention_ep20_continue
   sku: G4
   sku_count: 1
@@ -1675,7 +1675,7 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
     /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add30_pretrain_tapas_mlm_contextmention_ep20_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_continue_ep20_8gpu/pytorch_model_epoch19.bin"'
-    --mode generate-test --output_file generation_ep9.tsv
+    --mode generate-test --output_file generation_ep19.tsv
 - name: bart_wtq_qa_add30_pretrain_tapas_mlm_contextmention_ep20_continue
   sku: G4
   sku_count: 1
@@ -1687,7 +1687,7 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
     /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_tapas_mlm_contextmention_ep20_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_continue_ep20_8gpu/pytorch_model_epoch19.bin"'
-    --mode generate-test --output_file generation_ep9.tsv
+    --mode generate-test --output_file generation_ep19.tsv
 
 # 3merge wholetabel (mlm context mention tapas ret bycontext continue)
 - name: wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue
@@ -1880,6 +1880,77 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_data0_continue_defaultparallel_continue/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
 
+# tapas wholetable (mlm context mention ret bycontext)
+- name: wholetable_tapas_bart_mlm_contextmention_retbycontext
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention_retbycontext
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext seq2seq 24 5 null
+- name: wholetable_tapas_bart_mlm_contextmention_retbycontext_continue
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext/pytorch_model_epoch04.bin"'
+- name: bart_turl_cf_mlm_pretrain_tapas_mlm_contextmention_retbycontext_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_tapas_mlm_contextmention_retbycontext_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_turl_sa_mlm_pretrain_tapas_mlm_contextmention_retbycontext_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_tapas_mlm_contextmention_retbycontext_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_wikisql_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+- name: bart_wtq_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+
 # tapas wholetable (mlm context mention ret bycontext combine default)
 - name: wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default
   sku: G8
@@ -1891,6 +1962,66 @@ jobs:
   - ./run_vanilla.sh
     /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default
     /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default seq2seq 24 5 null
+- name: wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default_continue
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default/pytorch_model_epoch04.bin"'
+    --gradient-accumulation-steps 3
+- name: bart_turl_cf_mlm_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_turl_sa_mlm_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_wikisql_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+- name: bart_wtq_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_tapas_mlm_contextmention_retbycontext_combine_default_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_combine_default_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
 
 # wikisent wholetabel (500k)
 - name: wholetable_wikisent_tapas_500k_bart_mlm_contextmention
@@ -2273,6 +2404,152 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
     /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_3merge_mlm_contextmention_retbytable_tapas seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_retbytable_tapas/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+
+# 3merge wholetabel (mlm context mention dpr bm25)
+- name: wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention seq2seq 24 5 null
+    --gradient-accumulation-steps 3
+- name: wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention_continue
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention/pytorch_model_epoch04.bin"'
+    --gradient-accumulation-steps 3
+- name: bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_turl_sa_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_wikisql_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+- name: bart_wtq_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_mention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_mention_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+
+# 3merge wholetabel (mlm context mention dpr bm25)
+- name: wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention seq2seq 24 5 null
+    --gradient-accumulation-steps 3
+- name: wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention_continue
+  sku: G8
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention/pytorch_model_epoch04.bin"'
+    --gradient-accumulation-steps 3
+- name: bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_cf_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_cf_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_turl_sa_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/turl_sa_bart_mlm
+    /mnt/root/TaBERT/data/runs/bart_turl_sa_mlm_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention_continue/pytorch_model_epoch09.bin"'
+    --mode evaluate-test --output_file evaluation_ep9.jsonl
+- name: bart_wikisql_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wikisql_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention_continue/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file generation_ep9.tsv
+- name: bart_wtq_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
+    /mnt/root/TaBERT/data/runs/bart_wtq_qa_add30_pretrain_3merge_mlm_contextmention_dpr_bm25_orimention_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_dpr_bm25_orimention_continue/pytorch_model_epoch09.bin"'
     --mode generate-test --output_file generation_ep9.tsv
 
 # 3merge wholetabel (mlm context mention ret bytable dpr)

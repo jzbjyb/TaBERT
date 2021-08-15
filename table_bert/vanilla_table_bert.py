@@ -183,11 +183,15 @@ class VanillaTableBert(TableBertModel):
                 if g == -1:
                     continue
                 batchgroup2tokens[(b, g)].append(token_ids[b, t])
+        _batchgroup2tokens: Dict[Tuple[int, int], str] = defaultdict(lambda: '')
         for b, g in batchgroup2tokens:
-            batchgroup2tokens[(b, g)] = self.tokenizer_fast.decode(batchgroup2tokens[(b, g)])
-        return batchgroup2tokens
+            _batchgroup2tokens[(b, g)] = self.tokenizer_fast.decode(batchgroup2tokens[(b, g)])
+        return _batchgroup2tokens
 
-    def represent_span_bert(self, batch, field: str):
+    def represent_span_noncontext_bert(self, batch, field: str):
+        return self.represent_span_context_bert(batch, field, use_word_emb=True)
+
+    def represent_span_context_bert(self, batch, field: str, use_word_emb: bool = False):
         assert field in {'table', 'context'}
         input_ids = batch[f'{field}_input_ids']
         if field == 'table':
@@ -198,9 +202,12 @@ class VanillaTableBert(TableBertModel):
             raise ValueError(f'{field} not supported')
 
         # get representation
-        token_repr = self._bert_model.bert(
-            input_ids, batch[f'{field}_token_type_ids'], batch[f'{field}_attention_mask'],
-            output_all_encoded_layers=False)[0]
+        if use_word_emb:
+            token_repr = self._bert_model.bert.embeddings(input_ids, batch[f'{field}_token_type_ids'])
+        else:
+            token_repr = self._bert_model.bert(
+                input_ids, batch[f'{field}_token_type_ids'], batch[f'{field}_attention_mask'],
+                output_all_encoded_layers=False)[0]
 
         # get text
         batchgroup2tokens = self.get_group_token_ids(input_ids, t2i)
@@ -619,10 +626,10 @@ class VanillaTableBert(TableBertModel):
                         c, t = getattr(self, f'represent_{self.config.model_type.value}')(batch)
                         context_li.append(c.detach().cpu().numpy())
                         table_li.append(t.detach().cpu().numpy())
-                    elif args.index_repr == 'span':
+                    elif args.index_repr in {'span_context', 'span_noncontext'}:
                         for field in ['table', 'context']:
                             repre, mask, bg2text = getattr(
-                                self, f'represent_span_{self.config.model_type.value}')(batch, field=field)
+                                self, f'represent_{args.index_repr}_{self.config.model_type.value}')(batch, field=field)
                             repre = repre.detach().cpu().numpy()
                             mask = mask.detach().cpu().numpy()
                             for b_idx, spans in enumerate(repre):
@@ -641,9 +648,11 @@ class VanillaTableBert(TableBertModel):
             context_li = np.concatenate(context_li, 0)
             table_li = np.concatenate(table_li, 0)
             np.savez(output_file, context=context_li, table=table_li)
-        elif args.index_repr == 'span':
+        elif args.index_repr in {'span_context', 'span_noncontext'}:
             savekw = {f'{field}_{k}': np.array(span_overall[field][f'{k}_li']) for field in span_overall for k in ['repr', 'index', 'text']}
             np.savez(output_file, **savekw)
+        else:
+            raise NotImplementedError
 
         if was_training:
             self.train()

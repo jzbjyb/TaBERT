@@ -36,6 +36,10 @@ class FaissUtils(object):
         sub_query_emb = self.query_emb[mask]
         sub_query_index = self.query_index[mask]
         sub_query_text = self.query_text[mask]
+        sub_mask = [False if type(t) is not str or t == '' else True for t in sub_query_text]
+        sub_query_emb = sub_query_emb[sub_mask]
+        sub_query_index = sub_query_index[sub_mask]
+        sub_query_text = sub_query_text[sub_mask]
         return {
             'emb': sub_query_emb,
             'index': sub_query_index,
@@ -48,6 +52,10 @@ class FaissUtils(object):
         sub_index_emb = self.index_emb[mask]
         sub_index_index = self.index_index[mask]
         sub_index_text = self.index_text[mask]
+        sub_mask = [False if type(t) is not str or t == '' else True for t in sub_index_text]
+        sub_index_emb = sub_index_emb[sub_mask]
+        sub_index_index = sub_index_index[sub_mask]
+        sub_index_text = sub_index_text[sub_mask]
 
         if use_faiss:
             # index

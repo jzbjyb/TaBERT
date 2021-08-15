@@ -66,6 +66,7 @@ class WikiSQL(BasicDataset):
                     'context_before': [],
                     'context_after': [],
                     'context_before_mentions': [],
+                    'context_before_mentions_cells': [],
                 }
                 td['uuid'] = f'wsql_{split}_{idx}'
                 question = example['question']
@@ -123,8 +124,10 @@ class WikiSQL(BasicDataset):
 
                 # extract mentions
                 hl_cells = td['table']['data_used']
-                mention_locations = self.get_mention_locations(question, td['table']['data'], hl_cells)
+                mention_locations, mention_cells = self.get_mention_locations(question, td['table']['data'], set(hl_cells))
+                mention_cells = [mention_cells[ml] for ml in mention_locations]
                 td['context_before_mentions'].append(mention_locations)
+                td['context_before_mentions_cells'].append(mention_cells)
                 numusedcells2count[len(hl_cells)] += 1
                 nummentions2count[len(mention_locations)] += 1
                 find_mention_ratios.append(len(mention_locations) / (len(hl_cells) or 1))

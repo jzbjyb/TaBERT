@@ -42,22 +42,22 @@ class TableFact(BasicDataset):
     def parse_context(context: str):
         tok_idx = 0
         raw_sentence: List[str] = []
-        highlighted_cells: List[Tuple[int, int]] = set()  # row/column index of mentions
         mentions: List[Tuple[int, int]] = []  # char index of mentions
+        mentions_cells: List[Tuple[int, int]] = []
         for i, piece in enumerate(context.split('#')):
             if i % 2 == 1:  # entity
                 entity, idx = piece.rsplit(';', 1)
                 row_ind, col_ind = idx.split(',')
                 row_ind, col_ind = int(row_ind), int(col_ind)
                 if row_ind != -1 and col_ind != -1:
-                    highlighted_cells.add((row_ind, col_ind))
                     mentions.append((tok_idx, tok_idx + len(entity)))
+                    mentions_cells.append((row_ind, col_ind))
                 raw_sentence.append(entity)
                 tok_idx += len(entity)
             else:  # no entity
                 raw_sentence.append(piece)
                 tok_idx += len(piece)
-        return ''.join(raw_sentence), sorted(list(highlighted_cells)), mentions
+        return ''.join(raw_sentence), mentions, mentions_cells
 
     def get_page_ids(self, split: str):
         data = getattr(self, '{}_data'.format(split))
@@ -84,7 +84,10 @@ class TableFact(BasicDataset):
                 for context_id, (context, label) in enumerate(zip(example[0], example[1])):
                     if not label:
                         continue
-                    context, highlighted_cells, mentions = self.parse_context(context)
+                    context, mentions, mentions_cells = self.parse_context(context)
+                    highlighted_cells = sorted(list(set(mentions_cells)))
+                    mentions_cells = [[(r - 1, c)] if r > 0 else [] for r, c in mentions_cells]
+                    assert len(mentions) == len(mentions_cells)
                     col2rows: Dict[int, Set[int]] = defaultdict(set)
                     row2count: Dict[int, int] = defaultdict(lambda: 0)
                     data_used: List[Tuple[int, int]] = []
@@ -99,6 +102,7 @@ class TableFact(BasicDataset):
                                   'used_header': []},
                         'context_before': [context],
                         'context_before_mentions': [mentions],
+                        'context_before_mentions_cells': [mentions_cells],
                         'context_after': []
                     }
                     num_rows += len(table_data)

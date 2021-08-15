@@ -109,13 +109,14 @@ class BasicDataset(object):
 
     #@timeout_decorator.timeout(1, use_signals=False)
     @staticmethod
-    def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: List[Tuple[int, int]] = None):
+    def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: Set[Tuple[int, int]] = None):
         locations: Set[Tuple[int, int]] = set()  # (inclusive, exclusive)
+        location2cell: Dict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         context = context.lower()
         annotated = True
         if highlighed_cells is None:  # assume all cells are highlighted
             annotated = False
-            highlighed_cells = [(row_idx, col_idx) for row_idx, row in enumerate(table) for col_idx, _ in enumerate(row)]
+            highlighed_cells = set((row_idx, col_idx) for row_idx, row in enumerate(table) for col_idx, _ in enumerate(row))
         for r, c in highlighed_cells:
             v = table[r][c].lower()
             if len(v) <= 0:
@@ -134,5 +135,7 @@ class BasicDataset(object):
                         len(common) >= 20
             if len(common) > 0 and find:
                 start = context.find(common)
-                locations.add((start, start + len(common)))
-        return sorted(list(locations))
+                loc = (start, start + len(common))
+                locations.add(loc)
+                location2cell[loc].append((r, c))
+        return sorted(list(locations)), location2cell

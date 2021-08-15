@@ -71,6 +71,7 @@ class Totto(BasicDataset):
     def expand_table(table, highlighted_cells: Set[Tuple[int, int]] = set()):
         _table: Dict[int, Dict[int, Dict]] = defaultdict(dict)  # expanded table, row_idx -> col_idx -> cell
         _highlighted_cells: Set[Tuple[int, int]] = set()  # expanded highlighted cells
+        idx_convert: Dict[Tuple[int, int], Set[Tuple[int, int]]] = defaultdict(set)
         _row_idx = _col_idx = 0  # index of the expanded table
         row_idx = col_idx = 0  # index to the original collapsed table
         is_expanded = False
@@ -103,6 +104,7 @@ class Totto(BasicDataset):
                             # but we ignore this because it's not a large portion and it's impossible to fix it unless we
                             # download the row tables from Wikipedia ourselves.
                             _table[_row_idx + i][_col_idx + j] = _cell
+                            idx_convert[(row_idx, col_idx)].add((_row_idx + i, _col_idx + j))
                             visited_col_idx.add(_col_idx + j)
                             if (row_idx, col_idx) in highlighted_cells:
                                 # TODO: some highlighted cells overflow because of the following truncate
@@ -118,7 +120,7 @@ class Totto(BasicDataset):
                     break
         _table_list = Totto.table_dict_to_list(_table, miss_value=Totto.dummy_cell(is_header=False),
                                                truncate_by_first_row=True)
-        return _table_list, _highlighted_cells, is_expanded
+        return _table_list, _highlighted_cells, is_expanded, idx_convert
 
     @staticmethod
     def get_header_rows_and_merge(table: List[List[Dict]], merge_sym: str = ' // '):
@@ -164,27 +166,26 @@ class Totto(BasicDataset):
                     'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
                     'context_before': [],
                     'context_before_mentions': [],
+                    'context_before_mentions_cells': [],
                     'context_after': []
                 }
 
                 td['uuid'] = 'totto_{}'.format(example['example_id'])
                 context = example['sentence_annotations'][0]['final_sentence']  # use the first annotated sentence
                 table = example['table']
-                highlighted_cells = example['highlighted_cells']
+                highlighted_cells = set(map(tuple, example['highlighted_cells']))  # dedup
                 td['context_before'].append(context)
-                mention_locations = self.get_mention_locations(
+                mention_locations, ml2cells = self.get_mention_locations(
                     context, [[c['value'] for c in r] for r in table], highlighted_cells)
                 td['context_before_mentions'].append(mention_locations)
                 numusedcells2count[len(highlighted_cells)] += 1
                 nummentions2count[len(mention_locations)] += 1
                 find_mention_ratios.append(len(mention_locations) / (len(highlighted_cells) or 1))
 
-                invalid_table = False
-
                 # expand table
-                expand_table, expand_highlighted_cells, is_expand = Totto.expand_table(
-                    table, set(map(tuple, highlighted_cells)))
+                expand_table, expand_highlighted_cells, is_expand, idx_convert = Totto.expand_table(table, highlighted_cells)
                 cases['expand'] += int(is_expand)
+                ml2cells = {k: list(set(_i for i in cs for _i in idx_convert[i])) for k, cs in ml2cells.items()}
 
                 # merge header
                 row2count: Dict[int, int] = defaultdict(lambda: 0)
@@ -193,11 +194,9 @@ class Totto(BasicDataset):
                 cases['multi_header'] += int(num_hr > 1)
                 if num_hr <= 0:  # table must contain at least one header row
                     cases['no_header'] += 1
-                    invalid_table = True
                     continue
                 if len(expand_table) < num_hr + 1:  # table must contain at least one data row
                     cases['no_data'] += 1
-                    invalid_table = True
                     continue
                 for r, c in expand_highlighted_cells:
                     row2count[r] += 1
@@ -226,6 +225,10 @@ class Totto(BasicDataset):
                 cases['partial_header'] += int(partial_header)
                 td['table']['data_used'] = sorted([(r - num_hr, c) for r, c in expand_highlighted_cells if r >= num_hr])
                 numrows2count[len(td['table']['data'])] += 1
+
+                # link mention with table data
+                td['context_before_mentions_cells'].append(
+                    [[(r - num_hr, c) for r, c in ml2cells[ml] if r >= num_hr] for ml in mention_locations])
 
                 # extract column name
                 for cell in merged_header:

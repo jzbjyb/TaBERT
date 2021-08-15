@@ -137,6 +137,7 @@ class TableBertConfig(SimpleNamespace):
         context_first: bool = True,
         cell_input_template: str = 'column | type | value',
         column_representation: str = 'mean_pool',
+        column_repr_dpr: str = 'whole_span',
         max_cell_len: int = 5,
         max_sequence_len: int = 512,
         max_context_len: int = 256,
@@ -198,6 +199,7 @@ class TableBertConfig(SimpleNamespace):
         self.pad_id = MODEL2PADID[self.model_type]
         self.context_first = context_first
         self.column_representation = column_representation
+        self.column_repr_dpr = column_repr_dpr
         self.objective_function = objective_function
         self.column_wise = column_wise
         assert objective_function in {
@@ -287,6 +289,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument("--row_delimiter", type=str, default='[SEP]', help='row delimiter')
         parser.add_argument("--cell_input_template", type=str, default='column | type | value', help='Cell representation')
         parser.add_argument("--column_representation", type=str, default='mean_pool', help='Column representation')
+        parser.add_argument('--column_repr_dpr', type=str, default='whole_span', help='which part to use in DPR table index')
 
         # training specifications
         parser.add_argument("--max_sequence_len", type=int, default=512)

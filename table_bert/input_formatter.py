@@ -312,9 +312,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         # get column_token_to_column_id
         column_token_to_column_id = np.full(len(sequence), dtype=np.int, fill_value=-1)  # init with -1
-        span_key = 'whole_span'
+        span_key = self.config.column_repr_dpr
 
         for col_id, span in enumerate(column_token_span_maps):
+            if span_key not in span: break  # table overflow
             col_start, col_end = span[span_key]
             column_token_to_column_id[col_start:col_end] = col_id
 
@@ -791,10 +792,6 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             "masked_lm_label_ids": self.tokenizer.convert_tokens_to_ids(masked_lm_labels),
             "info": info
         }
-        print(self.tokenizer.decode(instance['token_ids']))
-        print(instance['masked_lm_labels'])
-        print()
-        input()
 
         return instance
 

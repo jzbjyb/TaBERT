@@ -261,6 +261,8 @@ class TableDataset(Dataset):
             target_sequence_offsets = data['target_sequence_offsets'] if 'target_sequence_offsets' in data else None
             column_token_to_column_id = data['column_token_to_column_id'] if 'column_token_to_column_id' in data else None
             context_token_to_mention_id = data['context_token_to_mention_id'] if 'context_token_to_mention_id' in data else None
+            mentions_cells = data['mentions_cells'] if 'mentions_cells' in data else None
+            mentions_cells_offsets = data['mentions_cells_offsets'] if 'mentions_cells_offsets' in data else None
 
             shard_size = len(segment_a_lengths)
 
@@ -278,6 +280,11 @@ class TableDataset(Dataset):
                     example['column_token_to_column_id'] = column_token_to_column_id[seq_begin:seq_end]
                 if context_token_to_mention_id is not None:
                     example['context_token_to_mention_id'] = context_token_to_mention_id[seq_begin:seq_end]
+                if mentions_cells is not None:
+                    ms_begin, ms_end = mentions_cells_offsets[i]
+                    example['mentions_cells'] = mentions_cells[ms_begin:ms_end]
+                    example['num_cells'] = max(np.max(example['column_token_to_column_id']) + 1, 0)
+                    example['num_mentions'] = max(np.max(example['context_token_to_mention_id']) + 1, 0)
                 if target_sequence_offsets is not None:
                     t_seq_begin, t_seq_end = target_sequence_offsets[i]
                     example['target_token_ids'] = target_sequences[t_seq_begin: t_seq_end]
@@ -295,7 +302,7 @@ class TableDataset(Dataset):
                     self.only_table(example)
 
                 obj = self.config.objective_function
-                if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj or 'separate-bin' in obj:
+                if 'contrastive' in obj or 'table2text' in obj or 'text2table' in obj or 'separate-bin' in obj or 'contrast-span' in obj:
                     # use cls for the first position for seq2seq objective
                     self.add_for_contrastive(example, same_first_token=True)
                 elif 'contrast-concat' in obj or 'nsp' in obj:
@@ -315,7 +322,7 @@ class TableDataset(Dataset):
         return self.examples[item]
 
     @staticmethod
-    def collate(examples, pad_id: int = 0, sep_id: int = 102, max_allow_len: int = 512):  # TODO: add model specific param
+    def collate(examples, pad_id: int = 0, sep_id: int = 102, max_allow_len: int = 512, mention_cell_neg_count: int = 10):  # TODO: add model specific param
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
         has_contrastive = False
@@ -324,6 +331,7 @@ class TableDataset(Dataset):
         has_target = False
         has_ct2ci = False
         has_ct2mi = False
+        has_mention_cell = False
         for e in examples:  # use the first one to check
             if 'context_token_ids' in e and 'contrastive_concat' not in e:
                 has_contrastive = True
@@ -337,6 +345,8 @@ class TableDataset(Dataset):
                 has_ct2ci = True
             if 'context_token_to_mention_id' in e:
                 has_ct2mi = True
+            if 'mentions_cells' in e:
+                has_mention_cell = True
             break
         if has_target:
             max_target_len = max(len(e['target_token_ids']) for e in examples)
@@ -351,6 +361,11 @@ class TableDataset(Dataset):
             column_token_to_column_id = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
         if has_ct2mi:
             context_token_to_mention_id = np.full((batch_size, max_len), dtype=np.int, fill_value=-1)
+        if has_mention_cell:
+            max_num_cells = np.max([example['num_cells'] for example in examples])
+            max_num_mentions = np.max([example['num_mentions'] for example in examples])
+            pos_mentions_cells = []
+            neg_mentions_cells = []
         if has_target:
             lm_label_array = np.full((batch_size, max_target_len), dtype=np.int, fill_value=-1)
             target_input_array = np.full((batch_size, max_target_len), dtype=np.int, fill_value=pad_id)
@@ -403,6 +418,17 @@ class TableDataset(Dataset):
             if has_ct2mi:
                 ct2mi = example['context_token_to_mention_id']
                 context_token_to_mention_id[e_id, :len(ct2mi)] = ct2mi
+            if has_mention_cell:
+                for mid, cid in example['mentions_cells']:
+                    _mid = e_id * max_num_mentions + mid
+                    _cid = e_id * max_num_cells + cid
+                    pos_mentions_cells.append((_mid, _cid))
+                    _mention_cell_neg_count = min(mention_cell_neg_count, example['num_cells'])
+                    for neg_cid in np.random.choice(example['num_cells'], _mention_cell_neg_count, replace=False):
+                        if neg_cid == cid:
+                            continue
+                        _cid = e_id * max_num_cells + neg_cid
+                        neg_mentions_cells.append((_mid, _cid))
             if has_target:
                 target_input_array[e_id, :len(example['target_token_ids'])] = example['target_token_ids']
             if has_contrastive:
@@ -448,6 +474,9 @@ class TableDataset(Dataset):
             result['column_token_to_column_id'] = torch.tensor(column_token_to_column_id.astype(np.int64))
         if has_ct2mi:
             result['context_token_to_mention_id'] = torch.tensor(context_token_to_mention_id.astype(np.int64))
+        if has_mention_cell:
+            result['pos_mentions_cells'] = torch.tensor(pos_mentions_cells)
+            result['neg_mentions_cells'] = torch.tensor(neg_mentions_cells)
 
         if has_contrastive:
             result['context_input_ids'] = torch.tensor(context_input_array.astype(np.int64))
@@ -473,7 +502,8 @@ class TableDataset(Dataset):
 
 
 class Example(object):
-    def __init__(self, uuid, header, context: Tuple[List, List], context_mentions: Tuple[List, List]=(None, None),
+    def __init__(self, uuid, header, context: Tuple[List, List],
+                 context_mentions: Tuple[Union[None, List], Union[None, List]]=(None, None),
                  column_data=None, column_data_used=None, is_positive=True,
                  answer_coordinates: List[Tuple[int, int]]=None, answers: List[str]=None, sql: str=None, **kwargs):
         self.uuid = uuid
@@ -596,9 +626,11 @@ class Example(object):
         return 0
 
     @staticmethod
-    def char_index2token_index(offsets: List[Tuple[int, int]], char_mentions: List[Tuple[int, int]], added_prefix_space: bool):
+    def char_index2token_index(offsets: List[Tuple[int, int]],
+                               char_mentions: List[Tuple[Tuple[int, int], List[Tuple[int, int]]]],
+                               added_prefix_space: bool):
         char_adjust = -1 if added_prefix_space else 0
-        token_mentions: List[Tuple[int, int]] = [None for _ in range(len(char_mentions))]
+        token_mentions: List[Tuple[Tuple[int, int], List[Tuple[int, int]]]] = [None for _ in range(len(char_mentions))]
         midx = tid = 0
         while tid < len(offsets) and midx < len(char_mentions):
             start, end = offsets[tid]
@@ -606,37 +638,46 @@ class Example(object):
             end = end + char_adjust
             status = None
             while midx < len(char_mentions):
-                ms, me = char_mentions[midx]
+                (ms, me), cells = char_mentions[midx]
                 status = Example.overlap(start, end, ms, me)
                 if status != 1:
                     break
                 midx += 1
             if status == 0:  # overlap
                 if token_mentions[midx] is None:
-                    token_mentions[midx] = (tid, tid + 1)
+                    token_mentions[midx] = ((tid, tid + 1), cells)
                 else:
-                    token_mentions[midx] = (token_mentions[midx][0], tid + 1)
-                if char_mentions[midx][1] < end:
+                    token_mentions[midx] = ((token_mentions[midx][0][0], tid + 1), token_mentions[midx][1])
+                if char_mentions[midx][0][1] < end:
                     midx += 1
                 else:
                     tid += 1
             else:  # tid behind
                 tid += 1
+        location2cells: Dict[Tuple[int, int], Set[Tuple[int, int]]] = {}
         for tm in token_mentions:
-            if tm is None: logging.warning(f'char2token index error {offsets} {char_mentions}')
-        token_mentions = sorted(set(token_mentions) - {None})  # multiple mentions might be from the same token
+            if tm is None:
+                logging.warning(f'char2token index error {offsets} {char_mentions}')
+                continue
+            if tm[0] not in location2cells:
+                location2cells[tm[0]] = set(tm[1])
+            else:  # multiple mentions might be from the same token
+                location2cells[tm[0]] = location2cells[tm[0]] | set(tm[1])
+        token_mentions = [(k, sorted(list(location2cells[k]))) for k in sorted(location2cells.keys())]  # TODO: avoid overlap between mentions?
         return token_mentions
 
     @staticmethod
-    def mention_postprocess(mentions: List[Tuple[int, int]]):
+    def mention_postprocess(mentions: List[Tuple[Tuple[int, int], List[Tuple[int, int]]]]):
         # dedup, sort, remove overlap
         de_overlap = []
-        prev = -1
-        for s, e in sorted(set(map(tuple, mentions))):
-            if s < prev:
+        max_prev = -1
+        for (s, e), cells in sorted(mentions, key=lambda x: x[0]):
+            if s >= e:
                 continue
-            de_overlap.append((s, e))
-            prev = e
+            if s < max_prev:
+                continue
+            de_overlap.append(((s, e), list(map(tuple, cells))))
+            max_prev = max(max_prev, e)
         return de_overlap
 
     @classmethod
@@ -741,16 +782,15 @@ class Example(object):
         cbm = cam = None
         if 'context_before_mentions' in entry:
             cbm = entry['context_before_mentions']
+            if 'context_before_mentions_cells' in entry:
+                cbm = [list(zip(single_cbm, single_cbmc)) for single_cbm, single_cbmc in zip(cbm, entry['context_before_mentions_cells'])]
+            else:
+                cbm = [[(m, []) for m in single_cbm] for single_cbm in cbm]
             assert len(cbm) == len(context_before_offsets)
             # TODO: modify files to avoid this postprocess
             cbm = [Example.char_index2token_index(off, Example.mention_postprocess(cm), added_prefix_space=aps)
                    for off, cm in zip(context_before_offsets, cbm)]
-        if 'context_after_mentions' in entry:
-            cam = entry['context_after_mentions']
-            assert len(cam) == len(context_after_offsets)
-            # TODO: modify files to avoid this postprocess
-            cam = [Example.char_index2token_index(off, Example.mention_postprocess(cm), added_prefix_space=aps)
-                   for off, cm in zip(context_after_offsets, cam)]
+        # TODO: add after
 
         uuid = entry['uuid']
         is_positive = entry['is_positive'] if 'is_positive' in entry else True

@@ -53,8 +53,10 @@ def generate_for_epoch(table_db: TableDatabase,
     sequences = []
     column_token_to_column_id = []
     context_token_to_mention_id = []
+    mentions_cells = []
     segment_a_lengths = []
     sequence_offsets = []
+    mentions_cells_offsets = []
     masked_lm_positions = []
     masked_lm_label_ids = []
     masked_lm_offsets = []
@@ -79,6 +81,9 @@ def generate_for_epoch(table_db: TableDatabase,
             data['column_token_to_column_id'] = np.int16(column_token_to_column_id)
         if len(context_token_to_mention_id) > 0:
             data['context_token_to_mention_id'] = np.int16(context_token_to_mention_id)
+        if len(mentions_cells) > 0:
+            data['mentions_cells'] = np.int16(mentions_cells)
+            data['mentions_cells_offsets'] = np.uint64(mentions_cells_offsets)
 
         with h5py.File(str(epoch_file), 'w') as f:
             for key, val in data.items():
@@ -87,8 +92,10 @@ def generate_for_epoch(table_db: TableDatabase,
         del sequences[:]
         del column_token_to_column_id[:]
         del context_token_to_mention_id[:]
+        del mentions_cells[:]
         del segment_a_lengths[:]
         del sequence_offsets[:]
+        del mentions_cells_offsets[:]
         del masked_lm_positions[:]
         del masked_lm_label_ids[:]
         del masked_lm_offsets[:]
@@ -121,6 +128,10 @@ def generate_for_epoch(table_db: TableDatabase,
                     column_token_to_column_id.extend(instance['column_token_to_column_id'])
                 if 'context_token_to_mention_id' in instance:
                     context_token_to_mention_id.extend(instance['context_token_to_mention_id'])
+                if 'mentions_cells' in instance:
+                    cur_pos_mc = len(mentions_cells)
+                    mentions_cells.extend(instance['mentions_cells'])
+                    mentions_cells_offsets.append([cur_pos_mc, cur_pos_mc + len(instance['mentions_cells'])])
 
                 cur_pos = len(masked_lm_positions)
                 lm_mask_len = len(instance['masked_lm_positions'])

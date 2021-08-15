@@ -93,8 +93,8 @@ def sample_context(example: Example, max_context_length: int, context_sample_str
             selected_context_mentions.extend(ment)
             if len(selected_context) > max_context_length:
                 selected_context = selected_context[:max_context_length]
-                selected_context_mentions = [(min(s, max_context_length - 1), min(e, max_context_length))
-                                             for (s, e) in selected_context_mentions if s < max_context_length]
+                selected_context_mentions = [((min(s, max_context_length - 1), min(e, max_context_length)), cells)
+                                             for ((s, e), cells) in selected_context_mentions if s < max_context_length]
                 if selected_context:
                     yield selected_context, selected_context_mentions
                 selected_context = []

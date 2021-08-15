@@ -44,7 +44,7 @@ class VanillaTableBert(TableBertModel):
         obj = self.config.objective_function
         if 'contrastive' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
-        elif 'contrast-concat' in obj or 'separate-bin' in obj:
+        elif 'contrast-concat' in obj or 'separate-bin' in obj or 'contrast-span' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size, is_paired=True)
         elif 'nsp' in obj or 'binary' in obj:
             self.nsp_loss = CrossEntropyLoss(ignore_index=-1, reduction='mean')
@@ -65,7 +65,7 @@ class VanillaTableBert(TableBertModel):
             self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_electra(self):
-        for loss_fct in ['nsp', 'binary', 'seq2seq']:
+        for loss_fct in ['nsp', 'binary', 'seq2seq', 'contrast-span']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         generator = ElectraForMaskedLM.from_pretrained(self.config.base_model_name)
@@ -77,13 +77,13 @@ class VanillaTableBert(TableBertModel):
         self._electra_loss = ELECTRALoss()
 
     def load_roberta(self):
-        for loss_fct in ['nsp', 'binary', 'separate-bin', 'seq2seq']:
+        for loss_fct in ['nsp', 'binary', 'separate-bin', 'seq2seq', 'contrast-span']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
 
     def load_bart(self):
-        for loss_fct in ['nsp', 'binary', 'separate-bin', 'contrastive', 'contrast-concat']:
+        for loss_fct in ['nsp', 'binary', 'separate-bin', 'contrastive', 'contrast-concat', 'contrast-span']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._bart = BartForConditionalGeneration.from_pretrained(self.config.base_model_name)
@@ -127,6 +127,19 @@ class VanillaTableBert(TableBertModel):
                 raise ValueError
             total_loss += contrastive_loss
             logging_output['contrastive_loss'] = contrastive_loss.item()
+        if 'contrast-span' in obj:
+            mentions_repr = self.represent_span_context_bert(kwargs, field='context')[0]  # (bs, num_mentions, emb_size)
+            cells_repr = self.represent_span_context_bert(kwargs, field='table')[0]  # (bs, num_cells, emb_size)
+            mentions_repr = mentions_repr.view(-1, mentions_repr.size(-1))
+            cells_repr = cells_repr.view(-1, cells_repr.size(-1))
+            pos_mc = kwargs['pos_mentions_cells']  # (num_pos_pairs, 2)
+            neg_mc = kwargs['neg_mentions_cells']  # (num_neg_pairs, 2)
+            all_mentions = torch.cat([mentions_repr[pos_mc[:, 0]], mentions_repr[neg_mc[:, 0]]], 0)  # (num_pos_pairs + num_neg_pairs, emb_size)
+            all_cells = torch.cat([cells_repr[pos_mc[:, 1]], cells_repr[neg_mc[:, 1]]], 0)  # (num_pos_pairs + num_neg_pairs, emb_size)
+            labels = torch.cat([torch.ones(pos_mc.size(0)), torch.zeros(neg_mc.size(0))], 0)
+            span_contrastive_loss = self.contrastive_loss(all_mentions, all_cells, labels=labels)
+            total_loss += span_contrastive_loss
+            logging_output['span_contrastive_loss'] = span_contrastive_loss.item()
         if 'contrast-concat' in obj:
             # use the representation corresponding to the first token (cls or sep)
             concat_repr, _ = self._bert_model.bert(
@@ -222,7 +235,7 @@ class VanillaTableBert(TableBertModel):
 
         # (batch_size, max_num_spans + 1, emb_size)
         span_repr = agg_func(token_repr, t2i_noneg.unsqueeze(-1).expand(
-            -1, -1, token_repr.size(-1)), dim=1, dim_size=max_num_spans + 1)
+            -1, -1, token_repr.size(-1)), dim=1, dim_size=max_num_spans + 1, fill_value=0)
 
         # remove the last "garbage collection" entry, mask out padding spans
         span_repr = span_repr[:, :-1] * span_mask.float().unsqueeze(-1)

@@ -26,6 +26,7 @@ class TableBertBertInputFormatter(object):
     def __init__(self, config: TableBertConfig, tokenizer: BertTokenizer):
         self.config = config
         self.tokenizer = tokenizer
+        self.tokenizer_fast = config.tokenizer_fast_cls.from_pretrained(config.base_model_name)
         if hasattr(self.tokenizer, 'vocab'):
             self.vocab_list = list(self.tokenizer.vocab.keys())
         elif hasattr(self.tokenizer, 'get_vocab'):
@@ -333,16 +334,28 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return instance
 
-    def get_context_token_to_mention_id(self, context: List[str], context_mentions: List[Tuple[int, int]], size: int):
+    def get_context_token_to_mention_id(self,
+                                        context: List[str],
+                                        context_mentions: List[Tuple[Tuple[int, int], List[Tuple[int, int]]]],
+                                        size: int,
+                                        max_num_cells: int = None,
+                                        row_size: int = None):
         if not self.config.context_first:
             raise NotImplementedError
         offset = 1  # cls token
         context_token_to_mention_id = np.full(size, dtype=np.int, fill_value=-1)  # init with -1
-        for idx, (start, end) in enumerate(context_mentions):
+        mentions_cells: List[Tuple[int, int]] = []
+        for idx, ((start, end), cells) in enumerate(context_mentions):
             if end > len(context):
                 continue
             context_token_to_mention_id[start + offset:end + offset] = idx
-        return context_token_to_mention_id.tolist()
+            if max_num_cells is not None:
+                for row_idx, col_idx in cells:
+                    cell_idx = row_idx * row_size + col_idx
+                    if cell_idx >= max_num_cells:
+                        continue
+                    mentions_cells.append((idx, cell_idx))
+        return context_token_to_mention_id.tolist(), mentions_cells
 
     def get_multiple_rows(self, example, keep_num_rows: int, exclude: Set[int]={}, use_sample: bool = True, skip_empty: bool = True):
         additional_rows = []
@@ -413,6 +426,26 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return additional_rows, answer
 
+    def verify_mention_cell(self, tokens, context_token_to_mention_id, column_token_to_column_id, mentions_cells, debug: bool = False, **kwargs):
+        if debug:
+            cid2tokens: Dict[int, List[int]] = defaultdict(list)
+            mid2tokens: Dict[int, List[int]] = defaultdict(list)
+            for t, cid, mid in zip(tokens, column_token_to_column_id, context_token_to_mention_id):
+                if cid != -1:
+                    cid2tokens[cid].append(t)
+                if mid != -1:
+                    mid2tokens[mid].append(t)
+            cid2tokens = {k: self.tokenizer_fast.decode(v) for k, v in cid2tokens.items()}
+            mid2tokens = {k: self.tokenizer_fast.decode(v) for k, v in mid2tokens.items()}
+            for mid, cid in mentions_cells:
+                print(f'{mid} {mid2tokens[mid]}\t\t{cid} {cid2tokens[cid]}')
+        assert len(context_token_to_mention_id) == len(tokens)
+        assert len(column_token_to_column_id) == len(tokens)
+        _context_token_to_mention_id = set(context_token_to_mention_id)
+        _column_token_to_column_id = set(column_token_to_column_id)
+        for mid, cid in mentions_cells:
+            assert mid in _context_token_to_mention_id and cid in _column_token_to_column_id
+
     def get_pretraining_instances_from_example(
         self, example: Example,
         context_sampler: Callable
@@ -437,7 +470,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instance = self.create_pretraining_instance(context, example.header, additional_rows)
                     instance['source'] = example.source
                     instance['target_token_ids'] = instance['token_ids']
-                    instance['context_token_to_mention_id'] = self.get_context_token_to_mention_id(context, context_mentions, size=len(instance['tokens']))
+                    instance['context_token_to_mention_id'], instance['mentions_cells'] = self.get_context_token_to_mention_id(
+                        context, context_mentions, size=len(instance['tokens']),
+                        max_num_cells=np.max(instance['column_token_to_column_id']) + 1, row_size=len(example.column_data))
+                    self.verify_mention_cell(instance['token_ids'], instance['context_token_to_mention_id'], instance['column_token_to_column_id'], instance['mentions_cells'], debug=False)
                     instances.append(instance)
                 if 'single' in seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
@@ -513,7 +549,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         if len(context_mentions) <= 0:
             return instances
         table = Table('fake_table', example.header)
-        for start, end in sample(context_mentions, min(len(context_mentions), self.config.max_num_mention_per_example)):
+        for (start, end), _ in sample(context_mentions, min(len(context_mentions), self.config.max_num_mention_per_example)):
             _context = context[:start] + [self.config.mask_token] + context[end:]
             instance = self.get_input(_context, table, additional_rows)
             target = [self.config.cls_token] +  context[start:end][:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]

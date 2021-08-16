@@ -31,12 +31,16 @@ class FaissUtils(object):
         self.small_index = faiss.IndexHNSWFlat(self.small_index_emb.shape[1], self.index_emb_size, faiss.METRIC_INNER_PRODUCT)
         self.small_index.add(self.small_index_emb)
 
+    def get_text_mask(self, text: List[str]):
+        mask = [False if type(t) not in {str, np.str_} or t == '' else True for t in text]
+        return mask
+
     def get_subset_query_emb(self, sub_index: List[int]):
         mask = np.isin(self.query_index, sub_index)
         sub_query_emb = self.query_emb[mask]
         sub_query_index = self.query_index[mask]
         sub_query_text = self.query_text[mask]
-        sub_mask = [False if type(t) is not str or t == '' else True for t in sub_query_text]
+        sub_mask = self.get_text_mask(sub_query_text)
         sub_query_emb = sub_query_emb[sub_mask]
         sub_query_index = sub_query_index[sub_mask]
         sub_query_text = sub_query_text[sub_mask]
@@ -52,7 +56,7 @@ class FaissUtils(object):
         sub_index_emb = self.index_emb[mask]
         sub_index_index = self.index_index[mask]
         sub_index_text = self.index_text[mask]
-        sub_mask = [False if type(t) is not str or t == '' else True for t in sub_index_text]
+        sub_mask = self.get_text_mask(sub_index_text)
         sub_index_emb = sub_index_emb[sub_mask]
         sub_index_index = sub_index_index[sub_mask]
         sub_index_text = sub_index_text[sub_mask]
@@ -68,7 +72,8 @@ class FaissUtils(object):
                 query_emb = torch.tensor(query_emb).cuda()
                 sub_index_emb = torch.tensor(sub_index_emb).cuda()
                 D = query_emb @ sub_index_emb.T
-                D, I = torch.topk(D, topk, 1)
+                _topk = min(topk, D.shape[1])
+                D, I = torch.topk(D, _topk, 1)
                 D, I = D.cpu().numpy(), I.cpu().numpy()
             else:
                 D = query_emb @ sub_index_emb.T

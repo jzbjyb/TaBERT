@@ -643,6 +643,11 @@ class VanillaTableBert(TableBertModel):
                         for field in ['table', 'context']:
                             repre, mask, bg2text = getattr(
                                 self, f'represent_{args.index_repr}_{self.config.model_type.value}')(batch, field=field)
+                            if 'contrast-span' in self.config.objective_function:
+                                if field == 'table':
+                                    repre = self.contrastive_loss.preprocess(repre, self.contrastive_loss.target_projection)
+                                elif field == 'context':
+                                    repre = self.contrastive_loss.preprocess(repre, self.contrastive_loss.source_projection)
                             repre = repre.detach().cpu().numpy()
                             mask = mask.detach().cpu().numpy()
                             for b_idx, spans in enumerate(repre):

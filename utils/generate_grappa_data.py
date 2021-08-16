@@ -346,13 +346,16 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
                 fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
 
 
-def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str, topk: int, index_emb_size: int, batch_size: int = 1, use_str_match: bool = False):
+def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str, topk: int, index_emb_size: int, batch_size: int = 1, use_str_match: bool = False, separate: bool = False):
     findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
     findex.load_span_faiss(repr_file, index_name='table', query_name='context')
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
         for idx, l in tqdm(enumerate(fin), desc='build map'):
             idx2example[idx] = json.loads(l)
+
+    def match_mention(t1, t2):
+        return ''.join(t1.lower().split()) == ''.join(t2.lower().split())
 
     with open(ret_file, 'r') as rfin, open(target_file, 'r') as tfin, open(output_file, 'w') as fout:
         tfin_idx = -1
@@ -385,25 +388,45 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
                     #    print(qtext)
                     #    print(set(t for r, tss in r2ts.items() for t, s in tss))
                     #input()
-                    # find the one with the most scores
-                    qid2rid2score: Dict[int, Dict[int, float]] = defaultdict(lambda: defaultdict(lambda: 0))
-                    for qid, r2ts in zip(query_dict['index'], li_retid2textscore):
-                        for rid, tss in r2ts.items():
-                            qid2rid2score[qid][rid] += np.sum([s for t, s in tss])
-                    for qid in sorted(qid2rid2score.keys()):
-                        rid2score = qid2rid2score[qid]
-                        if len(rid2score) <= 0:
-                            logging.warning(f'query {qid} has no retrieval results')
-                            continue
-                        rid = sorted(rid2score.items(), key=lambda x: -x[1])[0][0]
-                        example = json.loads(get_next_target_until(qid))
-                        ret_example =  idx2example[rid]
-                        example['table'] = ret_example['table']
-                        if use_str_match:
-                            locations, _ = BasicDataset.get_mention_locations(example['context_before'][0], ret_example['table']['data'])
-                            example['context_before_mentions'] = [locations]
-                        num_mention_li.append(len(example['context_before_mentions'][0]))
-                        fout.write(json.dumps(example) + '\n')
+                    if separate:
+                        qid2qtext_rid2score: Dict[int, List[Tuple[str, Dict[int, float]]]] = defaultdict(list)
+                        for qid, qtext, r2ts in zip(query_dict['index'], query_dict['text'], li_retid2textscore):
+                            qid2qtext_rid2score[qid].append((qtext, {}))
+                            for rid, tss in r2ts.items():
+                                qid2qtext_rid2score[qid][-1][1][rid] = np.sum([s for t, s in tss])
+                        for qid in sorted(qid2qtext_rid2score.keys()):
+                            raw_example = json.loads(get_next_target_until(qid))
+                            for qtext, rid2score in qid2qtext_rid2score[qid]:
+                                rid = sorted(rid2score.items(), key=lambda x: -x[1])[0][0]
+                                ret_example = idx2example[rid]
+                                example = copy.deepcopy(raw_example)
+                                context = example['context_before'][0]
+                                example['table'] = ret_example['table']
+                                example['context_before_mentions'] = [ml for ml in raw_example['context_before_mentions'][0] if match_mention(qtext, context[ml[0]:ml[1]])]
+                                # only for visualizing
+                                locations, _ = BasicDataset.get_mention_locations(example['context_before'][0], example['table']['data'])
+                                num_mention_li.append(len(locations))
+                                fout.write(json.dumps(example) + '\n')
+                    else:
+                        # find the one with the most scores
+                        qid2rid2score: Dict[int, Dict[int, float]] = defaultdict(lambda: defaultdict(lambda: 0))
+                        for qid, r2ts in zip(query_dict['index'], li_retid2textscore):
+                            for rid, tss in r2ts.items():
+                                qid2rid2score[qid][rid] += np.sum([s for t, s in tss])
+                        for qid in sorted(qid2rid2score.keys()):
+                            rid2score = qid2rid2score[qid]
+                            if len(rid2score) <= 0:
+                                logging.warning(f'query {qid} has no retrieval results')
+                                continue
+                            rid = sorted(rid2score.items(), key=lambda x: -x[1])[0][0]
+                            example = json.loads(get_next_target_until(qid))
+                            ret_example =  idx2example[rid]
+                            example['table'] = ret_example['table']
+                            if use_str_match:
+                                locations, _ = BasicDataset.get_mention_locations(example['context_before'][0], ret_example['table']['data'])
+                                example['context_before_mentions'] = [locations]
+                            num_mention_li.append(len(example['context_before_mentions'][0]))
+                            fout.write(json.dumps(example) + '\n')
                     idx_li = []
                     byall_li = []
 

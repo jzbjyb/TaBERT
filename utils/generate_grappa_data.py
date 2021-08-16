@@ -283,72 +283,44 @@ def filter_mention(input_file: str, out_file: str, topk: int = 0, sort: bool = F
 
 def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int = None, index_emb_size: int = 512):
     print('loading ...')
-    repr = np.load(repr_file, allow_pickle=True)
-    ret_results = []
+    findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
+    findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
+    findex.build_small_index(index_subsample)
     queryidx2retscores: Dict[int, Dict[int, List[float]]] = defaultdict(lambda: defaultdict(list))
-    for index_name, query_name in [('table', 'context')]:
-        # load
-        index_emb = repr[f'{index_name}_repr'].astype('float32')
-        index_index = repr[f'{index_name}_index']
-        index_text = repr[f'{index_name}_text']
-        if index_subsample:
-            print('subsample')
-            sample_inds = np.random.choice(index_emb.shape[0], index_subsample, replace=False)
-            index_emb = index_emb[sample_inds]
-            index_index = index_index[sample_inds]
-            index_text = index_text[sample_inds]
-        query_emb = repr[f'{query_name}_repr'].astype('float32')
-        query_index = repr[f'{query_name}_index']
-        query_text = repr[f'{query_name}_text']
 
-        # normalize
-        index_emb = index_emb / np.sqrt((index_emb * index_emb).sum(-1, keepdims=True))
-        query_emb = query_emb / np.sqrt((query_emb * query_emb).sum(-1, keepdims=True))
+    # query
+    print(f'retrieving ...')
+    '''
+    for i in range(query_emb.shape[0]):
+        D, I = index.search(query_emb[i:i+1], topk + 1)
+        print('--->', query_text[i])
+        for j in I[0]:
+            print(index_text[j])
+        input()
+    '''
+    D, I = findex.small_index.search(findex.query_emb, topk + 1)  # add 1 for self retrieval
+    print('retrieving done')
 
-        # index
-        emb_size = index_emb.shape[1]
-        index = faiss.IndexHNSWFlat(emb_size, index_emb_size, faiss.METRIC_INNER_PRODUCT)
-        print(f'query with {query_name} with shape {query_emb.shape} ...')
-        print(f'indexing {index_name} with shape {index_emb.shape} ...')
-        print(f'matrix sampe {index_emb[:5]}')
-        index.add(index_emb)
-        print('indexing done')
+    print('aggregate scores')
+    for i in range(findex.query_emb.shape[0]):
+        qid = findex.query_index[i]
+        for id, score in zip(I[i], D[i]):
+            rid = findex.small_index_index[id]
+            queryidx2retscores[qid][rid].append(score)
+    print(f'max query id is {np.max(list(queryidx2retscores.keys()))}')
 
-        # query
-        print(f'retrieving ...')
-        '''
-        for i in range(query_emb.shape[0]):
-            D, I = index.search(query_emb[i:i+1], topk + 1)
-            print('--->', query_text[i])
-            for j in I[0]:
-                print(index_text[j])
-            input()
-        '''
-        D, I = index.search(query_emb, topk + 1)  # add 1 for self retrieval
-        ret_results.append((I, D))
-        print('retrieving done')
-
-        print('aggregate scores')
-        for i in range(query_emb.shape[0]):
-            qid = query_index[i]
-            for id, score in zip(I[i], D[i]):
-                rid = index_index[id]
-                queryidx2retscores[qid][rid].append(score)
-        print(f'max query id is {np.max(list(queryidx2retscores.keys()))}')
-
-        print('output')
-        format_list = lambda indscores: ' '.join(['{},{}'.format(i, s) for i, s in indscores])
-        with open(ouput_file, 'w') as fout:
-            for qid in sorted(queryidx2retscores.keys()):
-                rid2scores = queryidx2retscores[qid]
-                rid2sumscore = sorted([(rid, np.sum(scores)) for rid, scores in rid2scores.items()],
-                                      key=lambda x: -x[1])[:topk]
-                fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
+    print('output')
+    format_list = lambda indscores: ' '.join(['{},{}'.format(i, s) for i, s in indscores])
+    with open(ouput_file, 'w') as fout:
+        for qid in sorted(queryidx2retscores.keys()):
+            rid2scores = queryidx2retscores[qid]
+            rid2sumscore = sorted([(rid, np.sum(scores)) for rid, scores in rid2scores.items()], key=lambda x: -x[1])[:topk]
+            fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
 
 
 def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str, topk: int, index_emb_size: int, batch_size: int = 1, use_str_match: bool = False, separate: bool = False):
     findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
-    findex.load_span_faiss(repr_file, index_name='table', query_name='context')
+    findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
         for idx, l in tqdm(enumerate(fin), desc='build map'):

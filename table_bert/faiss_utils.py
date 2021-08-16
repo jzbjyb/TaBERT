@@ -10,7 +10,16 @@ class FaissUtils(object):
         self.index_emb_size = index_emb_size
         self.cuda = cuda
 
-    def load_span_faiss(self, repr_file: str, index_name: str, query_name: str, normalize: bool = True):
+    def convert_index(self, num_shards: int, total_count: int):
+        raw_ind = list(range(total_count))
+        rearranged_ind = []
+        for s in range(num_shards):
+            rearranged_ind.extend(raw_ind[s::num_shards])
+        to_raw_ind = dict(zip(raw_ind, rearranged_ind))
+        self.index_index = np.array([to_raw_ind[i] for i in self.index_index])
+        self.query_index = np.array([to_raw_ind[i] for i in self.query_index])
+
+    def load_span_faiss(self, repr_file: str, index_name: str, query_name: str, normalize: bool = True, reindex_shards: int = None):
         print('loading ...')
         repr = np.load(repr_file, allow_pickle=True)
         self.index_emb = repr[f'{index_name}_repr'].astype('float32')
@@ -22,6 +31,10 @@ class FaissUtils(object):
         if normalize:
             self.index_emb = self.index_emb / np.sqrt((self.index_emb * self.index_emb).sum(-1, keepdims=True))
             self.query_emb = self.query_emb / np.sqrt((self.query_emb * self.query_emb).sum(-1, keepdims=True))
+        if reindex_shards:
+            total_count = np.max(self.index_index) + 1
+            assert total_count == 218419, '3merge data only!'
+            self.convert_index(reindex_shards, total_count)
 
     def build_small_index(self, size: int):
         sample_inds = np.random.choice(self.index_emb.shape[0], size, replace=False)

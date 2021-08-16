@@ -257,12 +257,6 @@ def init_distributed_mode(params):
         params.world_size = 1
         params.n_gpu_per_node = 1
 
-    # sanity checks
-    assert params.n_nodes >= 1
-    assert 0 <= params.node_id < params.n_nodes
-    assert 0 <= params.local_rank <= params.global_rank < params.world_size
-    assert params.world_size == params.n_nodes * params.n_gpu_per_node
-
     # define whether this is the master process / if we are in distributed mode
     params.is_master = params.node_id == 0 and params.local_rank == 0
     params.multi_node = params.n_nodes > 1
@@ -280,6 +274,12 @@ def init_distributed_mode(params):
     print(PREFIX + "Multi-node     : %s" % str(params.multi_node))
     print(PREFIX + "Multi-GPU      : %s" % str(params.multi_gpu))
     print(PREFIX + "Hostname       : %s" % socket.gethostname())
+
+    # sanity checks
+    assert params.n_nodes >= 1
+    assert 0 <= params.node_id < params.n_nodes
+    assert 0 <= params.local_rank <= params.global_rank < params.world_size
+    assert params.world_size == params.n_nodes * params.n_gpu_per_node
 
     # set GPU device
     if not params.cpu:

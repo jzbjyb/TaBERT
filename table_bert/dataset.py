@@ -322,7 +322,7 @@ class TableDataset(Dataset):
         return self.examples[item]
 
     @staticmethod
-    def collate(examples, pad_id: int = 0, sep_id: int = 102, max_allow_len: int = 512, mention_cell_neg_count: int = 10):  # TODO: add model specific param
+    def collate(examples, pad_id: int = 0, sep_id: int = 102, max_allow_len: int = 512, mention_cell_neg_count: int = 5):  # TODO: add model specific param
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
         has_contrastive = False

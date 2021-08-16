@@ -51,7 +51,7 @@ class VanillaTableBert(TableBertModel):
         if config.load_model_from is not None:
             print('init from {}'.format(config.load_model_from))
             state_dict = torch.load(config.load_model_from, map_location='cpu')
-            self.load_state_dict(state_dict, strict=True)
+            self.load_state_dict(state_dict, strict=False)
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
@@ -127,7 +127,7 @@ class VanillaTableBert(TableBertModel):
                 raise ValueError
             total_loss += contrastive_loss
             logging_output['contrastive_loss'] = contrastive_loss.item()
-        if 'contrast-span' in obj:
+        if 'contrast-span' in obj and kwargs['pos_mentions_cells'].size(0) > 0:
             mentions_repr = self.represent_span_context_bert(kwargs, field='context')[0]  # (bs, num_mentions, emb_size)
             cells_repr = self.represent_span_context_bert(kwargs, field='table')[0]  # (bs, num_cells, emb_size)
             mentions_repr = mentions_repr.view(-1, mentions_repr.size(-1))
@@ -136,7 +136,7 @@ class VanillaTableBert(TableBertModel):
             neg_mc = kwargs['neg_mentions_cells']  # (num_neg_pairs, 2)
             all_mentions = torch.cat([mentions_repr[pos_mc[:, 0]], mentions_repr[neg_mc[:, 0]]], 0)  # (num_pos_pairs + num_neg_pairs, emb_size)
             all_cells = torch.cat([cells_repr[pos_mc[:, 1]], cells_repr[neg_mc[:, 1]]], 0)  # (num_pos_pairs + num_neg_pairs, emb_size)
-            labels = torch.cat([torch.ones(pos_mc.size(0)), torch.zeros(neg_mc.size(0))], 0)
+            labels = torch.cat([torch.ones(pos_mc.size(0)), torch.zeros(neg_mc.size(0))], 0).to(mentions_repr.device)
             span_contrastive_loss = self.contrastive_loss(all_mentions, all_cells, labels=labels)
             total_loss += span_contrastive_loss
             logging_output['span_contrastive_loss'] = span_contrastive_loss.item()
@@ -235,10 +235,10 @@ class VanillaTableBert(TableBertModel):
 
         # (batch_size, max_num_spans + 1, emb_size)
         span_repr = agg_func(token_repr, t2i_noneg.unsqueeze(-1).expand(
-            -1, -1, token_repr.size(-1)), dim=1, dim_size=max_num_spans + 1, fill_value=0)
+            -1, -1, token_repr.size(-1)), dim=1, dim_size=max_num_spans + 1, fill_value=0).type(token_repr.dtype)
 
         # remove the last "garbage collection" entry, mask out padding spans
-        span_repr = span_repr[:, :-1] * span_mask.float().unsqueeze(-1)
+        span_repr = span_repr[:, :-1] * span_mask.unsqueeze(-1)
 
         return span_repr, span_mask, batchgroup2tokens
 

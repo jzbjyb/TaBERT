@@ -117,6 +117,7 @@ class TableDataset(Dataset):
                 num_shards = torch.distributed.get_world_size()
                 local_shard_id = torch.distributed.get_rank()
 
+                shard_size = None
                 if not not_even:
                     shard_size = epoch_dataset_size // num_shards
 

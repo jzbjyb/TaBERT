@@ -423,11 +423,24 @@ class TableDataset(Dataset):
                     _mid = e_id * max_num_mentions + mid
                     _cid = e_id * max_num_cells + cid
                     pos_mentions_cells.append((_mid, _cid))
+                    # neg cells from the same table
                     _mention_cell_neg_count = min(mention_cell_neg_count, example['num_cells'])
                     for neg_cid in np.random.choice(example['num_cells'], _mention_cell_neg_count, replace=False):
                         if neg_cid == cid:
                             continue
                         _cid = e_id * max_num_cells + neg_cid
+                        neg_mentions_cells.append((_mid, _cid))
+                    # neg cells from other tables in the same batch
+                    for _ in range(mention_cell_neg_count):
+                        _eids = list(set(np.random.choice(len(examples), min(2, len(examples)), replace=False)) - {e_id})  # sample a table
+                        if len(_eids) <= 0:
+                            continue
+                        _eid = _eids[0]
+                        _example = examples[_eid]
+                        if _example['num_cells'] <= 0:
+                            continue
+                        neg_cid = np.random.choice(_example['num_cells'], 1)[0]  # sample a cell
+                        _cid = _eid * max_num_cells + neg_cid
                         neg_mentions_cells.append((_mid, _cid))
             if has_target:
                 target_input_array[e_id, :len(example['target_token_ids'])] = example['target_token_ids']

@@ -94,7 +94,7 @@ class DistributedSampler(Sampler):
 class TableDataset(Dataset):
     DEFAULT_CONFIG_CLS = TableBertConfig
 
-    def __init__(self, training_path, epoch=0, config=None, tokenizer=None, reduce_memory=False, multi_gpu=False, indices=None, debug=False):
+    def __init__(self, training_path, epoch=0, config=None, tokenizer=None, reduce_memory=False, multi_gpu=False, indices=None, debug=False, not_even=False):
         # self.vocab = tokenizer.vocab
         # self.tokenizer = tokenizer
         self.data_epoch = self.epoch = epoch
@@ -117,7 +117,8 @@ class TableDataset(Dataset):
                 num_shards = torch.distributed.get_world_size()
                 local_shard_id = torch.distributed.get_rank()
 
-                shard_size = epoch_dataset_size // num_shards
+                if not not_even:
+                    shard_size = epoch_dataset_size // num_shards
 
                 logging.info(f'dataset_size={epoch_dataset_size}, shard_size={shard_size}')
 
@@ -125,13 +126,14 @@ class TableDataset(Dataset):
                 g.manual_seed(self.epoch)
                 indices = torch.randperm(epoch_dataset_size, generator=g).tolist()
 
-                # make it evenly divisible
-                indices = indices[:shard_size * num_shards]
-                assert len(indices) == shard_size * num_shards
+                if not not_even:  # make it evenly divisible
+                    indices = indices[:shard_size * num_shards]
+                    assert len(indices) == shard_size * num_shards
 
                 # subsample
                 indices = indices[local_shard_id:len(indices):num_shards]
-                assert len(indices) == shard_size
+                if not not_even:
+                    assert len(indices) == shard_size
 
                 indices = set(indices)
             else:
@@ -272,7 +274,7 @@ class TableDataset(Dataset):
                 if valid_indices and idx not in valid_indices:
                     continue
 
-                example = {}
+                example = {'idx': idx}
 
                 seq_begin, seq_end = sequence_offsets[i]
                 example['token_ids'] = sequences[seq_begin: seq_end]
@@ -354,6 +356,7 @@ class TableDataset(Dataset):
             max_context_len = max(len(e['context_token_ids']) for e in examples)
             max_table_len = max(len(e['table_token_ids']) for e in examples)
 
+        idx_array = np.full((batch_size,), dtype=np.int, fill_value=0)
         input_array = np.full((batch_size, max_len), dtype=np.int, fill_value=pad_id)
         mask_array = np.zeros((batch_size, max_len), dtype=np.bool)
         segment_array = np.zeros((batch_size, max_len), dtype=np.bool)
@@ -394,6 +397,8 @@ class TableDataset(Dataset):
             concat_labels = np.diag(np.ones(batch_size)).reshape(-1)
 
         for e_id, example in enumerate(examples):
+            idx_array[e_id] = example['idx']
+
             token_ids = example['token_ids']
             # print(tokenizer.convert_ids_to_tokens(token_ids))
             # assert tokenizer.convert_ids_to_tokens([token_ids[0]]) == ['[CLS]'] and \
@@ -474,6 +479,7 @@ class TableDataset(Dataset):
                     table_mask_array[ind, len(context_token_ids) - 1] = 1  # sep is in context
 
         result = {
+            'idx': torch.tensor(idx_array),
             'input_ids': torch.tensor(input_array.astype(np.int64)),
             'attention_mask': torch.tensor(mask_array.astype(np.int64)),
             'token_type_ids': torch.tensor(segment_array.astype(np.int64)),

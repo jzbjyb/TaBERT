@@ -199,8 +199,14 @@ def main():
     dev_table_indices = corpus_table_indices[:dev_table_num]
     train_table_indices = corpus_table_indices[dev_table_num:]
 
-    local_dev_table_indices = dev_table_indices[args.global_rank::args.world_size]
-    local_train_table_indices = train_table_indices[args.global_rank::args.world_size]
+    if args.no_shuffle:
+        dev_single_size = int(np.ceil(len(dev_table_indices) / args.world_size))
+        train_single_size = int(np.ceil(len(train_table_indices) / args.world_size))
+        local_dev_table_indices = dev_table_indices[args.global_rank * dev_single_size:(args.global_rank + 1) * dev_single_size]
+        local_train_table_indices = train_table_indices[args.global_rank * train_single_size:(args.global_rank + 1) * train_single_size]
+    else:
+        local_dev_table_indices = dev_table_indices[args.global_rank::args.world_size]
+        local_train_table_indices = train_table_indices[args.global_rank::args.world_size]
     local_indices = local_dev_table_indices + local_train_table_indices
 
     logger.info(f'total tables: {total_tables_num}')

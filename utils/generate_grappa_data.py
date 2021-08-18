@@ -18,6 +18,7 @@ import multiprocessing
 import logging
 from timeout_decorator.timeout_decorator import TimeoutError
 import faiss
+import spacy
 from table_bert.totto import Totto
 from table_bert.wikisql import WikiSQL
 from table_bert.tablefact import TableFact
@@ -426,12 +427,59 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
                     byall_li = []
 
 
+def ner_example(batch_id, examples, nlp, skip_ner_types: Set[str] = None):
+    skip_ner_types = set() if skip_ner_types is None else skip_ner_types
+    contexts = [e['context_before'][0] for e in examples]
+    docs = list(nlp.pipe(contexts, disable=['parser']))
+    for doc, example in zip(docs, examples):
+        ents = [(ent.text, ent.start_char, ent.end_char, ent.label_) for ent in doc.ents if ent.label_ not in skip_ner_types]
+        example['context_before_mentions'] = sorted([(e[1], e[2]) for e in ents])
+    print(f'{batch_id} completed')
+    return examples
+
+def find_mention(prep_file: str, out_file: str, batch_size: int, nthread: int):
+    nlp = spacy.load('en_core_web_sm')
+    unique_tables: Set[str] = set()
+    num_mentions_li: List[int] = []
+    total_count = 0
+    examples = []
+    pool = multiprocessing.Pool(processes=nthread)
+    results = []
+    batch_id = 0
+    with open(prep_file, 'r') as fin, open(out_file, 'w') as fout:
+        for l in tqdm(fin):
+            total_count += 1
+            example = json.loads(l)
+            examples.append(example)
+            table = ''.join([c for r in example['table']['data'] for c in r])
+            unique_tables.add(table)
+            num_mentions_li.append(len(example['context_before_mentions'][0]))
+            if len(examples) >= batch_size:
+                r = pool.apply_async(functools.partial(ner_example, nlp=nlp, skip_ner_types=None), (batch_id, examples))
+                results.append(r)
+                examples = []
+                if len(results) >= nthread:
+                    for r in results:
+                        for e in r.get():
+                            fout.write(json.dumps(e) + '\n')
+                    batch_id += 1
+                    results = []
+        if len(examples) > 0:
+            r = pool.apply_async(functools.partial(ner_example, nlp=nlp, skip_ner_types=None), (batch_id, examples))
+            results.append(r)
+        if len(results) > 0:
+            for r in results:
+                for e in r.get():
+                    fout.write(json.dumps(e) + '\n')
+    print(f'total table {total_count}, #unique {len(unique_tables)}, avg #mentions {np.mean(num_mentions_li)}')
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
         'overlap', 'fakepair', 'retpair', 'tableshuffle',
-        'faiss', 'span_faiss', 'ret_faiss', 'random_neg', 'mrr', 'filter_mention'])
+        'faiss', 'span_faiss', 'ret_faiss', 'random_neg', 'mrr', 'filter_mention', 'find_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
@@ -551,6 +599,8 @@ def main():
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':
         filter_mention(args.path[0], args.output_dir, topk=0, sort=True)
+    elif args.data == 'find_mention':
+        find_mention(args.path[0], args.output_dir, batch_size=10192, nthread=30)
     else:
         raise NotImplementedError
 

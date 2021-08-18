@@ -294,7 +294,7 @@ def main():
         if which_part == 'train':  # load train dataset without shuffle
             train_set = dataset_cls(
                 epoch=0, training_path=args.data_dir / 'train_noshuf', tokenizer=model_ptr.tokenizer,
-                config=table_bert_config, multi_gpu=False, debug=args.debug_dataset)
+                config=table_bert_config, multi_gpu=args.multi_gpu, debug=args.debug_dataset, not_even=True)
         trainer.test(eval(f'{which_part}_set'), mode=mode)
         exit()
 

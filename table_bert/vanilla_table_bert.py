@@ -625,13 +625,13 @@ class VanillaTableBert(TableBertModel):
         self.eval()
 
         os.makedirs(args.output_file, exist_ok=True)
-        output_file = os.path.join(args.output_file, 'repr.npz')
+        output_file = os.path.join(args.output_file, f'repr_gpu{args.global_rank}.npz')
         context_li = []
         table_li = []
 
         span_overall = {
-            'table': {'repr_li': [], 'index_li': [], 'text_li': [], 'overall_index': 0},
-            'context': {'repr_li': [], 'index_li': [], 'text_li': [], 'overall_index': 0}
+            'table': {'repr_li': [], 'index_li': [], 'text_li': []},
+            'context': {'repr_li': [], 'index_li': [], 'text_li': []}
         }
 
         with torch.no_grad():
@@ -657,9 +657,9 @@ class VanillaTableBert(TableBertModel):
                                     if not mask[b_idx, c_idx]:
                                         continue
                                     span_overall[field]['repr_li'].append(span)
-                                    span_overall[field]['index_li'].append(span_overall[field]['overall_index'])
+                                    # use idx from the dataset builder as identity
+                                    span_overall[field]['index_li'].append(batch['idx'][b_idx].item())
                                     span_overall[field]['text_li'].append(bg2text[b_idx, c_idx])
-                                span_overall[field]['overall_index'] += 1
                     else:
                         raise NotImplementedError
                     pbar.update(1)

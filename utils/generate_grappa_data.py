@@ -433,7 +433,7 @@ def ner_example(batch_id, examples, nlp, skip_ner_types: Set[str] = None):
     docs = list(nlp.pipe(contexts, disable=['parser']))
     for doc, example in zip(docs, examples):
         ents = [(ent.text, ent.start_char, ent.end_char, ent.label_) for ent in doc.ents if ent.label_ not in skip_ner_types]
-        example['context_before_mentions'] = sorted([(e[1], e[2]) for e in ents])
+        example['context_before_mentions'] = [sorted([(e[1], e[2]) for e in ents])]
     print(f'{batch_id} completed')
     return examples
 

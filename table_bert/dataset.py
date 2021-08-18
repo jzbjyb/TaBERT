@@ -779,9 +779,11 @@ class Example(object):
                     offsets = sent_fast['offset_mapping']
                     if 'added_prefix_space' in sent_fast: aps = sent_fast['added_prefix_space']
                 if tokenizer:
+                    raw_sent = sent
                     sent = tokenizer.tokenize(sent)
-                    if tokenizer_fast:
-                        assert len(sent_fast['input_ids']) == len(sent), f"tokenizer results inconsistent {sent} {sent_fast['input_ids']}"
+                    if tokenizer_fast and len(sent_fast['input_ids']) != len(sent):
+                        sent = tokenizer.convert_ids_to_tokens(sent_fast['input_ids'])
+                        logging.warning(f"tokenizer results inconsistent {raw_sent} {sent} {sent_fast['input_ids']}")
                 context_before.append(sent)
                 context_before_offsets.append(offsets)
 

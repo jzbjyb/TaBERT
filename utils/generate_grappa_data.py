@@ -318,7 +318,9 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
             fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
 
 
-def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str, topk: int, index_emb_size: int, batch_size: int = 1, use_str_match: bool = False, separate: bool = False):
+def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str,
+              topk: int, index_emb_size: int, agg: str = 'sum', batch_size: int = 1,
+              use_str_match: bool = False, separate: bool = False, skip_noret: bool = False):
     findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
     findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
     idx2example: Dict[int, Dict] = {}
@@ -338,6 +340,7 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
                 l = tfin.readline()
                 tfin_idx += 1
             return l
+        idx2byall: Dict[int, Set[int]] = {}
         idx_li: List[int] = []
         byall_li: List[int] = []
         num_mention_li: List[int] = []
@@ -352,6 +355,7 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
                 byall = list(set(bytext + bytable) - {idx})  # always remove self
                 idx_li.append(idx)
                 byall_li.extend(byall)
+                idx2byall[idx] = set(byall)
                 if len(idx_li) >= batch_size:
                     query_dict = findex.get_subset_query_emb(idx_li)
                     li_retid2textscore = findex.query_from_subset(query_dict['emb'], byall_li, topk=topk, use_faiss=False)
@@ -381,24 +385,43 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
                                 fout.write(json.dumps(example) + '\n')
                     else:
                         # find the one with the most scores
-                        qid2rid2score: Dict[int, Dict[int, float]] = defaultdict(lambda: defaultdict(lambda: 0))
+                        qid2rid2scores: Dict[int, Dict[int, List[float]]] = defaultdict(lambda: defaultdict(list))
+                        qid2rid2text2score: Dict[int, Dict[int, Dict[str, float]]] = defaultdict(
+                            lambda: defaultdict(lambda: defaultdict(lambda: 0)))
                         for qid, r2ts in zip(query_dict['index'], li_retid2textscore):
                             for rid, tss in r2ts.items():
-                                qid2rid2score[qid][rid] += np.sum([s for t, s in tss])
-                        for qid in sorted(qid2rid2score.keys()):
-                            rid2score = qid2rid2score[qid]
-                            if len(rid2score) <= 0:
-                                logging.warning(f'query {qid} has no retrieval results')
-                                continue
-                            rid = sorted(rid2score.items(), key=lambda x: -x[1])[0][0]
+                                if rid not in idx2byall[qid]:  # use retrieval results to filter
+                                    continue
+                                qid2rid2scores[qid][rid].append(np.sum([s for t, s in tss]))  # sum over cells within a table
+                                for t, s in tss:
+                                    qid2rid2text2score[qid][rid][t] += s
+                        for qid in idx_li:
                             example = json.loads(get_next_target_until(qid))
-                            ret_example =  idx2example[rid]
-                            example['table'] = ret_example['table']
-                            if use_str_match:
-                                locations, _ = BasicDataset.get_mention_locations(example['context_before'][0], ret_example['table']['data'])
-                                example['context_before_mentions'] = [locations]
-                            num_mention_li.append(len(example['context_before_mentions'][0]))
-                            fout.write(json.dumps(example) + '\n')
+                            if qid not in qid2rid2scores or len(qid2rid2scores[qid]) <= 0:
+                                if skip_noret:
+                                    continue
+                                logging.warning(f'query {qid} has no retrieval results')
+                                example['text2score'] = []
+                                fout.write(json.dumps(example) + '\n')
+                            else:
+                                rid2scores = qid2rid2scores[qid]
+                                if agg == 'sum':
+                                    rid = sorted(rid2scores.items(), key=lambda x: -np.sum(x[1]))[0][0]
+                                elif agg == 'count':
+                                    rid = sorted(rid2scores.items(), key=lambda x: (-len(x[1]), -np.sum(x[1])))[0][0]
+                                elif agg == 'avg_count':
+                                    rid = sorted(rid2scores.items(), key=lambda x: -np.mean(x[1]) * np.exp(len(x[1]) - 1))[0][0]
+                                else:
+                                    raise NotImplementedError
+                                ret_example = idx2example[rid]
+                                example['table'] = ret_example['table']
+                                example['text2score'] = sorted(qid2rid2text2score[qid][rid].items(), key=lambda x: -x[1])
+                                if use_str_match:
+                                    locations, _ = BasicDataset.get_mention_locations(example['context_before'][0], ret_example['table']['data'])
+                                    example['context_before_mentions'] = [locations]
+                                num_mention_li.append(len(example['context_before_mentions'][0]))
+                                fout.write(json.dumps(example) + '\n')
+                    idx2byall = {}
                     idx_li = []
                     byall_li = []
 
@@ -516,12 +539,14 @@ def main():
         span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=index_emb_size)
     elif args.data == 'ret_faiss':
         repr_file, ret_file, prep_file = args.path
-        topk = 10
+        topk = 1000
         index_emb_size = 256
+        agg = 'avg_count'
         batch_size = 64
         use_str_match = True
         ret_faiss(repr_file, ret_file, prep_file, prep_file, args.output_dir,
-                  topk=topk, index_emb_size=index_emb_size, batch_size=batch_size, use_str_match=use_str_match)
+                  topk=topk, index_emb_size=index_emb_size, agg=agg, batch_size=batch_size,
+                  use_str_match=use_str_match, separate=False, skip_noret=True)
     elif args.data == 'mrr':
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':

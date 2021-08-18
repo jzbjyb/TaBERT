@@ -347,10 +347,11 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
         idx_li: List[int] = []
         byall_li: List[int] = []
         num_mention_li: List[int] = []
+        num_mention_li_before: List[int] = []
         with tqdm(miniters=50) as pbar:
             for l in rfin:
                 pbar.update(1)
-                pbar.set_postfix_str(f'{np.mean(num_mention_li)}')
+                pbar.set_postfix_str(f'{np.mean(num_mention_li)} before {np.mean(num_mention_li_before)}')
                 idx, bytext, bytable = l.rstrip('\n').split('\t')
                 idx = int(idx)
                 bytext = [int(s.split(',')[0]) for s in bytext.split(' ') if len(s) > 0]
@@ -419,6 +420,7 @@ def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, outp
                                 ret_example = idx2example[rid]
                                 example['table'] = ret_example['table']
                                 example['text2score'] = sorted(qid2rid2text2score[qid][rid].items(), key=lambda x: -x[1])
+                                num_mention_li_before.append(len(example['context_before_mentions'][0]))
                                 if use_str_match:
                                     locations, _ = BasicDataset.get_mention_locations(example['context_before'][0], ret_example['table']['data'])
                                     example['context_before_mentions'] = [locations]

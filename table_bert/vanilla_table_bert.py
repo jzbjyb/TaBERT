@@ -140,6 +140,8 @@ class VanillaTableBert(TableBertModel):
             span_contrastive_loss = self.contrastive_loss(all_mentions, all_cells, labels=labels)
             total_loss += span_contrastive_loss
             logging_output['span_contrastive_loss'] = span_contrastive_loss.item()
+        elif 'contrast-span' in obj and kwargs['pos_mentions_cells'].size(0) <= 0:
+            logging_output['span_contrastive_loss'] = 0.0
         if 'contrast-concat' in obj:
             # use the representation corresponding to the first token (cls or sep)
             concat_repr, _ = self._bert_model.bert(

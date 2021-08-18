@@ -4,7 +4,7 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
-
+import logging
 import re
 import sys
 from argparse import ArgumentParser
@@ -292,6 +292,7 @@ def main():
         assert args.mode is not None, 'need to set mode for only_test'
         mode, which_part = args.mode.split('-')
         if which_part == 'train':  # load train dataset without shuffle
+            logger.info(f'run test with multi gpu {args.multi_gpu}')
             train_set = dataset_cls(
                 epoch=0, training_path=args.data_dir / 'train_noshuf', tokenizer=model_ptr.tokenizer,
                 config=table_bert_config, multi_gpu=args.multi_gpu, debug=args.debug_dataset, not_even=True)

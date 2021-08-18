@@ -19,15 +19,34 @@ class FaissUtils(object):
         self.index_index = np.array([to_raw_ind[i] for i in self.index_index])
         self.query_index = np.array([to_raw_ind[i] for i in self.query_index])
 
-    def load_span_faiss(self, repr_file: str, index_name: str, query_name: str, normalize: bool = True, reindex_shards: int = None):
+    def load_span_faiss(self, repr_files: List[str], index_name: str, query_name: str, normalize: bool = True, reindex_shards: int = None):
         print('loading ...')
-        repr = np.load(repr_file, allow_pickle=True)
-        self.index_emb = repr[f'{index_name}_repr'].astype('float32')
-        self.index_index = repr[f'{index_name}_index']
-        self.index_text = repr[f'{index_name}_text']
-        self.query_emb = repr[f'{query_name}_repr'].astype('float32')
-        self.query_index = repr[f'{query_name}_index']
-        self.query_text = repr[f'{query_name}_text']
+        index_emb_li = []
+        index_index_li = []
+        index_text_li = []
+        query_emb_li = []
+        query_index_li = []
+        query_text_li = []
+        for repr_file in repr_files:
+            repr = np.load(repr_file, allow_pickle=True)
+            index_emb_li.append(repr[f'{index_name}_repr'].astype('float32'))
+            index_index_li.append(repr[f'{index_name}_index'])
+            index_text_li.append(repr[f'{index_name}_text'])
+            query_emb_li.append(repr[f'{query_name}_repr'].astype('float32'))
+            query_index_li.append(repr[f'{query_name}_index'])
+            query_text_li.append(repr[f'{query_name}_text'])
+        self.index_emb = np.concatenate(index_emb_li)
+        del index_emb_li[:]
+        self.index_emb_size = self.index_emb.shape[1]
+        self.index_index = np.concatenate(index_index_li)
+        self.index_index_set = set(self.index_index)
+        self.index_text = np.concatenate(index_text_li)
+        self.query_emb = np.concatenate(query_emb_li)
+        del query_emb_li[:]
+        self.query_emb_size = self.query_emb.shape[1]
+        self.query_index = np.concatenate(query_index_li)
+        self.query_index_set = set(self.query_index)
+        self.query_text = np.concatenate(query_text_li)
         if normalize:
             self.index_emb = self.index_emb / np.sqrt((self.index_emb * self.index_emb).sum(-1, keepdims=True))
             self.query_emb = self.query_emb / np.sqrt((self.query_emb * self.query_emb).sum(-1, keepdims=True))
@@ -49,6 +68,12 @@ class FaissUtils(object):
         return mask
 
     def get_subset_query_emb(self, sub_index: List[int]):
+        if len(set(sub_index) & self.query_index_set) <= 0:
+            return {
+                'emb': np.zeros((0, self.query_emb_size)),
+                'index': np.zeros(0).astype(int),
+                'text': np.zeros(0).astype(str)
+            }
         mask = np.isin(self.query_index, sub_index)
         sub_query_emb = self.query_emb[mask]
         sub_query_index = self.query_index[mask]
@@ -64,6 +89,9 @@ class FaissUtils(object):
         }
 
     def query_from_subset(self, query_emb: np.ndarray, sub_index: List[int], topk: int, use_faiss: bool = True):
+        if len(set(sub_index) & self.index_index_set) <= 0:
+            return [{} for i in range(len(query_emb))]
+
         # select
         mask = np.isin(self.index_index, sub_index)
         sub_index_emb = self.index_emb[mask]
@@ -100,3 +128,42 @@ class FaissUtils(object):
                 text = sub_index_text[id]
                 li_retid2textscore[-1][rid].append((text, score))
         return li_retid2textscore
+
+
+class FaissUtilsMulti(object):
+    def __init__(self, index_emb_size: int, cuda: bool, num_index: int):
+        self.index_emb_size = index_emb_size
+        self.cuda = cuda
+        self.num_index = num_index
+
+    def load_span_faiss(self, repr_file: str, index_name: str, query_name: str, normalize: bool = True, reindex_shards: int = None, merge: bool = False):
+        if merge:
+            self.faiss0 = FaissUtils(self.index_emb_size, self.cuda)
+            self.faiss0.load_span_faiss([f'{repr_file}.{i}' for i in range(self.num_index)], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
+            self.num_index = 1
+        else:
+            for i in range(self.num_index):
+                setattr(self, f'faiss{i}', FaissUtils(self.index_emb_size, self.cuda))
+                getattr(self, f'faiss{i}').load_span_faiss(
+                    [f'{repr_file}.{i}'], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
+
+    def get_subset_query_emb(self, sub_index: List[int]):
+        qds = []
+        for i in range(self.num_index):
+            fi = getattr(self, f'faiss{i}')
+            qds.append(fi.get_subset_query_emb(sub_index))
+        combined_qd = {k: np.concatenate([qd[k] for qd in qds], 0) for k in qds[0]}
+        return combined_qd
+
+    def query_from_subset(self, *args, **kwargs):
+        results = []
+        for i in range(self.num_index):
+            fi = getattr(self, f'faiss{i}')
+            results.append(fi.query_from_subset(*args, **kwargs))
+        combined = results[0]
+        for result in results[1:]:
+            assert len(combined) == len(result)
+            for i in range(len(combined)):
+                for rid, tss in result[i].items():
+                    combined[i][rid].extend(tss)
+        return combined

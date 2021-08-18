@@ -27,7 +27,7 @@ from table_bert.turl import TurlData
 from table_bert.tapas import TapasTables
 from table_bert.dataset_utils import BasicDataset
 from table_bert.dataset import Example
-from table_bert.faiss_utils import FaissUtils
+from table_bert.faiss_utils import FaissUtils, FaissUtilsMulti
 
 
 def tableshuffle(prep_file: str, output_file: str):
@@ -322,8 +322,10 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
 def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str,
               topk: int, index_emb_size: int, agg: str = 'sum', batch_size: int = 1,
               use_str_match: bool = False, separate: bool = False, skip_noret: bool = False):
-    findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
-    findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
+    #findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
+    #findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
+    findex = FaissUtilsMulti(index_emb_size=index_emb_size, cuda=True, num_index=8)
+    findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=None, merge=True)
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
         for idx, l in tqdm(enumerate(fin), desc='build map'):

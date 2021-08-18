@@ -21,13 +21,16 @@ cd elasticsearch-7.14.0
 nohup bin/elasticsearch &
 sleep 1m  # wait elasticsearch to start
 
+task1=$1
+task2=$2
+nthreads=$3
+rank=$4
+worldsize=$5
+
 popd
 echo 'build index'
-python -m table_bert.retrieval tapas-index
+python -m table_bert.retrieval $task1
 sleep 1m  # wait
 
 echo 'retrieval'
-nthreads=$1
-rank=$2
-worldsize=$3
-python -m table_bert.retrieval wikipedia-extend $nthreads $rank $worldsize
+python -m table_bert.retrieval $task2 $nthreads $rank $worldsize

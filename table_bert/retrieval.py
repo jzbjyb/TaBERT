@@ -272,6 +272,21 @@ if __name__ == '__main__':
             retrieve_output = merge3_filename + f'.ret{topk}'
             retrieve(index_name, merge3_filename, retrieve_output, topk=topk, threads=10, full_table=True)
 
+    elif task[0] == 'tapas_data0':
+        index_name = 'tapas_data0'
+        es = ESWrapper(index_name)
+        if 'index' in task[1]:
+            filename = f'{home}/mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0'
+            es.build_index(es.table_text_data_iterator(filename, full_table=True), shards=5)
+        if 'ret' in task[1]:
+            topk = 100
+            threads, rank, world_size = sys.argv[2:5]
+            threads, rank, world_size = int(threads), int(rank), int(world_size)
+            filename = f'{home}/mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0'
+            retrieve_output = filename + f'.{index_name}_ret{topk}'
+            retrieve(index_name, filename, retrieve_output, topk=topk,
+                     threads=threads, rank=rank, world_size=world_size, full_table=True)
+
     elif task[0] == 'tapas':
         index_name = 'tapas'
         es = ESWrapper(index_name)

@@ -125,7 +125,7 @@ def parse_train_arg():
     parser.add_argument('--mode', type=str, choices=[
         'generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev', 'represent-test',
         'represent-dev', 'represent-train', None], default=None)
-    parser.add_argument('--index_repr', type=str, choices=['whole', 'span_context', 'span_noncontext'], default='whole', help='how to build representations for index')
+    parser.add_argument('--index_repr', type=str, choices=['whole', 'whole_avg_cell', 'span_context', 'span_noncontext'], default='whole', help='how to build representations for index')
     parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
     parser.add_argument('--max_generate_length', type=int, default=MAX_TARGET_LENGTH, help='max number of tokens generated for the generate mode')
     parser.add_argument('--min_generate_length', type=int, default=None, help='min number of tokens generated for the generate mode')
@@ -401,6 +401,12 @@ def main():
         test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if test_data_dir.exists() else None
         mode, which_part = args.mode.split('-')
         trainer.test(eval(f'{which_part}_set'), mode=mode)
+
+    # syn to avoid bugs when we run multiple jobs in sequence
+    if args.multi_gpu:
+        torch.distributed.barrier()
+
+    logger.info(f'End of {args.local_rank}')
 
 
 if __name__ == '__main__':

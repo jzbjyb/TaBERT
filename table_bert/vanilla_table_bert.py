@@ -128,8 +128,8 @@ class VanillaTableBert(TableBertModel):
             total_loss += contrastive_loss
             logging_output['contrastive_loss'] = contrastive_loss.item()
         if 'contrast-span' in obj and kwargs['pos_mentions_cells'].size(0) > 0:
-            mentions_repr = self.represent_span_context_bert(kwargs, field='context')[0]  # (bs, num_mentions, emb_size)
-            cells_repr = self.represent_span_context_bert(kwargs, field='table')[0]  # (bs, num_cells, emb_size)
+            mentions_repr = self.extract_span_context_bert(kwargs, field='context')[0]  # (bs, num_mentions, emb_size)
+            cells_repr = self.extract_span_context_bert(kwargs, field='table')[0]  # (bs, num_cells, emb_size)
             mentions_repr = mentions_repr.view(-1, mentions_repr.size(-1))
             cells_repr = cells_repr.view(-1, cells_repr.size(-1))
             pos_mc = kwargs['pos_mentions_cells']  # (num_pos_pairs, 2)
@@ -187,7 +187,19 @@ class VanillaTableBert(TableBertModel):
         table_repr = self._bert_model.bert(
             batch['table_input_ids'], batch['table_token_type_ids'], batch['table_attention_mask'],
             output_all_encoded_layers=False)[0][:, 0, :]
-        context_repr, table_repr = self.contrastive_loss(context_repr, table_repr, return_repr=True)
+        if hasattr(self, 'contrastive_loss'):
+            context_repr, table_repr = self.contrastive_loss(context_repr, table_repr, return_repr=True)
+        return context_repr, table_repr
+
+    def represent_avg_cell_bert(self, batch):
+        # extract span repr
+        context_span_repr, context_span_mask = self.extract_span_context_bert(batch, field='context', use_word_emb=False)[:2]
+        table_span_repr, table_span_mask = self.extract_span_context_bert(batch, field='table', use_word_emb=False)[:2]
+        # avg across spans
+        context_repr = context_span_repr.sum(1) / torch.clamp(context_span_mask.sum(1), min=1).unsqueeze(-1)
+        table_repr = table_span_repr.sum(1) / torch.clamp(table_span_mask.sum(1), min=1).unsqueeze(-1)
+        if hasattr(self, 'contrastive_loss'):
+            context_repr, table_repr = self.contrastive_loss(context_repr, table_repr, return_repr=True)
         return context_repr, table_repr
 
     def get_group_token_ids(self, token_ids, token_to_group_map):
@@ -203,10 +215,10 @@ class VanillaTableBert(TableBertModel):
             _batchgroup2tokens[(b, g)] = self.tokenizer_fast.decode(batchgroup2tokens[(b, g)])
         return _batchgroup2tokens
 
-    def represent_span_noncontext_bert(self, batch, field: str):
-        return self.represent_span_context_bert(batch, field, use_word_emb=True)
+    def extract_span_noncontext_bert(self, batch, field: str):
+        return self.extract_span_context_bert(batch, field, use_word_emb=True)
 
-    def represent_span_context_bert(self, batch, field: str, use_word_emb: bool = False):
+    def extract_span_context_bert(self, batch, field: str, use_word_emb: bool = False):
         assert field in {'table', 'context'}
         input_ids = batch[f'{field}_input_ids']
         if field == 'table':
@@ -243,6 +255,18 @@ class VanillaTableBert(TableBertModel):
         span_repr = span_repr[:, :-1] * span_mask.unsqueeze(-1)
 
         return span_repr, span_mask, batchgroup2tokens
+
+    def represent_span_context_bert(self, batch, field: str, use_word_emb: bool = False):
+        repre, mask, batchgroup2tokens = self.extract_span_context_bert(batch, field, use_word_emb=use_word_emb)
+        if 'contrast-span' in self.config.objective_function:
+            if field == 'context':
+                repre = self.contrastive_loss.preprocess(repre, self.contrastive_loss.source_projection)
+            elif field == 'table':
+                repre = self.contrastive_loss.preprocess(repre, self.contrastive_loss.target_projection)
+        return repre, mask, batchgroup2tokens
+
+    def represent_span_noncontext_bert(self, batch, field: str):
+        return self.represent_span_context_bert(batch, field, use_word_emb=True)
 
     def forward_electra(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, **kwargs):
         total_loss: torch.Tensor = 0.0
@@ -625,7 +649,10 @@ class VanillaTableBert(TableBertModel):
         self.eval()
 
         os.makedirs(args.output_file, exist_ok=True)
-        output_file = os.path.join(args.output_file, f'repr_gpu{args.global_rank}.npz')
+        config_file = os.path.join(args.output_file, f'args.json')
+        with open(config_file, 'w') as fout:
+            json.dump({'data_dir': str(args.data_dir)}, fout)
+        output_file = os.path.join(args.output_file, f'repr.npz.{args.global_rank}')
         context_li = []
         table_li = []
 
@@ -641,15 +668,14 @@ class VanillaTableBert(TableBertModel):
                         c, t = getattr(self, f'represent_{self.config.model_type.value}')(batch)
                         context_li.append(c.detach().cpu().numpy())
                         table_li.append(t.detach().cpu().numpy())
+                    elif args.index_repr == 'whole_avg_cell':
+                        c, t = getattr(self, f'represent_avg_cell_{self.config.model_type.value}')(batch)
+                        context_li.append(c.detach().cpu().numpy())
+                        table_li.append(t.detach().cpu().numpy())
                     elif args.index_repr in {'span_context', 'span_noncontext'}:
                         for field in ['table', 'context']:
                             repre, mask, bg2text = getattr(
                                 self, f'represent_{args.index_repr}_{self.config.model_type.value}')(batch, field=field)
-                            if 'contrast-span' in self.config.objective_function:
-                                if field == 'table':
-                                    repre = self.contrastive_loss.preprocess(repre, self.contrastive_loss.target_projection)
-                                elif field == 'context':
-                                    repre = self.contrastive_loss.preprocess(repre, self.contrastive_loss.source_projection)
                             repre = repre.detach().cpu().numpy()
                             mask = mask.detach().cpu().numpy()
                             for b_idx, spans in enumerate(repre):
@@ -664,7 +690,7 @@ class VanillaTableBert(TableBertModel):
                         raise NotImplementedError
                     pbar.update(1)
 
-        if args.index_repr == 'whole':
+        if args.index_repr in {'whole', 'whole_avg_cell'}:
             context_li = np.concatenate(context_li, 0)
             table_li = np.concatenate(table_li, 0)
             np.savez(output_file, context=context_li, table=table_li)

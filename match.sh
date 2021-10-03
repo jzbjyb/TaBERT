@@ -1,17 +1,6 @@
 #!/usr/bin/env bash
 
-# activate env if needed
-if [[ "$PATH" == *"tabert"* ]]; then
-  echo "tabert env activated"
-else
-  echo "tabert env not activated"
-  conda_base=$(conda info --base)
-  source ${conda_base}/etc/profile.d/conda.sh
-  conda activate tabert
-fi
-
-# wandb
-export WANDB_API_KEY=9caada2c257feff1b6e6a519ad378be3994bc06a
+source initialize.sh
 
 ret_file=$1
 target_file=$2
@@ -28,7 +17,7 @@ echo 'split into' ${entries[@]}
 
 for entry in "${entries[@]}"; do
   eb="$(basename $entry)"
-  python -m utils.generate_grappa_data --data retpair \
+  python -m utils.generate_grappa_data --data match_context_table \
     --path ${entry} ${target_file} ${source_file} \
     --output_dir ${out_file}.${eb} \
     --split context

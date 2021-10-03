@@ -203,7 +203,8 @@ class TableBertConfig(SimpleNamespace):
         self.objective_function = objective_function
         self.column_wise = column_wise
         assert objective_function in {
-            'mlm', 'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm', 'contrast-span_mlm',
+            'mlm', 'split_mlm',
+            'contrastive', 'contrastive_mlm', 'contrast-concat_mlm', 'nsp_mlm', 'contrast-span_mlm',
             'table2text_mlm', 'text2table_mlm', 'table2text_text2table', 'table2text_text2table_mlm',  # bart
             'binary_mlm', 'separate-bin_mlm',
             'seq2seq',  # bart

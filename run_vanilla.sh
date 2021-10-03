@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+source initialize.sh
+
 input_dir=$1  # data/train_data/vanilla_tabert
 output_dir=$2  # data/runs/vanilla_tabert
 mkdir -p ${output_dir}
@@ -10,19 +12,6 @@ name="$(basename -- $output_dir)"
 echo '==========' ${name} '=========='
 load=$6
 args="${@:7}"
-
-# activate env if needed
-if [[ "$PATH" == *"tabert"* ]]; then
-  echo "tabert env activated"
-else
-  echo "tabert env not activated"
-  conda_base=$(conda info --base)
-  source ${conda_base}/etc/profile.d/conda.sh
-  conda activate tabert
-fi
-
-# wandb
-export WANDB_API_KEY=9caada2c257feff1b6e6a519ad378be3994bc06a
 
 # (1) single node w/o deepspeed
 # export NGPU=8; python -m torch.distributed.launch --nproc_per_node=$NGPU train.py

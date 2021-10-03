@@ -27,7 +27,7 @@ from table_bert.turl import TurlData
 from table_bert.tapas import TapasTables
 from table_bert.dataset_utils import BasicDataset
 from table_bert.dataset import Example
-from table_bert.faiss_utils import FaissUtils, FaissUtilsMulti
+from table_bert.faiss_utils import FaissUtils, FaissUtilsMulti, WholeFaissUtil
 
 
 def tableshuffle(prep_file: str, output_file: str):
@@ -282,6 +282,32 @@ def filter_mention(input_file: str, out_file: str, topk: int = 0, sort: bool = F
         print(f'mean # {np.mean([nms[i] for i in rank])}')
 
 
+def whole_faiss(repr_file: str, index_emb_size: int):
+    topk = 10
+
+    repr_files: List[str] = []
+    if os.path.exists(repr_file):
+        repr_files.append(repr_file)
+    else:
+        i = 0
+        while os.path.exists(f'{repr_file}.{i}'):
+            repr_files.append(f'{repr_file}.{i}')
+            i += 1
+    print(f'load embeddings from {repr_files}')
+
+    wfu = WholeFaissUtil(repr_files, index_emb_size=index_emb_size)
+    ret_results = []
+    for index_name, query_name in [('table', 'context'), ('context', 'table')]:
+        D, I = wfu.interact(index_name, query_name, topk + 1)  # add 1 for self retrieval
+        ret_results.append((I, D))
+    format_list = lambda inds, scores: ' '.join(['{},{}'.format(i, s) for i, s in zip(inds, scores)])
+    with open(f'{repr_file}.ret_top{topk}', 'w') as fout:
+        for idx, (bycontext_inds, bycontext_scores, bytable_inds, bytable_scores) in enumerate(
+          zip(*(ret_results[0] + ret_results[1]))):
+            fout.write('{}\t{}\t{}\n'.format(
+                idx, format_list(bycontext_inds, bycontext_scores), format_list(bytable_inds, bytable_scores)))
+
+
 def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int = None, index_emb_size: int = 512):
     print('loading ...')
     findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
@@ -319,9 +345,9 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
             fout.write('{}\t{}\t\n'.format(qid, format_list(rid2sumscore)))
 
 
-def ret_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str,
-              topk: int, index_emb_size: int, agg: str = 'sum', batch_size: int = 1,
-              use_str_match: bool = False, separate: bool = False, skip_noret: bool = False):
+def ret_filter_by_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str,
+                        topk: int, index_emb_size: int, agg: str = 'sum', batch_size: int = 1,
+                        use_str_match: bool = False, separate: bool = False, skip_noret: bool = False):
     #findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
     #findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
     findex = FaissUtilsMulti(index_emb_size=index_emb_size, cuda=True, num_index=8)
@@ -482,13 +508,13 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
-        'overlap', 'fakepair', 'retpair', 'tableshuffle',
-        'faiss', 'span_faiss', 'ret_faiss', 'random_neg', 'mrr', 'filter_mention', 'find_mention'])
+        'overlap', 'fakepair', 'match_context_table', 'tableshuffle',
+        'whole_faiss', 'span_faiss', 'ret_filter_by_faiss', 'random_neg',
+        'mrr', 'filter_mention', 'find_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
     parser.add_argument('--model_type', type=str)
-    parser.add_argument('--faiss_size', type=int, default=512)
     args = parser.parse_args()
 
     random.seed(2021)
@@ -543,62 +569,50 @@ def main():
     # others
     elif args.data == 'fakepair':
         find_other_table(args.path[0], args.output_dir, max_count=3)
-    elif args.data == 'retpair':
+    elif args.data == 'match_context_table':
         only_self = False
         remove_self = True
         use_top1 = None
+        is_tapas = True
         op = 'max'
         batch_size = 5000 if only_self else 1000
         timeout = batch_size * 0.5  # 0.5s per example
-        nthread=40
+        nthread = 40
+        topk = 10
         retrieval_file, target_file, source_file = args.path
+        if is_tapas:
+          max_context_len = 512
+          max_num_rows = 100
+        else:
+          max_context_len = max_num_rows = None
         generate_retrieval_data(retrieval_file, target_file, source_file, args.output_dir,
-                                bywhich=args.split, topk=10, nthread=nthread, batch_size=batch_size,
-                                max_context_len=512, max_num_rows=100,  # used for tapas setting
+                                bywhich=args.split, topk=topk, nthread=nthread, batch_size=batch_size,
+                                max_context_len=max_context_len, max_num_rows=max_num_rows,  # used for tapas setting
                                 remove_self=remove_self, only_self=only_self, timeout=timeout, use_top1=use_top1, op=op)
     elif args.data == 'random_neg':
         generate_random_neg(args.path[0], args.output_dir)
     elif args.data == 'tableshuffle':
         tableshuffle(args.path[0], args.output_dir)
-    elif args.data == 'faiss':
+    elif args.data == 'whole_faiss':
+        index_emb_size = 256
         repr_file = args.path[0]
-        topk = 10
-        repr = np.load(repr_file)
-        ret_results = []
-        for index_name, query_name in [('table', 'context'), ('context', 'table')]:
-            index_emb = repr[index_name].astype('float32')
-            query_emb = repr[query_name].astype('float32')
-            emb_size = index_emb.shape[1]
-            index = faiss.IndexHNSWFlat(emb_size, args.faiss_size, faiss.METRIC_INNER_PRODUCT)
-            print(f'indexing {index_name} with shape {index_emb.shape} ...')
-            print(f'matrix sampe {index_emb[:5]}')
-            index.add(index_emb)
-            print('indexing done')
-            print(f'retrieving ...')
-            D, I = index.search(query_emb, topk + 1)  # add 1 for self retrieval
-            ret_results.append((I, D))
-            print('retrieving done')
-        format_list = lambda inds, scores: ' '.join(['{},{}'.format(i, s) for i, s in zip(inds, scores)])
-        with open(f'{repr_file}.ret_top{topk}', 'w') as fout:
-            for idx, (bycontext_inds, bycontext_scores, bytable_inds, bytable_scores) in enumerate(zip(*(ret_results[0] + ret_results[1]))):
-                fout.write('{}\t{}\t{}\n'.format(
-                    idx, format_list(bycontext_inds, bycontext_scores), format_list(bytable_inds, bytable_scores)))
+        whole_faiss(repr_file, index_emb_size=index_emb_size)
     elif args.data == 'span_faiss':
         repr_file = args.path[0]
         topk = 10
         index_emb_size = 256
         subsample = 1000000
         span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=index_emb_size)
-    elif args.data == 'ret_faiss':
+    elif args.data == 'ret_filter_by_faiss':
         repr_file, ret_file, prep_file = args.path
         topk = 1000
         index_emb_size = 256
         agg = 'avg_count'
         batch_size = 64
         use_str_match = True
-        ret_faiss(repr_file, ret_file, prep_file, prep_file, args.output_dir,
-                  topk=topk, index_emb_size=index_emb_size, agg=agg, batch_size=batch_size,
-                  use_str_match=use_str_match, separate=False, skip_noret=True)
+        ret_filter_by_faiss(repr_file, ret_file, prep_file, prep_file, args.output_dir,
+                            topk=topk, index_emb_size=index_emb_size, agg=agg, batch_size=batch_size,
+                            use_str_match=use_str_match, separate=False, skip_noret=True)
     elif args.data == 'mrr':
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':

@@ -6,3 +6,5 @@ wandb
 *.out
 test*
 dpr*
+*.jar
+*.ipynb

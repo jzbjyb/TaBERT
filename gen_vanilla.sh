@@ -1,5 +1,9 @@
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_mlm_contextmention_dpr_bm25_whole_context_optimized_strict_mention
-input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_dpr_bm25_whole_context_optimized_strict.jsonl.data0
+#!/usr/bin/env bash
+
+source initialize.sh
+
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell
+input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_whole_avg_cell.jsonl.data0
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=100

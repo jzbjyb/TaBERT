@@ -5,6 +5,32 @@ import torch
 import faiss
 
 
+class WholeFaissUtil(object):
+    def __init__(self, repr_files: List[str], index_emb_size: int):
+        self.index_emb_size = index_emb_size
+        self.load_faiss(repr_files)
+
+    def load_faiss(self, repr_files: List[str]):
+        context_li = []
+        table_li = []
+        for repr_file in repr_files:
+            repr = np.load(repr_file)
+            context_li.append(repr['context'].astype('float32'))
+            table_li.append(repr['table'].astype('float32'))
+        self.context_emb = np.concatenate(context_li)
+        self.table_emb = np.concatenate(table_li)
+        self.emb_size = self.context_emb.shape[1]
+
+    def interact(self, index_name: str, query_name: str, topk: int):
+        index_emb = getattr(self, f'{index_name}_emb')
+        query_emb = getattr(self, f'{query_name}_emb')
+        index = faiss.IndexHNSWFlat(self.emb_size, self.index_emb_size, faiss.METRIC_INNER_PRODUCT)
+        print(f'indexing {index_name} with shape {index_emb.shape} ...')
+        index.add(index_emb)
+        print(f'retrieving ...')
+        D, I = index.search(query_emb, topk)
+        return D, I
+
 class FaissUtils(object):
     def __init__(self, index_emb_size: int, cuda: bool):
         self.index_emb_size = index_emb_size

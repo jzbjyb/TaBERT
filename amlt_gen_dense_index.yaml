@@ -1,0 +1,33 @@
+description: generate dense index
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: tapas_data0_whole_avg_cell
+  sku: G4
+  sku_count: 1
+  aml_mpirun:
+    process_count_per_node: 4
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bert_mlm_data0
+    /mnt/root/TaBERT/data/runs/tabert_base_k1 split_mlm 32 1
+    '"/mnt/root/TaBERT/data/runs/tabert_base_k1/model.bin"'
+    --only_test --mode represent-train --index_repr whole_avg_cell
+    --output_file /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_whole_avg_cell

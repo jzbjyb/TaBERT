@@ -27,7 +27,7 @@ from table_bert.turl import TurlData
 from table_bert.tapas import TapasTables
 from table_bert.dataset_utils import BasicDataset
 from table_bert.dataset import Example
-from table_bert.faiss_utils import FaissUtils, FaissUtilsMulti, WholeFaissUtil
+from table_bert.faiss_utils import SpanFaiss, SpanFaissMulti, WholeFaiss
 
 
 def tableshuffle(prep_file: str, output_file: str):
@@ -282,9 +282,7 @@ def filter_mention(input_file: str, out_file: str, topk: int = 0, sort: bool = F
         print(f'mean # {np.mean([nms[i] for i in rank])}')
 
 
-def whole_faiss(repr_file: str, index_emb_size: int):
-    topk = 10
-
+def whole_faiss(repr_file: str, output_file: str, index_emb_size: int, topk: int = 10, use_span: bool = False):
     repr_files: List[str] = []
     if os.path.exists(repr_file):
         repr_files.append(repr_file)
@@ -295,13 +293,22 @@ def whole_faiss(repr_file: str, index_emb_size: int):
             i += 1
     print(f'load embeddings from {repr_files}')
 
-    wfu = WholeFaissUtil(repr_files, index_emb_size=index_emb_size)
+    if use_span:
+        faiss_wrap = SpanFaiss(index_emb_size=index_emb_size, cuda=False)
+        faiss_wrap.load_span_faiss(repr_files, index_name='table', query_name='context', reindex_shards=None)
+    else:
+        faiss_wrap = WholeFaiss(repr_files, index_emb_size=index_emb_size)
     ret_results = []
-    for index_name, query_name in [('table', 'context'), ('context', 'table')]:
-        D, I = wfu.interact(index_name, query_name, topk + 1)  # add 1 for self retrieval
-        ret_results.append((I, D))
+    for index_name, query_name in [('table', 'context'), ('context', 'table')]:  # add 1 for self retrieval
+        if use_span:
+            # TODO: this is only for tapas data0
+            total_num_doc = 904370
+            score_matrix, ind_matrix = faiss_wrap.interact(topk + 1, reverse=index_name == 'context', aggregate=total_num_doc)
+        else:
+            score_matrix, ind_matrix = faiss_wrap.interact(index_name, query_name, topk + 1)
+        ret_results.append((ind_matrix, score_matrix))
     format_list = lambda inds, scores: ' '.join(['{},{}'.format(i, s) for i, s in zip(inds, scores)])
-    with open(f'{repr_file}.ret_top{topk}', 'w') as fout:
+    with open(output_file, 'w') as fout:
         for idx, (bycontext_inds, bycontext_scores, bytable_inds, bytable_scores) in enumerate(
           zip(*(ret_results[0] + ret_results[1]))):
             fout.write('{}\t{}\t{}\n'.format(
@@ -310,7 +317,7 @@ def whole_faiss(repr_file: str, index_emb_size: int):
 
 def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int = None, index_emb_size: int = 512):
     print('loading ...')
-    findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
+    findex = SpanFaiss(index_emb_size=index_emb_size, cuda=True)
     findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
     findex.build_small_index(index_subsample)
     queryidx2retscores: Dict[int, Dict[int, List[float]]] = defaultdict(lambda: defaultdict(list))
@@ -319,19 +326,19 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
     print(f'retrieving ...')
     '''
     for i in range(query_emb.shape[0]):
-        D, I = index.search(query_emb[i:i+1], topk + 1)
+        score_matrix, ind_matrix = index.search(query_emb[i:i+1], topk + 1)
         print('--->', query_text[i])
         for j in I[0]:
             print(index_text[j])
         input()
     '''
-    D, I = findex.small_index.search(findex.query_emb, topk + 1)  # add 1 for self retrieval
+    score_matrix, ind_matrix = findex.small_index.search(findex.query_emb, topk + 1)  # add 1 for self retrieval
     print('retrieving done')
 
     print('aggregate scores')
     for i in range(findex.query_emb.shape[0]):
         qid = findex.query_index[i]
-        for id, score in zip(I[i], D[i]):
+        for id, score in zip(ind_matrix[i], score_matrix[i]):
             rid = findex.small_index_index[id]
             queryidx2retscores[qid][rid].append(score)
     print(f'max query id is {np.max(list(queryidx2retscores.keys()))}')
@@ -350,7 +357,7 @@ def ret_filter_by_faiss(repr_file, ret_file: str, target_file: str, source_file:
                         use_str_match: bool = False, separate: bool = False, skip_noret: bool = False):
     #findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
     #findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
-    findex = FaissUtilsMulti(index_emb_size=index_emb_size, cuda=True, num_index=8)
+    findex = SpanFaissMulti(index_emb_size=index_emb_size, cuda=True, num_index=8)
     findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=None, merge=True)
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
@@ -509,7 +516,7 @@ def main():
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
         'overlap', 'fakepair', 'match_context_table', 'tableshuffle',
-        'whole_faiss', 'span_faiss', 'ret_filter_by_faiss', 'random_neg',
+        'whole_faiss', 'span_faiss', 'span_faiss_as_whole_faiss', 'ret_filter_by_faiss', 'random_neg',
         'mrr', 'filter_mention', 'find_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
@@ -596,13 +603,19 @@ def main():
     elif args.data == 'whole_faiss':
         index_emb_size = 256
         repr_file = args.path[0]
-        whole_faiss(repr_file, index_emb_size=index_emb_size)
+        output_file = args.output_dir
+        whole_faiss(repr_file, output_file, index_emb_size=index_emb_size)
     elif args.data == 'span_faiss':
         repr_file = args.path[0]
         topk = 10
         index_emb_size = 256
         subsample = 1000000
         span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=index_emb_size)
+    elif args.data == 'span_faiss_as_whole_faiss':
+        index_emb_size = 256
+        repr_file = args.path[0]
+        output_file = args.output_dir
+        whole_faiss(repr_file, output_file, index_emb_size=index_emb_size, use_span=True)
     elif args.data == 'ret_filter_by_faiss':
         repr_file, ret_file, prep_file = args.path
         topk = 1000

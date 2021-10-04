@@ -2,8 +2,11 @@
 
 source initialize.sh
 
-path=$1
+task=$1
+input=$2
+output=$3
 
 python -m utils.generate_grappa_data \
-    --data whole_faiss \
-    --path ${path}
+    --data ${task} \
+    --path ${input} \
+    --output_dir ${output}

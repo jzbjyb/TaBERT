@@ -1,13 +1,15 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Set
 from collections import defaultdict
+from tqdm import tqdm
 import numpy as np
 import torch
 import faiss
 
 
-class WholeFaissUtil(object):
-    def __init__(self, repr_files: List[str], index_emb_size: int):
+class WholeFaiss(object):
+    def __init__(self, repr_files: List[str], index_emb_size: int, normalize: bool = True):
         self.index_emb_size = index_emb_size
+        self.normalize = normalize
         self.load_faiss(repr_files)
 
     def load_faiss(self, repr_files: List[str]):
@@ -19,6 +21,9 @@ class WholeFaissUtil(object):
             table_li.append(repr['table'].astype('float32'))
         self.context_emb = np.concatenate(context_li)
         self.table_emb = np.concatenate(table_li)
+        if self.normalize:
+            self.context_emb = self.context_emb / (np.sqrt((self.context_emb * self.context_emb).sum(-1, keepdims=True)) + 1e-10)
+            self.table_emb = self.table_emb / (np.sqrt((self.table_emb * self.table_emb).sum(-1, keepdims=True)) + 1e-10)
         self.emb_size = self.context_emb.shape[1]
 
     def interact(self, index_name: str, query_name: str, topk: int):
@@ -28,10 +33,32 @@ class WholeFaissUtil(object):
         print(f'indexing {index_name} with shape {index_emb.shape} ...')
         index.add(index_emb)
         print(f'retrieving ...')
-        D, I = index.search(query_emb, topk)
-        return D, I
+        score_matrix, ind_matrix = index.search(query_emb, topk)
+        return score_matrix, ind_matrix
 
-class FaissUtils(object):
+
+class WholeFaissMulti(object):
+    def __init__(self, repr_files: List[str], index_emb_size: int, normalize: bool = True, merge: bool = True):
+        self.index_emb_size = index_emb_size
+        self.merge = merge
+        self.normalize = normalize
+        self.load_faiss(repr_files)
+
+    def load_faiss(self, repr_files: List[str]):
+        if self.merge:
+            self.num_index = 0
+            self.faiss0 = WholeFaiss(repr_files, index_emb_size=self.index_emb_size, normalize=self.normalize)
+        else:
+            self.num_index = len(repr_files)
+            for i, rf in enumerate(repr_files):
+                setattr(self, f'faiss{i}',
+                        WholeFaiss([rf], index_emb_size=self.index_emb_size, normalize=self.normalize))
+
+    def interact(self, index_name: str, query_name: str, topk: int):
+        raise NotImplementedError
+
+
+class SpanFaiss(object):
     def __init__(self, index_emb_size: int, cuda: bool):
         self.index_emb_size = index_emb_size
         self.cuda = cuda
@@ -74,8 +101,8 @@ class FaissUtils(object):
         self.query_index_set = set(self.query_index)
         self.query_text = np.concatenate(query_text_li)
         if normalize:
-            self.index_emb = self.index_emb / np.sqrt((self.index_emb * self.index_emb).sum(-1, keepdims=True))
-            self.query_emb = self.query_emb / np.sqrt((self.query_emb * self.query_emb).sum(-1, keepdims=True))
+            self.index_emb = self.index_emb / (np.sqrt((self.index_emb * self.index_emb).sum(-1, keepdims=True)) + 1e-10)
+            self.query_emb = self.query_emb / (np.sqrt((self.query_emb * self.query_emb).sum(-1, keepdims=True)) + 1e-10)
         if reindex_shards:
             total_count = np.max(self.index_index) + 1
             assert total_count == 218419, '3merge data only!'
@@ -133,30 +160,80 @@ class FaissUtils(object):
             index = faiss.IndexHNSWFlat(sub_index_emb.shape[1], self.index_emb_size, faiss.METRIC_INNER_PRODUCT)
             index.add(sub_index_emb)
             # query
-            D, I = index.search(query_emb, topk)
+            score_matrix, ind_matrix = index.search(query_emb, topk)
         else:
             if self.cuda:
                 query_emb = torch.tensor(query_emb).cuda()
                 sub_index_emb = torch.tensor(sub_index_emb).cuda()
-                D = query_emb @ sub_index_emb.T
-                _topk = min(topk, D.shape[1])
-                D, I = torch.topk(D, _topk, 1)
-                D, I = D.cpu().numpy(), I.cpu().numpy()
+                score_matrix = query_emb @ sub_index_emb.T
+                _topk = min(topk, score_matrix.shape[1])
+                score_matrix, ind_matrix = torch.topk(score_matrix, _topk, 1)
+                score_matrix, ind_matrix = score_matrix.cpu().numpy(), ind_matrix.cpu().numpy()
             else:
-                D = query_emb @ sub_index_emb.T
-                I = np.argsort(-D, 1)[:, :topk]
-                D = np.take_along_axis(D, I, 1)
+                score_matrix = query_emb @ sub_index_emb.T
+                ind_matrix = np.argsort(-score_matrix, 1)[:, :topk]
+                score_matrix = np.take_along_axis(score_matrix, ind_matrix, 1)
         li_retid2textscore: List[Dict[int, List[Tuple[str, float]]]] = []
         for i in range(query_emb.shape[0]):
             li_retid2textscore.append(defaultdict(list))
-            for id, score in zip(I[i], D[i]):
+            for id, score in zip(ind_matrix[i], score_matrix[i]):
                 rid = sub_index_index[id]
                 text = sub_index_text[id]
                 li_retid2textscore[-1][rid].append((text, score))
         return li_retid2textscore
 
+    def interact(self, topk: int, reverse: bool = False, aggregate: int = 0, max_topk_span: int = 100):
+        if reverse:
+            index_name, query_name = 'query', 'index'
+        else:
+            index_name, query_name = 'index', 'query'
+        index_emb = getattr(self, f'{index_name}_emb')
+        index_index = getattr(self, f'{index_name}_index')
+        index_text = getattr(self, f'{index_name}_text')
+        query_emb = getattr(self, f'{query_name}_emb')
+        query_index = getattr(self, f'{query_name}_index')
+        query_text = getattr(self, f'{query_name}_text')
 
-class FaissUtilsMulti(object):
+        index = faiss.IndexHNSWFlat(index_emb.shape[1], self.index_emb_size, faiss.METRIC_INNER_PRODUCT)
+        print(f'indexing with shape {index_emb.shape} ...')
+        index.add(index_emb)
+
+        print(f'retrieving ...')
+        _topk = topk
+        if aggregate:
+            _topk = min(topk * 10, max_topk_span)  # assume that on avg a table has 10 cells retrieved
+        score_matrix, ind_matrix = index.search(query_emb, _topk)
+        if not aggregate:
+            return score_matrix, ind_matrix
+
+        print(f'aggregating ...')
+        # sum all scores
+        query_id2index_id2score: Dict[int, Dict[int, float]] = defaultdict(lambda: defaultdict(lambda: 0))
+        #query_id2index_id2textpairs: Dict[int, Dict[int, Set[Tuple[str, str]]]] = defaultdict(lambda: defaultdict(set))
+        for i, (scores, inds) in tqdm(enumerate(zip(score_matrix, ind_matrix))):
+            qid = query_index[i]
+            qtext = query_text[i]
+            for score, ind in zip(scores, inds):
+                iid = index_index[ind]
+                itext = index_text[ind]
+                query_id2index_id2score[qid][iid] += score
+                #query_id2index_id2textpairs[qid][iid].add((qtext, itext))
+
+        counts: List[int] = []
+        agg_score_matrix, agg_ind_matrix = np.zeros((aggregate, topk)), np.random.randint(aggregate, size=(aggregate, topk))
+
+        for qid, iid2score in query_id2index_id2score.items():
+            iid2score = sorted(iid2score.items(), key=lambda x: -x[1])[:topk]
+            counts.append(len(iid2score))
+            iids, scores = zip(*iid2score)
+            agg_score_matrix[qid][:len(scores)] = scores
+            agg_ind_matrix[qid][:len(iids)] = iids
+        print(f'for {len(query_id2index_id2score)}/{aggregate} queries, '
+              f'avg #retrieved items is {np.mean(counts)} with topk={topk}')
+        return agg_score_matrix, agg_ind_matrix
+
+
+class SpanFaissMulti(object):
     def __init__(self, index_emb_size: int, cuda: bool, num_index: int):
         self.index_emb_size = index_emb_size
         self.cuda = cuda
@@ -164,12 +241,12 @@ class FaissUtilsMulti(object):
 
     def load_span_faiss(self, repr_file: str, index_name: str, query_name: str, normalize: bool = True, reindex_shards: int = None, merge: bool = False):
         if merge:
-            self.faiss0 = FaissUtils(self.index_emb_size, self.cuda)
+            self.faiss0 = SpanFaiss(self.index_emb_size, self.cuda)
             self.faiss0.load_span_faiss([f'{repr_file}.{i}' for i in range(self.num_index)], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
             self.num_index = 1
         else:
             for i in range(self.num_index):
-                setattr(self, f'faiss{i}', FaissUtils(self.index_emb_size, self.cuda))
+                setattr(self, f'faiss{i}', SpanFaiss(self.index_emb_size, self.cuda))
                 getattr(self, f'faiss{i}').load_span_faiss(
                     [f'{repr_file}.{i}'], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
 

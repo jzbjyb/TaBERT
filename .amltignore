@@ -5,6 +5,6 @@ pretrained_models
 wandb
 *.out
 test*
-dpr*
 *.jar
 *.ipynb
+index

@@ -22,7 +22,16 @@ jobs:
   sku: C40
   sku_count: 1
   command:
-  - ./whole_faiss.sh /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_whole_avg_cell/repr.npz
+  - ./whole_faiss.sh whole_faiss
+    /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_whole_avg_cell/repr.npz
+    /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_whole_avg_cell/repr.npz.ret_top10_norm
+- name: span_faiss_as_whole_faiss
+  sku: C40
+  sku_count: 1
+  command:
+  - ./whole_faiss.sh span_faiss_as_whole_faiss
+    /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert_mc_othertable/index/tapas_data0_span_context_optimized/repr.npz
+    /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert_mc_othertable/index/tapas_data0_span_context_optimized/repr.npz.as_whole.ret_top10
 - name: gen_data
   sku: C40
   sku_count: 1

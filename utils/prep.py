@@ -24,7 +24,7 @@ def self_in_dense(ret_file: str):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=['self_in_dense'])
-  parser.add_argument('--inp', type=Path, required=True, nargs='+')
+  parser.add_argument('--inp', type=Path, required=False, nargs='+')
   args = parser.parse_args()
 
   if args.task == 'self_in_dense':

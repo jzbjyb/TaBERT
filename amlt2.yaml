@@ -30,18 +30,25 @@ jobs:
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell/pytorch_model_epoch04.bin"'
     --gradient-accumulation-steps 3
-- name: wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_2command_8gpu
-  sku: G8
+
+- name: wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_2command
+  sku: G4
   command:
-  - ./run_vanilla.sh 8
-    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_8gpu
-    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_8gpu seq2seq 24 5 null
-    --gradient-accumulation-steps 3
-  - ./run_vanilla.sh 8
+  - ./run_vanilla.sh 4
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm seq2seq 24 5 null
+    --gradient-accumulation-steps 6
+  - ./run_vanilla.sh 4
     /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
-    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_8gpu_continue seq2seq 24 10
-    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_8gpu/pytorch_model_epoch04.bin"'
-    --gradient-accumulation-steps 3
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_continue seq2seq 24 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm/pytorch_model_epoch04.bin"'
+    --gradient-accumulation-steps 6
+- name: wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_continue_finetune
+  sku: G4
+  command:
+  - ./finetune.sh 4 wtqqa:wikisqlqa:turl_sa:turl_cf
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_whole_avg_cell_norm_continue/pytorch_model_epoch09.bin
+
 - name: wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_2command
   sku: G8
   command:
@@ -54,3 +61,8 @@ jobs:
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_continue seq2seq 24 10
     '"/mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole/pytorch_model_epoch04.bin"'
     --gradient-accumulation-steps 3
+- name: wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_continue_finetune
+  sku: G4
+  command:
+  - ./finetune.sh 4 wtqqa:wikisqlqa:turl_sa:turl_cf
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_continue/pytorch_model_epoch09.bin

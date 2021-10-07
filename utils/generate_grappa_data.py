@@ -303,7 +303,7 @@ def whole_faiss(repr_file: str, output_file: str, index_emb_size: int, topk: int
         if use_span:
             # TODO: this is only for tapas data0
             total_num_doc = 904370
-            score_matrix, ind_matrix = faiss_wrap.interact(topk + 1, reverse=index_name == 'context', aggregate=total_num_doc)
+            score_matrix, ind_matrix = faiss_wrap.interact(topk + 1, reverse=index_name == 'context', after_agg_size=total_num_doc)
         else:
             score_matrix, ind_matrix = faiss_wrap.interact(index_name, query_name, topk + 1)
         ret_results.append((ind_matrix, score_matrix))
@@ -516,7 +516,7 @@ def main():
     parser.add_argument('--data', type=str, required=True, choices=[
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
         'overlap', 'fakepair', 'match_context_table', 'tableshuffle',
-        'whole_faiss', 'span_faiss', 'span_faiss_as_whole_faiss', 'ret_filter_by_faiss', 'random_neg',
+        'whole_faiss', 'span_faiss', 'span_as_whole_faiss', 'ret_filter_by_faiss', 'random_neg',
         'mrr', 'filter_mention', 'find_mention'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
@@ -611,7 +611,7 @@ def main():
         index_emb_size = 256
         subsample = 1000000
         span_faiss(repr_file, args.output_dir, topk=topk, index_subsample=subsample, index_emb_size=index_emb_size)
-    elif args.data == 'span_faiss_as_whole_faiss':
+    elif args.data == 'span_as_whole_faiss':
         index_emb_size = 256
         repr_file = args.path[0]
         output_file = args.output_dir

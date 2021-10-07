@@ -182,7 +182,7 @@ class SpanFaiss(object):
                 li_retid2textscore[-1][rid].append((text, score))
         return li_retid2textscore
 
-    def interact(self, topk: int, reverse: bool = False, aggregate: int = 0, max_topk_span: int = 100):
+    def interact(self, topk: int, reverse: bool = False, after_agg_size: int = 0, max_topk_span: int = 100):
         if reverse:
             index_name, query_name = 'query', 'index'
         else:
@@ -194,21 +194,25 @@ class SpanFaiss(object):
         query_index = getattr(self, f'{query_name}_index')
         query_text = getattr(self, f'{query_name}_text')
 
+        index_index2count: Dict[int, int] = dict(zip(*np.unique(index_index, return_counts=True)))
+        query_index2count: Dict[int, int] = dict(zip(*np.unique(query_index, return_counts=True)))
+
         index = faiss.IndexHNSWFlat(index_emb.shape[1], self.index_emb_size, faiss.METRIC_INNER_PRODUCT)
         print(f'indexing with shape {index_emb.shape} ...')
         index.add(index_emb)
 
         print(f'retrieving ...')
         _topk = topk
-        if aggregate:
+        if after_agg_size:
             _topk = min(topk * 10, max_topk_span)  # assume that on avg a table has 10 cells retrieved
         score_matrix, ind_matrix = index.search(query_emb, _topk)
-        if not aggregate:
+        if not after_agg_size:
             return score_matrix, ind_matrix
 
         print(f'aggregating ...')
         # sum all scores
         query_id2index_id2score: Dict[int, Dict[int, float]] = defaultdict(lambda: defaultdict(lambda: 0))
+        query_id2index_id2count: Dict[int, Dict[int, int]] = defaultdict(lambda: defaultdict(lambda: 0))
         #query_id2index_id2textpairs: Dict[int, Dict[int, Set[Tuple[str, str]]]] = defaultdict(lambda: defaultdict(set))
         for i, (scores, inds) in tqdm(enumerate(zip(score_matrix, ind_matrix))):
             qid = query_index[i]
@@ -217,19 +221,25 @@ class SpanFaiss(object):
                 iid = index_index[ind]
                 itext = index_text[ind]
                 query_id2index_id2score[qid][iid] += score
+                query_id2index_id2count[qid][iid] += 1
                 #query_id2index_id2textpairs[qid][iid].add((qtext, itext))
 
         counts: List[int] = []
-        agg_score_matrix, agg_ind_matrix = np.zeros((aggregate, topk)), np.random.randint(aggregate, size=(aggregate, topk))
+        agg_score_matrix, agg_ind_matrix = np.zeros((after_agg_size, topk)), np.random.randint(after_agg_size, size=(after_agg_size, topk))
 
+        sparsity_li: List[float] = []
         for qid, iid2score in query_id2index_id2score.items():
             iid2score = sorted(iid2score.items(), key=lambda x: -x[1])[:topk]
             counts.append(len(iid2score))
             iids, scores = zip(*iid2score)
+            for iid in iids:
+                spa = query_id2index_id2count[qid][iid] / ((query_index2count[qid] * index_index2count[iid]) or 1)
+                sparsity_li.append(spa)
             agg_score_matrix[qid][:len(scores)] = scores
             agg_ind_matrix[qid][:len(iids)] = iids
-        print(f'for {len(query_id2index_id2score)}/{aggregate} queries, '
+        print(f'for {len(query_id2index_id2score)}/{after_agg_size} queries, '
               f'avg #retrieved items is {np.mean(counts)} with topk={topk}')
+        print(f'retrieval sparsity is {np.mean(sparsity_li)}')
         return agg_score_matrix, agg_ind_matrix
 
 

@@ -26,3 +26,8 @@ done
 # combine results
 readarray -d '' entries < <(printf '%s\0' ${out_file}.* | sort -zV)  # sort
 cat ${entries[@]} > ${out_file}
+
+# remove intermediate files
+for entry in "${entries[@]}"; do
+    rm -f "${entry}"
+done

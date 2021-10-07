@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('--prediction', type=str, required=True)
     parser.add_argument('--gold', type=str, required=True)
     parser.add_argument('--output', type=str, default=None)
-    parser.add_argument('--data', type=str, choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
+    parser.add_argument('--data', type=str, default='wtq', choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
     parser.add_argument('--model_type', type=str, default='facebook/bart-base')
     args = parser.parse_args()
     if '_sql' in args.data:

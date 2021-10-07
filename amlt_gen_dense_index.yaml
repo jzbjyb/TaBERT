@@ -20,14 +20,19 @@ code:
 jobs:
 - name: tapas_data0_whole_avg_cell
   sku: G4
-  sku_count: 1
-  aml_mpirun:
-    process_count_per_node: 4
-    communicator: "OpenMpi"
   command:
-  - ./run_vanilla.sh
+  - ./run_vanilla.sh 4
     /mnt/root/TaBERT/data/train_data/wholetable_tapas_bert_mlm_data0
     /mnt/root/TaBERT/data/runs/tabert_base_k1 split_mlm 32 1
     '"/mnt/root/TaBERT/data/runs/tabert_base_k1/model.bin"'
     --only_test --mode represent-train --index_repr whole_avg_cell
     --output_file /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_whole_avg_cell
+- name: tapas_data0_span
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bert_mlm_data0
+    /mnt/root/TaBERT/data/runs/tabert_base_k1 split_mlm 32 1
+    '"/mnt/root/TaBERT/data/runs/tabert_base_k1/model.bin"'
+    --only_test --mode represent-train --index_repr span_context
+    --output_file /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_span

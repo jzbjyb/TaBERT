@@ -49,6 +49,9 @@ RUN conda install -c pytorch faiss-gpu==1.6.3 cudatoolkit=10.0
 # nltk
 RUN python -m nltk.downloader stopwords -d /usr/share/nltk_data
 
+# spacy
+RUN python -m spacy download en_core_web_sm
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

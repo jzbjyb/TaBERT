@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple, Set
 from collections import defaultdict
 from tqdm import tqdm
+import os
 import numpy as np
 import torch
 import faiss
@@ -11,6 +12,25 @@ class WholeFaiss(object):
         self.index_emb_size = index_emb_size
         self.normalize = normalize
         self.load_faiss(repr_files)
+
+    @staticmethod
+    def find_files(repr_file: str):
+        repr_files: List[str] = []
+        if os.path.exists(repr_file):
+            repr_files.append(repr_file)
+        else:
+            i = 0
+            while True:
+                found = False
+                for fm in [f'{repr_file}.{i}', f'{repr_file}.{i}.npz']:
+                    if os.path.exists(fm):
+                        repr_files.append(fm)
+                        found = True
+                        break
+                if not found:
+                    break
+                i += 1
+        return repr_files
 
     def load_faiss(self, repr_files: List[str]):
         context_li = []
@@ -35,27 +55,6 @@ class WholeFaiss(object):
         print(f'retrieving ...')
         score_matrix, ind_matrix = index.search(query_emb, topk)
         return score_matrix, ind_matrix
-
-
-class WholeFaissMulti(object):
-    def __init__(self, repr_files: List[str], index_emb_size: int, normalize: bool = True, merge: bool = True):
-        self.index_emb_size = index_emb_size
-        self.merge = merge
-        self.normalize = normalize
-        self.load_faiss(repr_files)
-
-    def load_faiss(self, repr_files: List[str]):
-        if self.merge:
-            self.num_index = 0
-            self.faiss0 = WholeFaiss(repr_files, index_emb_size=self.index_emb_size, normalize=self.normalize)
-        else:
-            self.num_index = len(repr_files)
-            for i, rf in enumerate(repr_files):
-                setattr(self, f'faiss{i}',
-                        WholeFaiss([rf], index_emb_size=self.index_emb_size, normalize=self.normalize))
-
-    def interact(self, index_name: str, query_name: str, topk: int):
-        raise NotImplementedError
 
 
 class SpanFaiss(object):
@@ -141,7 +140,7 @@ class SpanFaiss(object):
             'text': sub_query_text
         }
 
-    def query_from_subset(self, query_emb: np.ndarray, sub_index: List[int], topk: int, use_faiss: bool = True):
+    def query_from_subset(self, query_emb: np.ndarray, sub_index: List[int], topk: int = None, use_faiss: bool = True):
         if len(set(sub_index) & self.index_index_set) <= 0:
             return [{} for i in range(len(query_emb))]
 
@@ -166,12 +165,16 @@ class SpanFaiss(object):
                 query_emb = torch.tensor(query_emb).cuda()
                 sub_index_emb = torch.tensor(sub_index_emb).cuda()
                 score_matrix = query_emb @ sub_index_emb.T
+                if topk is None:
+                    topk = score_matrix.shape[1]
                 _topk = min(topk, score_matrix.shape[1])
                 score_matrix, ind_matrix = torch.topk(score_matrix, _topk, 1)
                 score_matrix, ind_matrix = score_matrix.cpu().numpy(), ind_matrix.cpu().numpy()
             else:
                 score_matrix = query_emb @ sub_index_emb.T
-                ind_matrix = np.argsort(-score_matrix, 1)[:, :topk]
+                ind_matrix = np.argsort(-score_matrix, 1)
+                if topk:
+                    ind_matrix = ind_matrix[:, :topk]
                 score_matrix = np.take_along_axis(score_matrix, ind_matrix, 1)
         li_retid2textscore: List[Dict[int, List[Tuple[str, float]]]] = []
         for i in range(query_emb.shape[0]):
@@ -244,21 +247,21 @@ class SpanFaiss(object):
 
 
 class SpanFaissMulti(object):
-    def __init__(self, index_emb_size: int, cuda: bool, num_index: int):
+    def __init__(self, index_emb_size: int, cuda: bool):
         self.index_emb_size = index_emb_size
         self.cuda = cuda
-        self.num_index = num_index
 
     def load_span_faiss(self, repr_file: str, index_name: str, query_name: str, normalize: bool = True, reindex_shards: int = None, merge: bool = False):
         if merge:
             self.faiss0 = SpanFaiss(self.index_emb_size, self.cuda)
-            self.faiss0.load_span_faiss([f'{repr_file}.{i}' for i in range(self.num_index)], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
+            self.faiss0.load_span_faiss(WholeFaiss.find_files(repr_file), index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
             self.num_index = 1
         else:
-            for i in range(self.num_index):
+            repr_files = WholeFaiss.find_files(repr_file)
+            self.num_index = len(repr_files)
+            for i, repr_file in enumerate(repr_files):
                 setattr(self, f'faiss{i}', SpanFaiss(self.index_emb_size, self.cuda))
-                getattr(self, f'faiss{i}').load_span_faiss(
-                    [f'{repr_file}.{i}'], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
+                getattr(self, f'faiss{i}').load_span_faiss([repr_file], index_name=index_name, query_name=query_name, normalize=normalize, reindex_shards=reindex_shards)
 
     def get_subset_query_emb(self, sub_index: List[int]):
         qds = []

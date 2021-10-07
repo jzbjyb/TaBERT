@@ -58,3 +58,13 @@ jobs:
     /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0.ner
     /mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_span_context_as_whole.jsonl.data0
     500000
+- name: tapas_data0_dense_span_context_as_whole_original_tabert
+  sku: C40
+  sku_count: 1
+  command:
+  - ./match.sh
+    /mnt/root/TaBERT/data/runs/tabert_base_k1/index/tapas_data0_span/repr.npz.as_whole.ret_top10
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0.ner
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0.ner
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_span_context_as_whole_original_tabert.jsonl.data0
+    500000

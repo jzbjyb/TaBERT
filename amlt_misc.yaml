@@ -54,3 +54,21 @@ jobs:
   sku_count: 1
   command:
   - ./gen_vanilla.sh
+
+- name: ner
+  sku: C40
+  sku_count: 1
+  command:
+  - ./ner.sh
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.ner
+
+- name: ret_filter_by_faiss
+  sku: C40
+  sku_count: 1
+  command:
+  - ./ret_filter_by_faiss.sh
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_span_context_as_whole_maxsum.jsonl.data0
+    /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert_mc_othertable/index/tapas_data0_span_context_optimized/repr.npz
+    /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert_mc_othertable/index/tapas_data0_span_context_optimized/repr.npz.as_whole.ret_top10
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0

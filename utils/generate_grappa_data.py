@@ -15,6 +15,7 @@ import copy
 from collections import defaultdict
 from tqdm import tqdm
 import multiprocessing
+import itertools
 import logging
 from timeout_decorator.timeout_decorator import TimeoutError
 import faiss
@@ -283,14 +284,7 @@ def filter_mention(input_file: str, out_file: str, topk: int = 0, sort: bool = F
 
 
 def whole_faiss(repr_file: str, output_file: str, index_emb_size: int, topk: int = 10, use_span: bool = False):
-    repr_files: List[str] = []
-    if os.path.exists(repr_file):
-        repr_files.append(repr_file)
-    else:
-        i = 0
-        while os.path.exists(f'{repr_file}.{i}'):
-            repr_files.append(f'{repr_file}.{i}')
-            i += 1
+    repr_files: List[str] = WholeFaiss.find_files(repr_file)
     print(f'load embeddings from {repr_files}')
 
     if use_span:
@@ -353,12 +347,14 @@ def span_faiss(repr_file: str, ouput_file: str, topk: int, index_subsample: int 
 
 
 def ret_filter_by_faiss(repr_file, ret_file: str, target_file: str, source_file: str, output_file: str,
-                        topk: int, index_emb_size: int, agg: str = 'sum', batch_size: int = 1,
+                        topk: int, index_emb_size: int, agg: str = 'max-sum', batch_size: int = 1,
                         use_str_match: bool = False, separate: bool = False, skip_noret: bool = False):
     #findex = FaissUtils(index_emb_size=index_emb_size, cuda=True)
     #findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=10)
-    findex = SpanFaissMulti(index_emb_size=index_emb_size, cuda=True, num_index=8)
-    findex.load_span_faiss(repr_file, index_name='table', query_name='context', reindex_shards=None, merge=True)
+    agg = tuple(agg.split('-'))
+    assert agg in set(itertools.product(['max', 'sum'], ['sum', 'count', 'avg_count']))
+    findex = SpanFaissMulti(index_emb_size=index_emb_size, cuda=True)
+    findex.load_span_faiss(str(repr_file), index_name='table', query_name='context', reindex_shards=None, merge=True)
     idx2example: Dict[int, Dict] = {}
     with open(source_file, 'r') as fin:
         for idx, l in tqdm(enumerate(fin), desc='build map'):
@@ -429,7 +425,12 @@ def ret_filter_by_faiss(repr_file, ret_file: str, target_file: str, source_file:
                             for rid, tss in r2ts.items():
                                 if rid not in idx2byall[qid]:  # use retrieval results to filter
                                     continue
-                                qid2rid2scores[qid][rid].append(np.sum([s for t, s in tss]))  # sum over cells within a table
+                                if agg[0] == 'sum':  # sum over cells within a table
+                                    qid2rid2scores[qid][rid].append(np.sum([s for t, s in tss]))
+                                elif agg[0] == 'max':  # avg over cells within a table
+                                    qid2rid2scores[qid][rid].append(np.max([s for t, s in tss]))
+                                else:
+                                    raise NotImplementedError
                                 for t, s in tss:
                                     qid2rid2text2score[qid][rid][t] += s
                         for qid in idx_li:
@@ -442,11 +443,11 @@ def ret_filter_by_faiss(repr_file, ret_file: str, target_file: str, source_file:
                                 fout.write(json.dumps(example) + '\n')
                             else:
                                 rid2scores = qid2rid2scores[qid]
-                                if agg == 'sum':
+                                if agg[1] == 'sum':
                                     rid = sorted(rid2scores.items(), key=lambda x: -np.sum(x[1]))[0][0]
-                                elif agg == 'count':
+                                elif agg[1] == 'count':
                                     rid = sorted(rid2scores.items(), key=lambda x: (-len(x[1]), -np.sum(x[1])))[0][0]
-                                elif agg == 'avg_count':
+                                elif agg[1] == 'avg_count':
                                     rid = sorted(rid2scores.items(), key=lambda x: -np.mean(x[1]) * np.exp(len(x[1]) - 1))[0][0]
                                 else:
                                     raise NotImplementedError
@@ -474,7 +475,7 @@ def ner_example(batch_id, examples, nlp, skip_ner_types: Set[str] = None):
     print(f'{batch_id} completed')
     return examples
 
-def find_mention(prep_file: str, out_file: str, batch_size: int, nthread: int):
+def ner_file(prep_file: str, out_file: str, batch_size: int, nthread: int):
     nlp = spacy.load('en_core_web_sm')
     unique_tables: Set[str] = set()
     num_mentions_li: List[int] = []
@@ -517,7 +518,7 @@ def main():
         'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
         'overlap', 'fakepair', 'match_context_table', 'tableshuffle',
         'whole_faiss', 'span_faiss', 'span_as_whole_faiss', 'ret_filter_by_faiss', 'random_neg',
-        'mrr', 'filter_mention', 'find_mention'])
+        'mrr', 'filter_mention', 'ner'])
     parser.add_argument('--path', type=Path, required=True, nargs='+')
     parser.add_argument('--output_dir', type=Path, required=False)
     parser.add_argument('--split', type=str, default='dev')
@@ -618,9 +619,9 @@ def main():
         whole_faiss(repr_file, output_file, index_emb_size=index_emb_size, use_span=True)
     elif args.data == 'ret_filter_by_faiss':
         repr_file, ret_file, prep_file = args.path
-        topk = 1000
+        topk = None
         index_emb_size = 256
-        agg = 'avg_count'
+        agg = 'max-sum'
         batch_size = 64
         use_str_match = True
         ret_filter_by_faiss(repr_file, ret_file, prep_file, prep_file, args.output_dir,
@@ -630,8 +631,8 @@ def main():
         compute_ret_mrr(args.path[0])
     elif args.data == 'filter_mention':
         filter_mention(args.path[0], args.output_dir, topk=0, sort=True)
-    elif args.data == 'find_mention':
-        find_mention(args.path[0], args.output_dir, batch_size=10192, nthread=30)
+    elif args.data == 'ner':
+        ner_file(args.path[0], args.output_dir, batch_size=10192, nthread=30)
     else:
         raise NotImplementedError
 

@@ -652,7 +652,7 @@ class VanillaTableBert(TableBertModel):
         config_file = os.path.join(args.output_file, f'args.json')
         with open(config_file, 'w') as fout:
             json.dump({'data_dir': str(args.data_dir)}, fout)
-        output_file = os.path.join(args.output_file, f'repr.npz.{args.global_rank}')
+        output_file = os.path.join(args.output_file, f'repr.{args.global_rank}')
         context_li = []
         table_li = []
 

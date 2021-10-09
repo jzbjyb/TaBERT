@@ -483,6 +483,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_qa_instances(context, example.header, answer, additional_rows))
                 if 'qa_allrow' in seq2seq_format:
                     instances.extend(self.create_qa_allrow_instances(context, example.header, answer, additional_rows))
+                if 'qa_tapex' in seq2seq_format:
+                    instances.extend(self.create_qa_tapex_instances(context, example.header, answer, additional_rows))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
@@ -667,6 +669,29 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         # context + table without mask
         table = Table('fake_table', header)
         instance = self.get_input(context, table, additional_rows, shuffle=True)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        # answer as target
+        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        instance = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance]
+
+    def create_qa_tapex_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
+        table = Table('fake_table', [Column.get_dummy()] + header)  # the dummy header is for the first index element
+        for i, row in enumerate(additional_rows):  # add row index at the beginning of each row
+            row.insert(0, self.tokenizer.tokenize(f'row {i + 1}'))
+        additional_rows.insert(0, [self.tokenizer.tokenize('col')] + [h.name_tokens for h in header])  # header is the first row
+        instance = self.get_input(context, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # answer as target

@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from collections import OrderedDict
 from types import SimpleNamespace
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Tuple
 from enum import Enum
 
 from table_bert.utils import BertTokenizerWrapper, ElectraTokenizer, BertConfig, ElectraConfig, \
@@ -126,6 +126,12 @@ MODEL2PADID = {
     ModelType.BART: 1,
 }
 
+MODEL2PAD = {
+    ModelType.BERT: '[PAD]',
+    ModelType.ELECTRA: '[PAD]',
+    ModelType.RoBERTa: '<pad>',
+    ModelType.BART: '<pad>',
+}
 
 class TableBertConfig(SimpleNamespace):
     def __init__(
@@ -227,12 +233,7 @@ class TableBertConfig(SimpleNamespace):
                 else:
                     raise NotImplementedError
             else:
-                if self.model_type not in {ModelType.BERT, ModelType.ELECTRA, ModelType.RoBERTa}:
-                    raise Exception(
-                        f'WARNING: cell_input_template is outdated: {cell_input_template}, '
-                        f'tokenizing this template using transformers tokenizers might have unexpected behaviors')
-                else:
-                    cell_input_template = tokenizer.tokenize(cell_input_template)
+                cell_input_template = [cell_input_template]  # assume there is only a single element in the template
 
         self.cell_input_template = cell_input_template
 
@@ -321,7 +322,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--mask_value_column_separate', action='store_true')
         parser.add_argument('--seq2seq_format', type=str,
                             choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
-                                     'qa_firstansrow', 'qa_allrow', 'sql',
+                                     'qa_firstansrow', 'qa_allrow', 'qa_tapex', 'sql',
                                      'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
                                      'mention-context', 'mention-table', 'mlm_mention-context',
                                      'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1'],
@@ -379,6 +380,15 @@ class TableBertConfig(SimpleNamespace):
         if 'bart' in model_name:
             return ModelType.BART
         return ModelType.BERT
+
+    @classmethod
+    def get_special_tokens(cls, model_name: str) -> Tuple[str, str, str]:
+        mt = cls.check_model_type(model_name)
+        tokenizer = MODEL2TOKENIZER[mt].from_pretrained(model_name)
+        sep_token = MODEL2SEP[mt]
+        cls_token = MODEL2CLS[mt]
+        pad_token = MODEL2PAD[mt]
+        return cls_token, sep_token, pad_token
 
     def with_new_args(self, **updated_args):
         new_config = self.__class__(**vars(self))

@@ -1,7 +1,7 @@
 import os
 os.environ['USE_TRANSFORMER'] = 'True'  # use new version
 
-from typing import List
+from typing import List, Union
 from argparse import ArgumentParser
 import json
 import numpy as np
@@ -9,7 +9,7 @@ import random
 from collections import defaultdict
 import re
 from table_bert.dataset_utils import BasicDataset
-from table_bert.config import TableBertConfig, MODEL2SEP, MODEL2CLS, MODEL2TOKENIZER
+from table_bert.config import TableBertConfig
 from utils.wtq_evaluator import to_value, to_value_list, check_denotation
 AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
 COND_OPS = ['=', '>', '<', 'OP']
@@ -21,6 +21,15 @@ def compute_f1(preds: List[str], golds: List[str]):
     r = len(sames) / (len(golds) or 1)
     f1 = 2 * p * r / ((p + r) or 1)
     return f1
+
+
+def source_contains(source: str, targets: Union[str, List[str]]):
+    if type(targets) is str:  targets = [targets]
+    source = source.lower()
+    for target in targets:
+        if target.lower() not in source:
+            return False
+    return True
 
 
 if __name__ == '__main__':
@@ -36,11 +45,9 @@ if __name__ == '__main__':
         from rouge import Rouge
         rouge = Rouge()
 
-    mt = TableBertConfig.check_model_type(args.model_type)
-    tokenizer = MODEL2TOKENIZER[mt].from_pretrained(args.model_type)
-    sep_token = MODEL2SEP[mt]
-    cls_token = MODEL2CLS[mt]
+    cls_token, sep_token, pad_token = TableBertConfig.get_special_tokens(args.model_type)
 
+    ans_in_inputs = []
     ems = []
     tapas_ems = []  # follow the tapas filtering conditions
     num_cells = []
@@ -69,10 +76,10 @@ if __name__ == '__main__':
                 pred, gold = p[0].strip(), p[1].strip()
             elif len(p) == 3:
                 pred, gold, source = p[0].strip(), p[1].strip(), p[2].strip()
-                pred = pred.replace('<pad>', '')  # TODO: use model-wise param
-                gold = gold.replace('<pad>', '')
-                source = source.replace('<pad>', '')
-                num_cell = len(source.split('</s>')) - 1
+                pred = pred.replace(pad_token, '')
+                gold = gold.replace(pad_token, '')
+                source = source.replace(pad_token, '')
+                num_cell = len(source.split(sep_token)) - 1
                 num_cells.append(num_cell)
                 first_word = source.split()[1].lower()  # skip cls
             if args.data == 'wikisql':  # exact match
@@ -84,9 +91,13 @@ if __name__ == '__main__':
                 gold = gold.replace(cls_token, '').replace(sep_token, '').strip()
                 if args.multi_ans_sep:
                     sep = args.multi_ans_sep
-                    em = check_denotation(to_value_list(gold.split(sep)), to_value_list(pred.split(sep)))
+                    golds = gold.split(sep)
+                    em = check_denotation(to_value_list(golds), to_value_list(pred.split(sep)))
+                    ans_in_input = source_contains(source, golds)
                 else:
                     em = to_value(gold).match(to_value(pred))
+                    ans_in_input = source_contains(source, gold)
+                ans_in_inputs.append(ans_in_input)
             elif args.data == 'wikisql_sql':
                 em = rouge.get_scores([pred.lower()], [gold.lower()], avg=True)['rouge-l']['f']
             elif args.data == 'turl':
@@ -130,6 +141,7 @@ if __name__ == '__main__':
                 firstword2cases[first_word][int(em)].append((source, pred, gold))
 
     print(f'Exact match: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')
+    print(f'Answer in input: {np.mean(ans_in_inputs)}')
 
     firstword2ems = {k: v for k, v in firstword2ems.items() if len(v) >= 10}
     numcell2ems = {k: v for k, v in numcell2ems.items() if len(v) >= 100}

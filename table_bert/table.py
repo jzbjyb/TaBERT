@@ -40,6 +40,10 @@ class Column(object):
             self.fields.append(key)
             setattr(self, key, val)
 
+    @classmethod
+    def get_dummy(cls):
+        return cls('', type='text')
+
     def copy(self):
         return Column(
             **self.to_dict()

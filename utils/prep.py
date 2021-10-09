@@ -33,9 +33,28 @@ def count_mentions(prep_file: str, max_num_examples: int = 50000):
   print(f'avg #mention {np.mean(num_mentions)}')
 
 
+def tapex_ans_in_source(pred_file: str):
+  ins = []
+  with open(pred_file, 'r') as fin:
+    for l in fin:
+      l = json.loads(l)
+      source = [h['name'] for h in l['table']['header']]
+      source += [c for r in l['table']['data'] for c in r]
+      source = ' '.join(source).lower()
+      anss = l['answers']
+      _in = True
+      for ans in anss:
+        if ans.lower() not in source:
+          _in = False
+          break
+      ins.append(_in)
+  print(f'answer in source: {np.mean(ins)}')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--task', type=str, required=True, choices=['self_in_dense', 'count_mentions'])
+  parser.add_argument('--task', type=str, required=True, choices=[
+    'self_in_dense', 'count_mentions', 'tapex_ans_in_source'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   args = parser.parse_args()
 
@@ -44,3 +63,6 @@ if __name__ == '__main__':
 
   elif args.task == 'count_mentions':
     count_mentions(args.inp[0])
+
+  elif args.task == 'tapex_ans_in_source':
+    tapex_ans_in_source(args.inp[0])

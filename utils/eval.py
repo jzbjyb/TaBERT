@@ -6,12 +6,11 @@ from argparse import ArgumentParser
 import json
 import numpy as np
 import random
-import csv
 from collections import defaultdict
 import re
 from table_bert.dataset_utils import BasicDataset
 from table_bert.config import TableBertConfig, MODEL2SEP, MODEL2CLS, MODEL2TOKENIZER
-from utils.wtq_evaluator import to_value
+from utils.wtq_evaluator import to_value, to_value_list, check_denotation
 AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
 COND_OPS = ['=', '>', '<', 'OP']
 
@@ -28,6 +27,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--prediction', type=str, required=True)
     parser.add_argument('--gold', type=str, required=True)
+    parser.add_argument('--multi_ans_sep', type=str, default=None)
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--data', type=str, default='wtq', choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
     parser.add_argument('--model_type', type=str, default='facebook/bart-base')
@@ -82,7 +82,11 @@ if __name__ == '__main__':
             elif args.data == 'wtq':  # official evaluation
                 pred = pred.replace(cls_token, '').replace(sep_token, '').strip()
                 gold = gold.replace(cls_token, '').replace(sep_token, '').strip()
-                em = to_value(gold).match(to_value(pred))
+                if args.multi_ans_sep:
+                    sep = args.multi_ans_sep
+                    em = check_denotation(to_value_list(gold.split(sep)), to_value_list(pred.split(sep)))
+                else:
+                    em = to_value(gold).match(to_value(pred))
             elif args.data == 'wikisql_sql':
                 em = rouge.get_scores([pred.lower()], [gold.lower()], avg=True)['rouge-l']['f']
             elif args.data == 'turl':

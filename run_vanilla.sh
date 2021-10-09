@@ -25,13 +25,16 @@ args="${@:8}"
 # export NGPU=8; deepspeed train.py
 
 # use different lanucher for single/multi-node
-if (( ${num_gpu} <= ${MAX_NUM_GPU_PER_NODE} )); then
-  echo 'single-node'
-  export NGPU=${num_gpu}
-  prefix="-m torch.distributed.launch --nproc_per_node=${num_gpu}"
+if (( ${num_gpu} == 1 )); then
+    echo 'single-GPU'
+    prefix=""
+elif (( ${num_gpu} <= ${MAX_NUM_GPU_PER_NODE} )); then
+    echo 'single-node'
+    export NGPU=${num_gpu}
+    prefix="-m torch.distributed.launch --nproc_per_node=${num_gpu}"
 else
-  echo 'multi-node'
-  prefix=""
+    echo 'multi-node'
+    prefix=""
 fi
 
 python ${prefix} train.py \

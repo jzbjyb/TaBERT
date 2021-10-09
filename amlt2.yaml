@@ -66,3 +66,42 @@ jobs:
   command:
   - ./finetune.sh 4 wtqqa:wikisqlqa:turl_sa:turl_cf
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_continue/pytorch_model_epoch09.bin
+
+- name: wtqqa_tapex
+  sku: G4
+  command:
+  - ./run_vanilla.sh 4
+    /mnt/root/TaBERT/data/train_data/wtq_qa_allrow
+    /mnt/root/TaBERT/data/runs/bart_base_wtq_tapex_ep10 seq2seq 24 10 null
+    --mode generate-test --output_file ep9.tsv
+- name: wtqqa_tapex_ep50
+  sku: G4
+  command:
+  - ./run_vanilla.sh 4
+    /mnt/root/TaBERT/data/train_data/wtq_qa_allrow
+    /mnt/root/TaBERT/data/runs/bart_base_wtq_tapex_ep50 seq2seq 24 50 null
+    --mode generate-test --output_file ep49.tsv
+
+- name: wtqqa_tapex_large
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_allrow_bart_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_ep10 seq2seq 12 10 null
+    --mode generate-test --output_file ep9.tsv
+- name: wtqqa_tapex_large_test
+  sku: G8
+  command:
+  - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_ep10 08:07:06:05:04:03:02:01:00
+
+- name: wtqqa_tapex_large_ep50
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_allrow_bart_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_ep50 seq2seq 12 50 null
+    --mode generate-test --output_file ep49.tsv
+- name: wtqqa_tapex_large_ep50_test
+  sku: G8
+  command:
+  - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_ep50 05:07:10:13:15:20:25:30:40

@@ -11,7 +11,7 @@ max_num_mention_per_example=3
 column_delimiter='//'
 row_delimiter="[SEP]"
 mkdir -p ${output_dir}
-worldsize=1
+worldsize=3
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -20,7 +20,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 20 \
+    --epochs_to_generate 50 \
     --max_context_len 128 \
     --max_column_len 15 \
     --max_cell_len 15 \

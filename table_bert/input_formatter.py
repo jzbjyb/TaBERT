@@ -393,8 +393,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
     def get_a_row(self, example):
         additional_rows = []
         answer = None
-        if 'firstansrow' in self.config.seq2seq_format:  # use the first answer and sample from other rows
+        if 'qa' in self.config.seq2seq_format:  # use the first answer
             answer = example.answers[0]
+
+        if 'firstansrow' in self.config.seq2seq_format:  # sample from other rows
             ans_coord = example.answer_coordinates[0] if len(example.answer_coordinates) > 0 else None
             exclude = {} if ans_coord is None else {ans_coord[0]}
             if self.config.additional_row_count:
@@ -477,8 +479,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.append(instance)
                 if 'single' in seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
-                if 'qa' in seq2seq_format:
+                if 'qa_firstansrow' in seq2seq_format:
                     instances.extend(self.create_qa_instances(context, example.header, answer, additional_rows))
+                if 'qa_allrow' in seq2seq_format:
+                    instances.extend(self.create_qa_allrow_instances(context, example.header, answer, additional_rows))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
@@ -663,6 +667,27 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         # context + table without mask
         table = Table('fake_table', header)
         instance = self.get_input(context, table, additional_rows, shuffle=True)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        # answer as target
+        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        instance = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance]
+
+    def create_qa_allrow_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
+        # context + table without mask
+        table = Table('fake_table', header)
+        instance = self.get_input(context, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # answer as target

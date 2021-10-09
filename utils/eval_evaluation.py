@@ -14,7 +14,7 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--prediction', type=str, required=True)
     parser.add_argument('--prep_file', type=str, required=True)
-    parser.add_argument('--model_type', type=str)
+    parser.add_argument('--model_type', type=str, default='facebook/bart-base')
     parser.add_argument('--ana', action='store_true', help='use preprocessed files for analysis')
     args = parser.parse_args()
     mt = TableBertConfig.check_model_type(args.model_type)

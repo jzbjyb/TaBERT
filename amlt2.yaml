@@ -114,6 +114,22 @@ jobs:
   command:
   - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep10 08:07:06:05:04:03:02:01:00
 
+- name: wtqqa_tapex_linear_large_bs256
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 16
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_bart_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep10_bs256 seq2seq 16 10 null
+    --mode generate-test --output_file ep9.tsv
+- name: wtqqa_tapex_linear_large_bs256_test
+  sku: G8
+  command:
+  - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep10_bs256 08:07:06:05:04:03:02:01:00
+
 - name: wtqqa_tapex_large_ep50
   sku: G8
   command:
@@ -137,3 +153,19 @@ jobs:
   sku: G8
   command:
   - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep50 08:07:06:05:04:03:02:01:00
+
+- name: wtqqa_tapex_linear_large_ep50_bs256
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 16
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_bart_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep50_bs256 seq2seq 16 50 null
+    --mode generate-test --output_file ep49.tsv
+- name: wtqqa_tapex_linear_large_ep50_bs256_test
+  sku: G8
+  command:
+  - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep50_bs256 05:07:10:13:15:20:25:30:40

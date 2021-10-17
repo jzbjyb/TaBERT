@@ -6,6 +6,7 @@ dependencies:
   - nltk==3.3
   - docopt
   - pandas
+  - pip
   - pip:
     - tqdm
     - bloom-filter==1.3

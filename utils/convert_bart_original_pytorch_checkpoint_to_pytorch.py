@@ -152,7 +152,8 @@ def convert_bart_checkpoint(checkpoint_path, pytorch_dump_folder_path, hf_checkp
     assert fairseq_output.shape == new_model_outputs.shape
     assert (fairseq_output == new_model_outputs).all().item()
     Path(pytorch_dump_folder_path).mkdir(exist_ok=True)
-    model.save_pretrained(pytorch_dump_folder_path)
+    save_function = lambda obj, f: torch.save(obj, f, _use_new_zipfile_serialization=False)
+    model.save_pretrained(pytorch_dump_folder_path, save_function=save_function)
 
 
 if __name__ == "__main__":

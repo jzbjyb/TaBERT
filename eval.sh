@@ -13,11 +13,12 @@ fi
 pred=$1
 
 if [[ "$task" == "wtqqa" ]]; then
-  prep_file=${prefix}/mnt/root/TaBERT/data/wikitablequestions/test/preprocessed_with_ans.jsonl
+  gold=${prefix}/mnt/root/TaBERT/data/wikitablequestions/tapex/test.tgt
 else
   exit
 fi
 
 python -m utils.eval \
   --prediction ${pred} \
-  --prep_file ${prep_file}
+  --gold ${gold} \
+  --multi_ans_sep ", "

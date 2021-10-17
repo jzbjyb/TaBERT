@@ -101,14 +101,14 @@ def make_linear_from_emb(emb):
 
 
 @torch.no_grad()
-def convert_bart_checkpoint(checkpoint_path, pytorch_dump_folder_path, hf_checkpoint_name=None):
+def convert_bart_checkpoint(checkpoint_path, pytorch_dump_folder_path, hf_checkpoint_name=None, bart_dir=None):
     """
     Copy/paste/tweak model's weights to our BERT structure.
     """
     if not os.path.exists(checkpoint_path):
         bart = torch.hub.load("pytorch/fairseq", checkpoint_path).eval()
     else:
-        bart = load_xsum_checkpoint(checkpoint_path)
+        bart = load_xsum_checkpoint(checkpoint_path, bart_dir)
 
     bart.model.upgrade_state_dict(bart.model.state_dict())
     if hf_checkpoint_name is None:
@@ -165,5 +165,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--hf_config", default=None, type=str, help="Which huggingface architecture to use: bart-large-xsum"
     )
+    parser.add_argument('--bart_dir', default=None, type=str, help='directory to the fairseq bart model')
     args = parser.parse_args()
-    convert_bart_checkpoint(args.fairseq_path, args.pytorch_dump_folder_path, hf_checkpoint_name=args.hf_config)
+    convert_bart_checkpoint(args.fairseq_path, args.pytorch_dump_folder_path,
+                            hf_checkpoint_name=args.hf_config, bart_dir=args.bart_dir)

@@ -114,6 +114,46 @@ jobs:
   command:
   - ./predict.sh 8 wtqqa_tapex_large /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_ep10 08:07:06:05:04:03:02:01:00
 
+- name: wtqqa_tapex_linear_large_tapex
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_bart_large
+    /mnt/root/TaBERT/data/runs/tapex_large_wtq_tapex_linear_ep10 seq2seq 12 10
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --base-model-name facebook/bart-large --mode generate-test --output_file ep9.tsv
+
+- name: wtqqa_tapex_linear_large_tapex_ep50
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_bart_large
+    /mnt/root/TaBERT/data/runs/tapex_large_wtq_tapex_linear_ep50 seq2seq 12 50
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --base-model-name facebook/bart-large --mode generate-test --output_file ep49.tsv
+
+- name: wtqqa_tapex_linear_large_bartxsum
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_bart_large
+    /mnt/root/TaBERT/data/runs/bartxsum_large_wtq_tapex_linear_ep10 seq2seq 12 10 null
+    --base-model-name facebook/bart-large-xsum --mode generate-test --output_file ep9.tsv
+- name: wtqqa_tapex_linear_large_bartxsum_test
+  sku: G4
+  command:
+  - ./predict.sh 4 wtqqa_tapex_large
+    /mnt/root/TaBERT/data/runs/bartxsum_large_wtq_tapex_linear_ep10 08:00:07:01:06:02:05:03:04
+    --base-model-name facebook/bart-large-xsum
+
+- name: wtqqa_tapex_linear_large_bartcnn
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_bart_large
+    /mnt/root/TaBERT/data/runs/bartcnn_large_wtq_tapex_linear_ep10 seq2seq 12 10 null
+    --base-model-name facebook/bart-large-cnn --mode generate-test --output_file ep9.tsv
+
 - name: wtqqa_tapex_linear_large_bs256
   sku: G8
   sku_count: 2

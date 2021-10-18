@@ -3,8 +3,9 @@
 ngpu=$1
 task=$2  # from "wtqqa" "wikisqlqa" "turl_cf" "turl_sa"
 model_ckpt=$3
+batch_size=$4
+args="${@:5}"  # additional args
 epoch=10
-batch_size=24
 prediction_file=ep9.tsv
 
 IFS=':' read -ra tasks <<< "$task"
@@ -33,5 +34,5 @@ for task in "${tasks[@]}"; do
         exit
     fi
 
-    ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} '"'${model_ckpt}'"' --mode ${mode} --output_file ${prediction_file}
+    ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} '"'${model_ckpt}'"' --mode ${mode} --output_file ${prediction_file} ${args}
 done

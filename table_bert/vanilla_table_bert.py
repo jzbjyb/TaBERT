@@ -54,7 +54,7 @@ class VanillaTableBert(TableBertModel):
             try:
                 self.load_state_dict(state_dict)
             except:
-                print('directly the load the LM')
+                print('directly load the LM')
                 if self.config.model_type == ModelType.BART:
                     state_dict.pop('lm_head.weight', None)
                 getattr(self, self.lm_module_name).load_state_dict(state_dict)

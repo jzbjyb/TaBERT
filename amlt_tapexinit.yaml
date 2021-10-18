@@ -1,0 +1,76 @@
+description: pretrain with tapex as initialization
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wholetable_3merge_bart_mlm_contextmention_bartlarge
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_bartlarge seq2seq 6 10 null
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-large
+
+- name: wholetable_3merge_bart_mlm_contextmention_tapexlarge
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_tapexlarge seq2seq 6 10
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-large
+- name: wholetable_3merge_bart_mlm_contextmention_tapexlarge_finetune
+  sku: G8
+  command:
+  - ./finetune.sh 8 wtqqa_tapex:wtqqa:wikisqlqa:turl_sa:turl_cf
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_tapexlarge/pytorch_model_epoch09.bin 12
+    --base-model-name facebook/bart-large
+
+- name: wholetable_tapas_bart_mlm_contextmention_retbycontext_tapexlarge
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention_retbycontext
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_mlm_contextmention_retbycontext_tapexlarge seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-large
+
+- name: wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_tapexinit
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_mlm_contextmention_dense_span_context_as_whole_tapexinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-large

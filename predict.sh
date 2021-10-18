@@ -4,6 +4,7 @@ ngpu=$1
 task=$2  # from "wtqqa" "wikisqlqa" "turl_cf" "turl_sa"
 model_dir=$3
 ckpt=$4
+args="${@:5}"
 
 epoch=1
 batch_size=24
@@ -42,7 +43,7 @@ for task in "${tasks[@]}"; do
         prediction_file=${model_filename%.*}_${mode}.tsv
         CUDA_VISIBLE_DEVICES="$((remain - 1))" ./run_vanilla.sh \
             1 ${data} ${model_dir} seq2seq ${batch_size} ${epoch} '"'${model_ckpt}'"' \
-            --only_test --mode ${mode} --output_file ${prediction_file} &
+            --only_test --mode ${mode} --output_file ${prediction_file} ${args} &
         if [[ "$isfirst" == "true" ]]; then
             # run the first exclusively to download necessary files
             wait

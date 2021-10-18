@@ -2,11 +2,14 @@
 
 source initialize.sh
 
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024
 input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=10000
+max_source_len=1024
+max_target_len=1024
+max_context_len=128
 max_num_mention_per_example=3
 column_delimiter='|'
 row_delimiter="[SEP]"
@@ -21,7 +24,9 @@ for (( i=0; i<${worldsize}; ++i)); do
     --base_model_name facebook/bart-base \
     --do_lower_case \
     --epochs_to_generate 50 \
-    --max_context_len 128 \
+    --max_source_len ${max_source_len} \
+    --max_target_len ${max_target_len} \
+    --max_context_len ${max_context_len} \
     --max_column_len 15 \
     --max_cell_len 15 \
     --table_mask_strategy column \

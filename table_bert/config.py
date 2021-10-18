@@ -134,6 +134,9 @@ MODEL2PAD = {
 }
 
 class TableBertConfig(SimpleNamespace):
+    MAX_SOURCE_LEN: int = 512
+    MAX_TARGET_LEN: int = 512
+
     def __init__(
         self,
         base_model_name: str = 'bert-base-uncased',
@@ -145,7 +148,7 @@ class TableBertConfig(SimpleNamespace):
         column_representation: str = 'mean_pool',
         column_repr_dpr: str = 'whole_span',
         max_cell_len: int = 5,
-        max_sequence_len: int = 512,
+        max_sequence_len: int = 512,  # TODO: never used
         max_context_len: int = 256,
         masked_context_prob: float = 0.15,
         masked_column_prob: float = 0.2,
@@ -167,12 +170,18 @@ class TableBertConfig(SimpleNamespace):
         not_skip_empty_column_name: bool = False,
         only_table: bool = False,
         seq2seq_format: str = None,
+        table_linearization: str = None,
         multi_decode_sep_token: str = '<|>',
         column_wise: bool = False,
         not_strict_mask: bool = False,
+        max_source_len: int = 512,
+        max_target_len: int = 512,
         **kwargs
     ):
         super(TableBertConfig, self).__init__()
+        # update the class-level value
+        TableBertConfig.MAX_SOURCE_LEN = max_source_len
+        TableBertConfig.MAX_TARGET_LEN = max_target_len
 
         self.base_model_name = base_model_name
         self.load_model_from = load_model_from
@@ -257,6 +266,7 @@ class TableBertConfig(SimpleNamespace):
         self.not_skip_empty_column_name = not_skip_empty_column_name
         self.only_table = only_table
         self.seq2seq_format = seq2seq_format
+        self.table_linearization = table_linearization
 
         if not hasattr(self, 'vocab_size_or_config_json_file'):
             if self.model_type == ModelType.BERT:
@@ -296,6 +306,9 @@ class TableBertConfig(SimpleNamespace):
         # training specifications
         parser.add_argument("--max_sequence_len", type=int, default=512)
         parser.add_argument("--max_context_len", type=int, default=256)
+        parser.add_argument('--max_source_len', type=int, default=512)
+        parser.add_argument('--max_target_len', type=int, default=512)
+
         parser.add_argument("--max_cell_len", type=int, default=5)
         parser.add_argument("--max_column_len", type=int, default=None)
         parser.add_argument("--skip_column_name_longer_than", type=int, default=10)
@@ -320,12 +333,15 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--mask_used_column_prob', type=float, default=0.0, help='probability of only masking used columns')
         parser.add_argument('--mask_value', action='store_true')
         parser.add_argument('--mask_value_column_separate', action='store_true')
+        parser.add_argument('--table_linearization', type=str, default='tabert', choices=['tabert', 'tapex'],
+                            help='specifies how to linearize tables')
         parser.add_argument('--seq2seq_format', type=str,
                             choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
                                      'qa_firstansrow', 'qa_allrow', 'qa_tapex', 'sql',
                                      'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
                                      'mention-context', 'mention-table', 'mlm_mention-context',
-                                     'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1'],
+                                     'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1',
+                                     'bart-mask', 'salient-mask', 'bart-mask_salient-mask'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument('--column_wise', action='store_true', help='linearize the table by columns')
         parser.add_argument('--not_strict_mask', action='store_true', help='skip errors during masking')

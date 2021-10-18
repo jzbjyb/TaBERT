@@ -13,7 +13,6 @@ from collections import defaultdict
 import numpy as np
 
 from table_bert.utils import BertTokenizer
-from table_bert.table_bert import MAX_BERT_INPUT_LENGTH, MAX_TARGET_LENGTH
 from table_bert.config import TableBertConfig
 from table_bert.dataset import Example
 from table_bert.table import Column, Table
@@ -243,7 +242,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                       cell_input_template: List[str] = None):  # none means not trim
         column_wise = self.config.column_wise
         use_row_data = self.config.top_row_count == 0 and len(row_data) > 0
-        max_total_len = trim_long_table or MAX_BERT_INPUT_LENGTH
+        max_total_len = trim_long_table or TableBertConfig.MAX_SOURCE_LEN
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
             # account for cls and sep, and the ending sep
@@ -520,6 +519,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return instances
 
     def create_table_row_instances(self, context, example: Example, additional_rows: List[List[Any]]):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         instances = []
         if len(additional_rows) <= 0:
             return instances
@@ -530,8 +530,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             instance = self.get_input(context, table, other_rows)
             target = self.concate_cells(
                 example.header, target_row, table_tokens_start_idx=0,
-                trim_long_table=0, max_table_token_length=MAX_TARGET_LENGTH - 2)[0]
-            target = [self.config.cls_token] + target[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+                trim_long_table=0, max_table_token_length=mtl - 2)[0]
+            target = [self.config.cls_token] + target[:mtl - 2] + [self.config.sep_token]
             instance = {
                 'tokens': instance['tokens'],
                 'token_ids': self.tokenizer.convert_tokens_to_ids(instance['tokens']),
@@ -551,6 +551,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                          context_mentions: List[Tuple[int, int]],
                                          example: Example,
                                          additional_rows: List[List[Any]]):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         instances = []
         if len(context_mentions) <= 0:
             return instances
@@ -558,7 +559,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         for (start, end), _ in sample(context_mentions, min(len(context_mentions), self.config.max_num_mention_per_example)):
             _context = context[:start] + [self.config.mask_token] + context[end:]
             instance = self.get_input(_context, table, additional_rows)
-            target = [self.config.cls_token] +  context[start:end][:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+            target = [self.config.cls_token] + context[start:end][:mtl - 2] + [self.config.sep_token]
             instance = {
                 'tokens': instance['tokens'],
                 'token_ids': self.tokenizer.convert_tokens_to_ids(instance['tokens']),
@@ -574,6 +575,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return instances
 
     def create_mention_table_instances(self, context, example: Example, additional_rows: List[List[Any]], dedup: bool = False):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         instances = []
         column_data_used = example.column_data_used
         if len(column_data_used) <= 0:
@@ -600,7 +602,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             if dedup:
                 for ri, ci in others:
                     additional_rows[ri][ci] = value
-            target = [self.config.cls_token] + value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+            target = [self.config.cls_token] + value[:mtl - 2] + [self.config.sep_token]
             instance = {
                 'tokens': instance['tokens'],
                 'token_ids': self.tokenizer.convert_tokens_to_ids(instance['tokens']),
@@ -616,7 +618,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return instances
 
     def _add_single_head(self, raw_tokens: List[str], toadd: List[str], target: List[str], seq_a_len: int):
-        need_to_remove = len(raw_tokens) + len(toadd) + 1 - MAX_BERT_INPUT_LENGTH  # sep token
+        need_to_remove = len(raw_tokens) + len(toadd) + 1 - TableBertConfig.MAX_SOURCE_LEN  # sep token
         if need_to_remove > 0:  # overflow
             assert len(raw_tokens) >= need_to_remove + 2, 'the raw input is too short to be removed'  # sep and cls token
             tokens = raw_tokens[:-(need_to_remove + 1)]  # also remove the last sep token
@@ -639,6 +641,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return instance
 
     def create_seq2seq_instances(self, context, header: List[Column]):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         instances = []
         seq2seqf = self.config.seq2seq_format
         for hi, single_head in enumerate(header):
@@ -654,25 +657,26 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 seq_a_len = len(context) + 2
             if 'single-c2v' in seq2seqf and single_head.value_used:
                 cell_value = single_head.sample_value_tokens[:self.config.max_cell_len]
-                target_tokens = [self.config.cls_token] + cell_value[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+                target_tokens = [self.config.cls_token] + cell_value[:mtl - 2] + [self.config.sep_token]
                 ctokens = self.get_cell_input(single_head, cell_value, cell_input_template=['column', '|', 'type', '|'])[0]
                 instances.append(self._add_single_head(raw_tokens, ctokens, target_tokens, seq_a_len))
             if 'single-v2c' in seq2seqf and (single_head.value_used or single_head.used):
                 cell_value = single_head.sample_value_tokens[:self.config.max_cell_len]
                 vtokens = self.get_cell_input(single_head, cell_value, cell_input_template=['|', 'value'])[0]
                 ctokens = self.get_cell_input(single_head, cell_value, cell_input_template=['column', '|', 'type'])[0]
-                target_tokens = [self.config.cls_token] + ctokens[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+                target_tokens = [self.config.cls_token] + ctokens[:mtl - 2] + [self.config.sep_token]
                 instances.append(self._add_single_head(raw_tokens, vtokens, target_tokens, seq_a_len))
         return instances
 
     def create_qa_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         # context + table without mask
         table = Table('fake_table', header)
         instance = self.get_input(context, table, additional_rows, shuffle=True)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # answer as target
-        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:mtl - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
             'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
@@ -687,6 +691,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return [instance]
 
     def create_qa_tapex_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         table = Table('fake_table', [Column.get_dummy()] + header)  # the dummy header is for the first index element
         for i, row in enumerate(additional_rows):  # add row index at the beginning of each row
             row.insert(0, self.tokenizer.tokenize(f'row {i + 1}'))
@@ -695,7 +700,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # answer as target
-        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:mtl - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
             'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
@@ -710,13 +715,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return [instance]
 
     def create_qa_allrow_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         # context + table without mask
         table = Table('fake_table', header)
         instance = self.get_input(context, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # answer as target
-        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:mtl - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
             'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
@@ -731,13 +737,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return [instance]
 
     def create_sql_instances(self, context, header: List[Column], sql: str):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         # context + table without mask
         table = Table('fake_table', header)
         instance = self.get_input(context, table)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # sql as target
-        target = [self.config.cls_token] + self.tokenizer.tokenize(sql)[:MAX_TARGET_LENGTH - 2] + [self.config.sep_token]
+        target = [self.config.cls_token] + self.tokenizer.tokenize(sql)[:mtl - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
             'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
@@ -752,7 +759,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         return [instance]
 
     def create_sa_gen_instance(self, context, header: List[Column]):
-        max_schema_token_length = MAX_TARGET_LENGTH - 2  # cls and sep token
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        max_schema_token_length = mtl - 2  # cls and sep token
         cds = self.config.multi_decode_sep_tokens
         schema_tokens = self.concate_cells(
             header, [[] for _ in range(len(header))],
@@ -776,6 +784,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         }
 
     def create_cf_gen_instance(self, context, header: List[Column]):
+        mtl = TableBertConfig.MAX_TARGET_LEN
         # get target using object columns (odd)
         target_cells: List[List] = []
         for col_idx, cell in enumerate(header):
@@ -797,7 +806,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             if i < len(target_cells) - 1:
                 target_tokens.extend(self.config.multi_decode_sep_tokens)
         target_tokens.append(self.config.sep_token)
-        target_tokens = target_tokens[:MAX_TARGET_LENGTH]
+        target_tokens = target_tokens[:mtl]
         if len(target_tokens) > 0 and target_tokens[-1] != self.config.sep_token:
             target_tokens[-1] = self.config.sep_token
 

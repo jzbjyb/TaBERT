@@ -27,7 +27,6 @@ from tqdm import tqdm
 import json
 import numpy as np
 
-from table_bert.table_bert import MAX_TARGET_LENGTH
 from table_bert.vanilla_table_bert import VanillaTableBert
 from table_bert.vertical.config import VerticalAttentionTableBertConfig
 from table_bert.vertical.dataset import VerticalAttentionTableBertDataset
@@ -125,7 +124,7 @@ def parse_train_arg():
         'represent-dev', 'represent-train', None], default=None)
     parser.add_argument('--index_repr', type=str, choices=['whole', 'whole_avg_cell', 'span_context', 'span_noncontext'], default='whole', help='how to build representations for index')
     parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
-    parser.add_argument('--max_generate_length', type=int, default=MAX_TARGET_LENGTH, help='max number of tokens generated for the generate mode')
+    parser.add_argument('--max_generate_length', type=int, default=None, help='max number of tokens generated for the generate mode')
     parser.add_argument('--min_generate_length', type=int, default=None, help='min number of tokens generated for the generate mode')
     parser.add_argument('--output_file', type=str, default=None)
 

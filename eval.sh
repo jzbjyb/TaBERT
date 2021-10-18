@@ -13,7 +13,7 @@ fi
 pred=$1
 
 if [[ "$task" == "wtqqa" ]]; then
-  gold=${prefix}/mnt/root/TaBERT/data/wikitablequestions/tapex/test.tgt
+  gold=${prefix}/mnt/root/TaBERT/data/wikitablequestions/test/preprocessed_with_ans.jsonl
 else
   exit
 fi

@@ -23,7 +23,7 @@ from table_bert.utils import BertForPreTraining, BertForMaskedLM, TRANSFORMER_VE
 from table_bert.utils import ElectraForPreTraining, ElectraForMaskedLM, RobertaForMaskedLM, \
     BartForConditionalGeneration, shift_tokens_right
 from table_bert.table_bert import TableBertModel
-from table_bert.config import TableBertConfig, BERT_CONFIGS
+from table_bert.config import TableBertConfig, ModelType
 from table_bert.table import Table
 from table_bert.input_formatter import VanillaTableBertInputFormatter
 from table_bert.electra import ELECTRAModel, ELECTRALoss
@@ -40,7 +40,7 @@ class VanillaTableBert(TableBertModel):
     ):
         super(VanillaTableBert, self).__init__(config, **kwargs)
 
-        getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
+        self.lm_module_name = getattr(self, 'load_{}'.format(config.model_type.value))()  # load model based on model type
         obj = self.config.objective_function
         if 'contrastive' in obj:
             self.contrastive_loss = CLIPLoss(self.output_size, self.config.contrastive_emb_size)
@@ -51,7 +51,13 @@ class VanillaTableBert(TableBertModel):
         if config.load_model_from is not None:
             print('init from {}'.format(config.load_model_from))
             state_dict = torch.load(config.load_model_from, map_location='cpu')
-            self.load_state_dict(state_dict, strict=False)
+            try:
+                self.load_state_dict(state_dict)
+            except:
+                print('directly the load the LM')
+                if self.config.model_type == ModelType.BART:
+                    state_dict.pop('lm_head.weight', None)
+                getattr(self, self.lm_module_name).load_state_dict(state_dict)
         self.input_formatter = VanillaTableBertInputFormatter(self.config, self.tokenizer)
 
     def load_bert(self):
@@ -63,6 +69,7 @@ class VanillaTableBert(TableBertModel):
             self._bert_model = BertForPreTraining.from_pretrained(self.config.base_model_name)
         else:
             self._bert_model = BertForMaskedLM.from_pretrained(self.config.base_model_name)
+        return '_bert_model'
 
     def load_electra(self):
         for loss_fct in ['nsp', 'binary', 'seq2seq', 'contrast-span']:
@@ -75,18 +82,21 @@ class VanillaTableBert(TableBertModel):
         generator.generator_lm_head.weight = generator.electra.embeddings.word_embeddings.weight
         self._electra = ELECTRAModel(generator, discriminator)
         self._electra_loss = ELECTRALoss()
+        return '_electra'
 
     def load_roberta(self):
         for loss_fct in ['nsp', 'binary', 'separate-bin', 'seq2seq', 'contrast-span']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._roberta = RobertaForMaskedLM.from_pretrained(self.config.base_model_name)
+        return '_roberta'
 
     def load_bart(self):
         for loss_fct in ['nsp', 'binary', 'separate-bin', 'contrastive', 'contrast-concat', 'contrast-span']:
             if loss_fct in self.config.objective_function:
                 raise NotImplementedError
         self._bart = BartForConditionalGeneration.from_pretrained(self.config.base_model_name)
+        return '_bart'
 
     def forward(self, *args, **kwargs):
         return getattr(self, 'forward_{}'.format(self.config.model_type.value))(*args, **kwargs)

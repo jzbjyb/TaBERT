@@ -236,11 +236,13 @@ class TableBertConfig(SimpleNamespace):
 
         if isinstance(cell_input_template, str):
             if ' ' in cell_input_template:
-                if '|' in cell_input_template:
-                    assert len(tokenizer.tokenize('|')) == 1, 'template should only contain single word piece tokens'
-                    cell_input_template = [tokenizer.tokenize(t)[0] if t == '|' else t for t in cell_input_template.split(' ')]
-                else:
-                    raise NotImplementedError
+                _cell_input_template = []
+                for t in cell_input_template.split(' '):
+                    if t in {'column', 'value', 'type'}:  # pre-defined keywords
+                        _cell_input_template.append(t)
+                    else:
+                        assert len(tokenizer.tokenize(t)) == 1, 'template should only contain single-piece tokens'
+                        _cell_input_template.append(tokenizer.tokenize(t)[0])
             else:
                 cell_input_template = [cell_input_template]  # assume there is only a single element in the template
 

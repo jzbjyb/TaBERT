@@ -11,7 +11,7 @@ max_source_len=1024
 max_target_len=1024
 max_context_len=128
 max_num_mention_per_example=3
-column_delimiter='//'
+column_delimiter='|'
 row_delimiter="[SEP]"
 mkdir -p ${output_dir}
 worldsize=3
@@ -35,7 +35,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --masked_column_prob 0.2 \
     --masked_context_prob 0.15 \
     --max_predictions_per_seq 200 \
-    --cell_input_template 'column | value' \
+    --cell_input_template 'column : value' \
     --column_delimiter ${column_delimiter} \
     --row_delimiter ${row_delimiter} \
     --world_size ${worldsize} \

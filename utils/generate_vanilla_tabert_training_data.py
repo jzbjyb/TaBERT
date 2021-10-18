@@ -121,8 +121,8 @@ def generate_for_epoch(table_db: TableDatabase,
                 sequence_offsets.append([cur_pos, cur_pos + sequence_len])
 
                 if 'target_token_ids' in instance:
-                    target_sequence_offsets.append(
-                        [len(target_sequences), len(target_sequences) + len(instance['target_token_ids'])])
+                    cur_pos_tgt = len(target_sequences)
+                    target_sequence_offsets.append([cur_pos_tgt, cur_pos_tgt + len(instance['target_token_ids'])])
                     target_sequences.extend(instance['target_token_ids'])
                 if 'column_token_to_column_id' in instance:
                     column_token_to_column_id.extend(instance['column_token_to_column_id'])
@@ -133,11 +133,10 @@ def generate_for_epoch(table_db: TableDatabase,
                     mentions_cells.extend(instance['mentions_cells'])
                     mentions_cells_offsets.append([cur_pos_mc, cur_pos_mc + len(instance['mentions_cells'])])
 
-                cur_pos = len(masked_lm_positions)
-                lm_mask_len = len(instance['masked_lm_positions'])
+                cur_pos_mlm = len(masked_lm_positions)
                 masked_lm_positions.extend(instance['masked_lm_positions'])
                 masked_lm_label_ids.extend(instance['masked_lm_label_ids'])
-                masked_lm_offsets.append([cur_pos, cur_pos + lm_mask_len])
+                masked_lm_offsets.append([cur_pos_mlm, cur_pos_mlm + len(instance['masked_lm_positions'])])
                 is_positives.append(int(example.is_positive))
         except KeyboardInterrupt as e:
             raise e

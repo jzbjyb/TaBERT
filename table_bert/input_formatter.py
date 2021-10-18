@@ -50,6 +50,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'first_token': (token_offset, token_offset + 1)
         }
         cell_input_template = cell_input_template or self.config.cell_input_template
+        assert type(cell_input_template) is list
 
         for token in cell_input_template:
             start_token_abs_position = len(input) + token_offset
@@ -467,14 +468,26 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 instance['source'] = example.source
                 instances.append(instance)
             else:
-                if 'mlm' in seq2seq_format:  # added a dummy target which is identical to the masked sequence
-                    instance = self.create_pretraining_instance(context, example.header, additional_rows)
+                if 'mlm' in seq2seq_format or 'bart-mask' in seq2seq_format:
+                    if 'mlm' in seq2seq_format:  # target is identical to source (which probably contains masks)
+                        instance = self.create_pretraining_instance(context, example.header, additional_rows)
+                        instance['target_token_ids'] = instance['token_ids']
+                    elif 'bart-mask' in seq2seq_format:  # target is identical to source but masked tokens are re-filled
+                        instance = self.create_pretraining_instance(context, example.header, additional_rows, single_mask=True)
+                        instance['target_token_ids'] = instance['raw_token_ids']
                     instance['source'] = example.source
-                    instance['target_token_ids'] = instance['token_ids']
-                    instance['context_token_to_mention_id'], instance['mentions_cells'] = self.get_context_token_to_mention_id(
-                        context, context_mentions, size=len(instance['tokens']),
-                        max_num_cells=np.max(instance['column_token_to_column_id']) + 1, row_size=len(example.column_data))
-                    self.verify_mention_cell(instance['token_ids'], instance['context_token_to_mention_id'], instance['column_token_to_column_id'], instance['mentions_cells'], debug=False)
+                    instance['context_token_to_mention_id'], instance['mentions_cells'] = \
+                        self.get_context_token_to_mention_id(
+                            context,
+                            context_mentions,
+                            size=len(instance['tokens']),
+                            max_num_cells=np.max(instance['column_token_to_column_id']) + 1,
+                            row_size=len(example.column_data))
+                    self.verify_mention_cell(
+                        instance['token_ids'],
+                        instance['context_token_to_mention_id'],
+                        instance['column_token_to_column_id'],
+                        instance['mentions_cells'], debug=False)
                     instances.append(instance)
                 if 'single' in seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
@@ -500,6 +513,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.append(self.create_sa_gen_instance(context, example.header))
                 if 'mention-context' in seq2seq_format:
                     instances.extend(self.create_mention_context_instances(context, context_mentions, example, additional_rows))
+                if 'salient-mask' in seq2seq_format:
+                    instances.extend(self.create_salient_mask_instances(context, context_mentions, example, additional_rows))
                 if 'mention-table' in seq2seq_format:
                     instances.extend(self.create_mention_table_instances(context, example, additional_rows))
                 if 'mention-dedup-table' in seq2seq_format:
@@ -572,6 +587,52 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 'info': None
             }
             instances.append(instance)
+        return instances
+
+    def create_salient_mask_instances(self,
+                                      context: List[str],
+                                      context_mentions: List[Tuple[int, int]],
+                                      example: Example,
+                                      additional_rows: List[List[Any]]):
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        instances = []
+        if len(context_mentions) <= 0:
+            return instances
+        table = Table('fake_table', example.header)
+
+        # mask all mentions
+        masked_context = copy.deepcopy(context)
+        masked_lm_positions: List[int] = []
+        masked_lm_labels: List[str] = []
+        for (start, end) in context_mentions:
+            for i in range(start, end):
+                masked_lm_positions.append(i + 1)  # add one to acount for the cls token
+                masked_lm_labels.append(context[i])
+                if i == start:
+                    masked_context[start] = self.config.mask_token
+                else:
+                    masked_context[i] = None
+
+        # single mask
+        masked_context = [t for t in masked_context if t is not None]
+        masked_inst = self.get_input(masked_context, table, additional_rows)
+
+        # use raw token sequence as target
+        target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
+        masked_lm_positions = masked_lm_positions[:mtl - 2]
+        masked_lm_labels = masked_lm_labels[:mtl - 2]
+        instance = {
+            'tokens': masked_inst['tokens'],
+            'token_ids': self.tokenizer.convert_tokens_to_ids(masked_inst['tokens']),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': masked_inst['segment_a_length'],
+            'masked_lm_positions': masked_lm_positions,
+            'masked_lm_labels': masked_lm_labels,
+            'masked_lm_label_ids': self.tokenizer.convert_tokens_to_ids(masked_lm_labels),
+            'info': None
+        }
+        instances.append(instance)
         return instances
 
     def create_mention_table_instances(self, context, example: Example, additional_rows: List[List[Any]], dedup: bool = False):
@@ -928,7 +989,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         }
         return instance
 
-    def create_pretraining_instance(self, context, header, additional_rows: List[List[Any]] = []):
+    def create_pretraining_instance(self,
+                                    context,
+                                    header,
+                                    additional_rows: List[List[Any]] = [],
+                                    single_mask: bool = False):
         table = Table('fake_table', header)
         input_instance = self.get_input(context, table, additional_rows)  # core format function
         column_spans = input_instance['column_spans']
@@ -971,15 +1036,26 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             list(range(*input_instance['context_span']))[:-1]
         )
 
+        raw_tokens = input_instance['tokens']
         masked_sequence, masked_lm_positions, masked_lm_labels, info = self.create_masked_lm_predictions(
-            input_instance['tokens'], context_candidate_indices, column_candidate_indices, masked_column_prob=masked_column_prob
+            raw_tokens, context_candidate_indices, column_candidate_indices, masked_column_prob=masked_column_prob
         )
+
+        if single_mask:  # only keep a single mask for consecutive mask tokens
+            _masked_sequence: List[str] = []
+            for i in range(len(masked_sequence)):
+                if i > 0 and masked_sequence[i - 1] == masked_sequence[i] == self.config.mask_token:
+                    continue
+                _masked_sequence.append(masked_sequence[i])
+            masked_sequence = _masked_sequence
 
         info['num_columns'] = len(header)
 
         instance = {
             "tokens": masked_sequence,
             "token_ids": self.tokenizer.convert_tokens_to_ids(masked_sequence),
+            "raw_tokens": raw_tokens,
+            "raw_token_ids": self.tokenizer.convert_tokens_to_ids(raw_tokens),
             "column_token_to_column_id": input_instance["column_token_to_column_id"],
             "segment_a_length": input_instance['segment_a_length'],
             "masked_lm_positions": masked_lm_positions,
@@ -990,10 +1066,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         return instance
 
-    def create_masked_lm_predictions(
-        self,
-        tokens, context_indices, column_indices, masked_column_prob=None
-    ):
+    def create_masked_lm_predictions(self,
+                                     tokens,
+                                     context_indices,
+                                     column_indices,
+                                     masked_column_prob=None):
         table_mask_strategy = self.config.table_mask_strategy
         masked_column_prob = masked_column_prob or self.config.masked_column_prob
 

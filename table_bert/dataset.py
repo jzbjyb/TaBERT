@@ -289,15 +289,15 @@ class TableDataset(Dataset):
                     example['num_cells'] = max(np.max(example['column_token_to_column_id']) + 1, 0)
                     example['num_mentions'] = max(np.max(example['context_token_to_mention_id']) + 1, 0)
                 if target_sequence_offsets is not None:
-                    t_seq_begin, t_seq_end = target_sequence_offsets[i]
-                    example['target_token_ids'] = target_sequences[t_seq_begin: t_seq_end]
+                    tgt_begin, tgt_end = target_sequence_offsets[i]
+                    example['target_token_ids'] = target_sequences[tgt_begin:tgt_end]
 
                 seq_a_length = segment_a_lengths[i]
                 example['sequence_a_length'] = seq_a_length
 
-                tgt_begin, tgt_end = masked_lm_offsets[i]
-                example['masked_lm_positions'] = masked_lm_positions[tgt_begin: tgt_end]
-                example['masked_lm_label_ids'] = masked_lm_label_ids[tgt_begin: tgt_end]
+                mlm_begin, mlm_end = masked_lm_offsets[i]
+                example['masked_lm_positions'] = masked_lm_positions[mlm_begin:mlm_end]
+                example['masked_lm_label_ids'] = masked_lm_label_ids[mlm_begin:mlm_end]
 
                 example['is_positive'] = is_positives[i] if is_positives is not None else 1  # default to 1
 

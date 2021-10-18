@@ -243,6 +243,7 @@ class TableBertConfig(SimpleNamespace):
                     else:
                         assert len(tokenizer.tokenize(t)) == 1, 'template should only contain single-piece tokens'
                         _cell_input_template.append(tokenizer.tokenize(t)[0])
+                cell_input_template = _cell_input_template
             else:
                 cell_input_template = [cell_input_template]  # assume there is only a single element in the template
 

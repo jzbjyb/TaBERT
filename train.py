@@ -329,7 +329,8 @@ def main():
                                           collate_fn=partial(
                                               epoch_dataset.collate,
                                               pad_id=table_bert_config.pad_id,
-                                              sep_id=table_bert_config.sep_id))
+                                              sep_id=table_bert_config.sep_id,
+                                              max_allow_len=TableBertConfig.MAX_SOURCE_LEN))
 
         samples_iter = GroupedIterator(iter(train_dataloader), args.gradient_accumulation_steps)
         trainer.resume_batch_loader(samples_iter)

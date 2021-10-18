@@ -2,8 +2,8 @@
 
 source initialize.sh
 
-output_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl
-input_dir=/mnt/root/tapas/data/pretrain/train/wholetable_3merge_bart_bartmask_salientmask
+output_dir=/mnt/root/tapas/data/pretrain/train/wholetable_3merge_bart_bartmask_salientmask
+input_dir=/mnt/root/TaBERT/data/grappa/totto_tablefact_wikisql_train_preprocessed_mention.jsonl
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=10000

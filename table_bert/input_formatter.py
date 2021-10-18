@@ -476,18 +476,19 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                         instance = self.create_pretraining_instance(context, example.header, additional_rows, single_mask=True)
                         instance['target_token_ids'] = instance['raw_token_ids']
                     instance['source'] = example.source
-                    instance['context_token_to_mention_id'], instance['mentions_cells'] = \
-                        self.get_context_token_to_mention_id(
-                            context,
-                            context_mentions,
-                            size=len(instance['tokens']),
-                            max_num_cells=np.max(instance['column_token_to_column_id']) + 1,
-                            row_size=len(example.column_data))
-                    self.verify_mention_cell(
-                        instance['token_ids'],
-                        instance['context_token_to_mention_id'],
-                        instance['column_token_to_column_id'],
-                        instance['mentions_cells'], debug=False)
+                    if 'bart-mask' not in seq2seq_format:
+                        instance['context_token_to_mention_id'], instance['mentions_cells'] = \
+                            self.get_context_token_to_mention_id(
+                                context,
+                                context_mentions,
+                                size=len(instance['tokens']),
+                                max_num_cells=np.max(instance['column_token_to_column_id']) + 1,
+                                row_size=len(example.column_data))
+                        self.verify_mention_cell(
+                            instance['token_ids'],
+                            instance['context_token_to_mention_id'],
+                            instance['column_token_to_column_id'],
+                            instance['mentions_cells'], debug=False)
                     instances.append(instance)
                 if 'single' in seq2seq_format:
                     instances.extend(self.create_seq2seq_instances(context, example.header))
@@ -601,10 +602,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         table = Table('fake_table', example.header)
 
         # mask all mentions
+        assert len(context) <= mtl - 2, 'context is truncated as target, so masked mentions might be out of bound'
         masked_context = copy.deepcopy(context)
         masked_lm_positions: List[int] = []
         masked_lm_labels: List[str] = []
-        for (start, end) in context_mentions:
+        for (start, end), _ in context_mentions:
             for i in range(start, end):
                 masked_lm_positions.append(i + 1)  # add one to acount for the cls token
                 masked_lm_labels.append(context[i])
@@ -619,8 +621,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
         # use raw token sequence as target
         target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
-        masked_lm_positions = masked_lm_positions[:mtl - 2]
-        masked_lm_labels = masked_lm_labels[:mtl - 2]
+        masked_lm_positions = masked_lm_positions
+        masked_lm_labels = masked_lm_labels
         instance = {
             'tokens': masked_inst['tokens'],
             'token_ids': self.tokenizer.convert_tokens_to_ids(masked_inst['tokens']),
@@ -1114,8 +1116,9 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         masked_token_labels = []
         masked_indices_rm_oob = []
 
+        tokens_with_mask = copy.deepcopy(tokens)
         for index in masked_indices:
-            if self.config.not_strict_mask and index >= len(tokens):
+            if self.config.not_strict_mask and index >= len(tokens_with_mask):
                 continue
             if not self.config.use_electra:  # BERT style masking
                 # 80% of the time, replace with mask
@@ -1124,7 +1127,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 else:
                     # 10% of the time, keep original
                     if random() < 0.5:
-                        masked_token = tokens[index]
+                        masked_token = tokens_with_mask[index]
                     # 10% of the time, replace with random word
                     else:
                         masked_token = choice(self.vocab_list)
@@ -1132,18 +1135,18 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 if random() < 0.85:  # 85% of the time, replace with mask
                     masked_token = self.config.mask_token
                 else:  # 15% of the time, keep original
-                    masked_token = tokens[index]
-            masked_token_labels.append(tokens[index])
+                    masked_token = tokens_with_mask[index]
+            masked_token_labels.append(tokens_with_mask[index])
             masked_indices_rm_oob.append(index)
             # Once we've saved the true label for that token, we can overwrite it with the masked version
-            tokens[index] = masked_token
+            tokens_with_mask[index] = masked_token
 
         info.update({
             'num_column_tokens_to_mask': num_column_tokens_to_mask,
             'num_context_tokens_to_mask': num_context_tokens_to_mask,
         })
 
-        return tokens, masked_indices_rm_oob, masked_token_labels, info
+        return tokens_with_mask, masked_indices_rm_oob, masked_token_labels, info
 
     def remove_unecessary_instance_entries(self, instance: Dict):
         del instance['tokens']

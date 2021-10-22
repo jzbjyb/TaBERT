@@ -148,6 +148,16 @@ jobs:
     --gradient-accumulation-steps 2
     --base-model-name facebook/bart-large --mode generate-test --output_file ep9.tsv
 
+- name: wtqqa_tapex_linear_1024_base_tapex_ep10
+  sku: G4
+  command:
+  - ./run_vanilla.sh 4
+    /mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024
+    /mnt/root/TaBERT/data/runs/tapex_base_wtq_tapex_linear_1024_ep10 seq2seq 8 10
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 3
+    --base-model-name facebook/bart-base --mode generate-test --output_file ep9.tsv
+
 - name: wtqqa_tapex_linear_1024_large_tapex
   sku: G8
   command:
@@ -216,6 +226,12 @@ jobs:
     /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_1024_ep10 seq2seq 6 10 null
     --gradient-accumulation-steps 2
     --base-model-name facebook/bart-large --mode generate-test --output_file ep9.tsv
+- name: wtqqa_tapex_1024_large_ep10_test
+  sku: G4
+  command:
+  - ./predict.sh 4 wtqqa_tapex_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_1024_ep10 09:08:07:06:05:04:03:02:01:00
+    --base-model-name facebook/bart-large
 
 - name: wtqqa_tapex_1024_large
   sku: G8
@@ -225,6 +241,12 @@ jobs:
     /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_1024_ep50 seq2seq 6 50 null
     --gradient-accumulation-steps 2
     --base-model-name facebook/bart-large --mode generate-test --output_file ep49.tsv
+- name: wtqqa_tapex_1024_large_test
+  sku: G4
+  command:
+  - ./predict.sh 4 wtqqa_tapex_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_1024_ep50 05:07:10:13:15:20:25:30:40
+    --base-model-name facebook/bart-large
 
 - name: wtqqa_tapex_linear_large_ep50
   sku: G8
@@ -255,6 +277,12 @@ jobs:
     /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_1024_ep50 seq2seq 6 50 null
     --gradient-accumulation-steps 2
     --base-model-name facebook/bart-large --mode generate-test --output_file ep49.tsv
+- name: wtqqa_tapex_linear_1024_large_test
+  sku: G4
+  command:
+  - ./predict.sh 4 wtqqa_tapex_large
+    /mnt/root/TaBERT/data/runs/bart_large_wtq_tapex_linear_1024_ep50 05:07:10:13:15:20:25:30:40
+    --base-model-name facebook/bart-large
 
 - name: wtqqa_tapex_linear_large_ep50_bs256
   sku: G8

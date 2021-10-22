@@ -202,6 +202,8 @@ class TableBertConfig(SimpleNamespace):
             self.column_delimiter =  self.column_delimiter[0]
         if row_delimiter == '[SEP]':  # model-dependent delimiter
             self.row_delimiter = MODEL2SEP[self.model_type]
+        elif row_delimiter == 'none':
+            self.row_delimiter = None
         else:
             raise NotImplementedError
         self.sep_token = MODEL2SEP[self.model_type]

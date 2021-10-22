@@ -67,7 +67,8 @@ if __name__ == '__main__':
     answertype2ems = defaultdict(list)
 
     prev_example = None
-    with open(args.prediction, 'r') as pfin, open(args.gold, 'r') as gfin:
+    with open(args.prediction, 'r', encoding='utf-8') as pfin, \
+      open(args.gold, 'r', encoding='utf-8') as gfin:
         #csv_reader = csv.reader(gfin, delimiter='\t')
         #_ = next(csv_reader)  # skip tsv head
         for i, p in enumerate(pfin):

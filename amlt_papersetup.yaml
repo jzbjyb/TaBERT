@@ -1,0 +1,72 @@
+description: pretrain with setup in paper
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wholetable_3merge_bart_bartmask_salientmask
+  sku: G8
+  sku_count: 9
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 48
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask seq2seq 8 10 null
+- name: wholetable_3merge_bart_bartmask_salientmask_wtq_qa_allrow_1024
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_qa_allrow_1024
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_wtq_qa_allrow_1024 seq2seq 6 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask/pytorch_model_epoch09.bin"'
+    --gradient-accumulation-steps 2 --mode generate-test --output_file ep9.tsv
+- name: wholetable_3merge_bart_bartmask_salientmask_wtq_qa_allrow_1024_ep50
+  sku: G8
+  sku_count: 2
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 16
+    /mnt/root/TaBERT/data/train_data/wtq_qa_allrow_1024
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_wtq_qa_allrow_1024_ep50 seq2seq 6 50
+    '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask/pytorch_model_epoch09.bin"'
+    --mode generate-test --output_file ep9.tsv
+
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit seq2seq 3 10
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 8 --base-model-name facebook/bart-large
+
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit seq2seq 8 10
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 9 --base-model-name facebook/bart-base

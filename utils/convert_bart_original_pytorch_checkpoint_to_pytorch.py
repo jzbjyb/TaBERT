@@ -83,6 +83,7 @@ def load_xsum_checkpoint(tapex_large_ckpt, bart_large_dir: str = 'data/runs/bart
     tapex_sd = torch.load(tapex_large_ckpt, map_location='cpu')
     bart_sd = torch.load(os.path.join(bart_large_dir, 'model.pt'), map_location='cpu')
     mask_token_emb = bart_sd['model']['encoder.embed_tokens.weight'][-1]
+    print('mask token vector', mask_token_emb)
     # tapex didn't use mask token
     for involved_key in ['encoder.embed_tokens.weight',
                          'decoder.embed_tokens.weight',
@@ -143,6 +144,12 @@ def convert_bart_checkpoint(checkpoint_path, pytorch_dump_folder_path, hf_checkp
             model = BartForConditionalGeneration(config).eval()  # an existing summarization ckpt
             if 'decoder.output_projection.weight' in state_dict:  # remove output layer
                 state_dict.pop('decoder.output_projection.weight', None)
+
+            # bart-base vocab from fairseq is larger because of dummy tokens (https://github.com/pytorch/fairseq/issues/2242) remove them
+            # the old versions of transformers are also affected by this: https://github.com/huggingface/transformers/issues/9731
+            for key in ['encoder.embed_tokens.weight', 'decoder.embed_tokens.weight', 'shared.weight']:
+                state_dict[key] = torch.cat([state_dict[key][:50264], state_dict[key][-1:]], 0)
+
             model.model.load_state_dict(state_dict)
             if hasattr(model, "lm_head"):
                 model.lm_head = make_linear_from_emb(model.model.shared)

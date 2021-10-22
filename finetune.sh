@@ -12,14 +12,14 @@ IFS=':' read -ra tasks <<< "$task"
 for task in "${tasks[@]}"; do
     output="$(dirname "${model_ckpt}")"_${task}
 
-    if [[ "$task" == "wtqqa" ]]; then
+    if [[ "$task" == "__wtqqa" ]]; then  # TODO: deprecated
         data=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
         mode=generate-test
-    elif [[ "$task" == "wtqqa_tapex" ]]; then
+    elif [[ "$task" == "wtqqa" ]]; then
         data=/mnt/root/TaBERT/data/train_data/wtq_qa_allrow
         mode=generate-test
-    elif [[ "$task" == "wtqqa_tapex_large" ]]; then
-        data=/mnt/root/TaBERT/data/train_data/wtq_qa_allrow_bart_large
+    elif [[ "$task" == "wtqqa_tapex" ]]; then
+        data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex
         mode=generate-test
     elif [[ "$task" == "wikisqlqa" ]]; then
         data=/mnt/root/TaBERT/data/train_data/wikisql_qa_firstansrow_add30

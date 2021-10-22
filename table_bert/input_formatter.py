@@ -129,7 +129,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
         column_delimiters = column_delimiters or [self.config.column_delimiter]
-        row_delimiters = [self.config.row_delimiter]
+        row_delimiters = [self.config.row_delimiter] if self.config.row_delimiter is not None else []
 
         col_id = 0
         for col_id, column in enumerate(header):
@@ -244,6 +244,16 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         column_wise = self.config.column_wise
         use_row_data = self.config.top_row_count == 0 and len(row_data) > 0
         max_total_len = trim_long_table or TableBertConfig.MAX_SOURCE_LEN
+
+        if self.config.table_linearization == 'tapex':
+            if use_row_data:
+                raise Exception('tapex linearization is only used on raw table data instead of sampled data')
+            for i, row in enumerate(additional_rows):  # add row index at the beginning of each row
+                row.insert(0, self.tokenizer.tokenize(f'row {i + 1}'))
+            # header is the first row
+            additional_rows.insert(0, [self.tokenizer.tokenize('col')] + [h.name_tokens for h in header])
+            header = [Column.get_dummy()] + header  # the dummy header is for the first index element
+
         if self.config.context_first:
             table_tokens_start_idx = len(context) + 2  # account for cls and sep
             # account for cls and sep, and the ending sep
@@ -755,10 +765,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def create_qa_tapex_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
         mtl = TableBertConfig.MAX_TARGET_LEN
-        table = Table('fake_table', [Column.get_dummy()] + header)  # the dummy header is for the first index element
-        for i, row in enumerate(additional_rows):  # add row index at the beginning of each row
-            row.insert(0, self.tokenizer.tokenize(f'row {i + 1}'))
-        additional_rows.insert(0, [self.tokenizer.tokenize('col')] + [h.name_tokens for h in header])  # header is the first row
+        table = Table('fake_table', header)  # the dummy header is for the first index element
         instance = self.get_input(context, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']

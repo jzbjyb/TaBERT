@@ -17,7 +17,7 @@ from table_bert.config import TableBertConfig
 from table_bert.dataset import Example
 from table_bert.table import Column, Table
 
-trim_count = {'total': 0, 'trim': 0}
+trim_count = {'total': 0, 'trim': 0, 'mask_no_enough': 0}
 tablededup2count: Dict[int, int] = defaultdict(lambda: 0)
 
 
@@ -1107,6 +1107,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         max_context_token_to_mask = self.config.max_predictions_per_seq - num_column_tokens_to_mask
         num_context_tokens_to_mask = min(max_context_token_to_mask, min(
             len(context_indices), max(1, int(len(context_indices) * self.config.masked_context_prob))))
+        if num_context_tokens_to_mask == max_context_token_to_mask:
+            trim_count['mask_no_enough'] += 1
 
         if num_context_tokens_to_mask > 0:
             # if num_context_tokens_to_mask < 0 or num_context_tokens_to_mask > len(context_indices):

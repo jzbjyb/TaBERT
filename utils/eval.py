@@ -7,12 +7,14 @@ import json
 import numpy as np
 import random
 from collections import defaultdict
+from tqdm import tqdm
 import re
 from table_bert.dataset_utils import BasicDataset
 from table_bert.config import TableBertConfig
 from utils.wtq_evaluator import to_value, to_value_list, check_denotation
 AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
 COND_OPS = ['=', '>', '<', 'OP']
+only_alphanumeric = re.compile('[\W_]+')
 
 
 def compute_f1(preds: List[str], golds: List[str]):
@@ -25,9 +27,9 @@ def compute_f1(preds: List[str], golds: List[str]):
 
 def source_contains(source: str, targets: Union[str, List[str]]):
     if type(targets) is str:  targets = [targets]
-    source = source.lower()
+    source = only_alphanumeric.sub('', source.lower())  # remove non-alphanumeric characters
     for target in targets:
-        if target.lower() not in source:
+        if only_alphanumeric.sub('', target.lower()) not in source:
             return False
     return True
 
@@ -141,6 +143,7 @@ if __name__ == '__main__':
                 firstword2ems[first_word].append(em)
                 firstword2cases[first_word][int(em)].append((source, pred, gold))
 
+    print(np.mean(ems))  # the fine line of output is used for automatic analysis
     print(f'Exact match: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')
     print(f'Answer in input: {np.mean(ans_in_inputs)}')
 

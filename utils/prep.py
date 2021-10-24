@@ -1,6 +1,8 @@
 from typing import List
 import argparse
 import json
+import re
+from shutil import copyfile
 from pathlib import Path
 import numpy as np
 
@@ -51,11 +53,36 @@ def tapex_ans_in_source(pred_file: str):
   print(f'answer in source: {np.mean(ins)}')
 
 
+def get_shard_num(dir: Path, epoch: int) -> int:
+  epoch_prefix = dir / f'epoch_{epoch}'
+  shard_files = list(epoch_prefix.parent.glob(epoch_prefix.name + '.shard*.h5'))
+  shard_ids = [int(re.search(r'shard(\d+)', str(f)).group(1)) for f in shard_files]
+  shard_num = max(shard_ids) + 1
+  return shard_num
+
+
+def merge_shards(dirs: List[Path], out_dir: Path, epochs: int = 10, keep_shards: List[int] = [-1, -1], skip_first: bool = False):
+  assert len(dirs) == len(keep_shards)
+  for e in range(epochs):
+    sns: List[int] = [get_shard_num(dir, e) for dir in dirs]
+    keep_sns: List[int] = [sn if keep_shards[i] == -1 else min(sn, keep_shards[i]) for i, sn in enumerate(sns)]
+    new_shard_id = 0
+    for i, (dir, ksn) in enumerate(zip(dirs, keep_sns)):
+      for s in range(ksn):
+        from_file = dir / f'epoch_{e}.shard{s}.h5'
+        to_file = out_dir / f'epoch_{e}.shard{new_shard_id}.h5'
+        new_shard_id += 1
+        if not skip_first or i != 0:
+          print(f'{from_file} -> {to_file}')
+          copyfile(str(from_file), str(to_file))
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
-    'self_in_dense', 'count_mentions', 'tapex_ans_in_source'])
+    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
+  parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
 
   if args.task == 'self_in_dense':
@@ -66,3 +93,6 @@ if __name__ == '__main__':
 
   elif args.task == 'tapex_ans_in_source':
     tapex_ans_in_source(args.inp[0])
+
+  elif args.task == 'merge_shards':
+    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, 2], skip_first=True)

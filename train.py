@@ -395,10 +395,12 @@ def main():
 
         trainer.next_epoch()
 
+    # run evaluation at the end of the training
     if args.mode is not None and args.is_master:  # evaluate after training using the whole dataset
         dev_set = dataset_cls(epoch=0, training_path=dev_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if dev_data_dir.exists() else None
         test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if test_data_dir.exists() else None
         mode, which_part = args.mode.split('-')
+        trainer.args.output_file = f'ep{args.max_epoch - 1}.tsv'
         trainer.test(eval(f'{which_part}_set'), mode=mode)
 
     # syn to avoid bugs when we run multiple jobs in sequence

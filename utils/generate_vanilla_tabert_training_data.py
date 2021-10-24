@@ -13,7 +13,7 @@ import traceback
 from argparse import ArgumentParser, Namespace
 import logging
 from multiprocessing import connection
-from typing import List, Iterator, Callable
+from typing import List, Set, Iterator, Callable
 
 import h5py
 import numpy as np
@@ -155,6 +155,98 @@ def generate_for_epoch(table_db: TableDatabase,
     _save_shard()
 
 
+def convert_tapex_data(tapex_path: Path, output_dir: Path, tokenizer, indices: List[int], args: Namespace, config: TableBertConfig):
+    output_dir.mkdir(exist_ok=True, parents=True)
+    (output_dir / 'train').mkdir(exist_ok=True)
+
+    indices: Set[int] = set(indices)
+
+    for epoch in trange(args.epochs_to_generate, desc='Epoch'):
+        gc.collect()
+
+        epoch_filename = output_dir / 'train' / f'epoch_{epoch}.shard{args.global_rank}.h5'
+
+        sequences = []
+        segment_a_lengths = []
+        sequence_offsets = []
+
+        target_sequences = []
+        target_sequence_offsets = []
+
+        masked_lm_positions = []
+        masked_lm_label_ids = []
+        masked_lm_offsets = []
+
+        is_positives = []
+
+        with open(str(tapex_path), 'r') as sfin, open(str(tapex_path).replace('.src', '.tgt'), 'r') as tfin:
+            for line_id, source in tqdm(enumerate(sfin)):
+                source = source.strip()
+                target = tfin.readline().strip()
+                if line_id not in indices:
+                    continue
+
+                cp = source.find('col :')
+                context = source[:cp].strip()
+                table = source[cp:].strip()
+
+                # get source tokens
+                context_tokens: List[str] = tokenizer.tokenize(context)
+                table_tokens: List[str] = tokenizer.tokenize(table)
+
+                context_tokens = context_tokens[:config.MAX_SOURCE_LEN - 2]  # cls and sep
+                seg_a_len = len(context_tokens) + 1  # cls
+                source_tokens = [config.cls_token] + \
+                                (context_tokens + table_tokens)[:config.MAX_SOURCE_LEN - 2] + \
+                                [config.sep_token]
+                source_token_ids: List[int] = tokenizer.convert_tokens_to_ids(source_tokens)
+
+                # get target tokens
+                target_tokens: List[str] = [config.cls_token] + \
+                                           tokenizer.tokenize(target)[:config.MAX_TARGET_LEN - 2] + \
+                                           [config.sep_token]
+                target_token_ids: List[int] = tokenizer.convert_tokens_to_ids(target_tokens)
+
+                # save
+                cur_pos = len(sequences)
+                sequence_offsets.append([cur_pos, cur_pos + len(source_token_ids)])
+                sequences.extend(source_token_ids)
+                segment_a_lengths.append(seg_a_len)
+
+                cur_pos_tgt = len(target_sequences)
+                target_sequence_offsets.append([cur_pos_tgt, cur_pos_tgt + len(target_token_ids)])
+                target_sequences.extend(target_token_ids)
+
+                masked_lm_offsets.append([0, 0])
+                is_positives.append(1)
+
+        data = {
+            'sequences': np.uint16(sequences),
+            'segment_a_lengths': np.uint16(segment_a_lengths),
+            'sequence_offsets': np.uint64(sequence_offsets),
+            'masked_lm_positions': np.uint16(masked_lm_positions),
+            'masked_lm_label_ids': np.uint16(masked_lm_label_ids),
+            'masked_lm_offsets': np.uint64(masked_lm_offsets),
+            'is_positives': np.uint16(is_positives),
+            'target_sequences': np.uint16(target_sequences),
+            'target_sequence_offsets': np.uint64(target_sequence_offsets)
+        }
+
+        with h5py.File(str(epoch_filename), 'w') as f:
+            for key, val in data.items():
+                f.create_dataset(key, data=val)
+
+        del sequences[:]
+        del segment_a_lengths[:]
+        del sequence_offsets[:]
+        del masked_lm_positions[:]
+        del masked_lm_label_ids[:]
+        del masked_lm_offsets[:]
+        del is_positives[:]
+        del target_sequences[:]
+        del target_sequence_offsets[:]
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--train_corpus', type=Path, required=True)
@@ -166,6 +258,7 @@ def main():
     parser.add_argument('--world_size', type=int, default=os.environ.get('SLURM_NTASKS', 1))
     parser.add_argument('--no_shuffle', action='store_true')
     parser.add_argument('--dev_num', type=int, default=None, help='number of examples used for validation')
+    parser.add_argument('--tapex', action='store_true', help='generate tapex data')
 
     TableBertConfig.add_args(parser)
 
@@ -211,6 +304,11 @@ def main():
     logger.info(f'total tables: {total_tables_num}')
     logger.debug(f'local dev table indices: {local_dev_table_indices[:1000]}')
     logger.debug(f'local train table indices: {local_train_table_indices[:1000]}')
+
+    if args.tapex:
+        convert_tapex_data(args.train_corpus, args.output_dir,
+                           tokenizer=tokenizer, indices=local_indices, args=args, config=table_bert_config)
+        exit()
 
     with TableDatabase.from_jsonl(args.train_corpus, backend='memory', tokenizer=tokenizer, tokenizer_fast=tokenizer_fast,
                                   indices=local_indices,

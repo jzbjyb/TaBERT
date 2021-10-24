@@ -333,29 +333,29 @@ class TableDataset(Dataset):
     def collate(examples, pad_id: int = 0, sep_id: int = 102, max_allow_len: int = 512, mention_cell_neg_count: int = 5):  # TODO: add model specific param
         batch_size = len(examples)
         max_len = max(len(e['token_ids']) for e in examples)
-        has_contrastive = False
-        has_contrastive_concat = False
-        has_is_positive = False
-        has_target = False
-        has_ct2ci = False
-        has_ct2mi = False
-        has_mention_cell = False
+        has_contrastive = True
+        has_contrastive_concat = True
+        has_is_positive = True
+        has_target = True
+        has_ct2ci = True
+        has_ct2mi = True
+        has_mention_cell = True
         for e in examples:  # use the first one to check
-            if 'context_token_ids' in e and 'contrastive_concat' not in e:
-                has_contrastive = True
-            if 'context_token_ids' in e and 'contrastive_concat' in e:
-                has_contrastive_concat = True
-            if 'is_positive' in e:
-                has_is_positive = True
-            if 'target_token_ids' in e:
-                has_target = True
-            if 'column_token_to_column_id' in e:
-                has_ct2ci = True
-            if 'context_token_to_mention_id' in e:
-                has_ct2mi = True
-            if 'mentions_cells' in e:
-                has_mention_cell = True
-            break
+            if 'context_token_ids' not in e or 'contrastive_concat' in e:
+                has_contrastive = False
+            if 'context_token_ids' not in e or 'contrastive_concat' not in e:
+                has_contrastive_concat = False
+            if 'is_positive' not in e:
+                has_is_positive = False
+            if 'target_token_ids' not in e:
+                has_target = False
+            if 'column_token_to_column_id' not in e:
+                has_ct2ci = False
+            if 'context_token_to_mention_id' not in e:
+                has_ct2mi = False
+            if 'mentions_cells' not in e:
+                has_mention_cell = False
+
         if has_target:
             max_target_len = max(len(e['target_token_ids']) for e in examples)
         if has_contrastive or has_contrastive_concat:

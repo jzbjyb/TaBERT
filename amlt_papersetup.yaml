@@ -47,7 +47,24 @@ jobs:
     /mnt/root/TaBERT/data/train_data/wtq_qa_allrow_1024
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_wtq_qa_allrow_1024_ep50 seq2seq 6 50
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask/pytorch_model_epoch09.bin"'
-    --mode generate-test --output_file ep9.tsv
+    --mode generate-test --output_file ep49.tsv
+
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_bartlarge
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_bartlarge seq2seq 2 10 null
+    --gradient-accumulation-steps 12 --base-model-name facebook/bart-large
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_bartlarge_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa large full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_bartlarge/pytorch_model_epoch09.bin 10:30:50
 
 - name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit
   sku: G8
@@ -58,9 +75,24 @@ jobs:
   command:
   - ./run_vanilla.sh 24
     /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear
-    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit seq2seq 3 10
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit seq2seq 2 10
     '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
-    --gradient-accumulation-steps 8 --base-model-name facebook/bart-large
+    --gradient-accumulation-steps 12 --base-model-name facebook/bart-large
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa large
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexinit/pytorch_model_epoch09.bin 10:20:30
+
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear seq2seq 8 10 null
+    --gradient-accumulation-steps 9 --base-model-name facebook/bart-base
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 10:30:50
 
 - name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit
   sku: G8
@@ -70,3 +102,115 @@ jobs:
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit seq2seq 8 10
     '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
     --gradient-accumulation-steps 9 --base-model-name facebook/bart-base
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch09.bin 50
+
+- name: wholetable_tapex_bart_tapexbaseinit
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_bart
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_bart_tapexbaseinit seq2seq 6 1
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name facebook/bart-base
+- name: wholetable_tapex_bart_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_bart_tapexbaseinit/pytorch_model_epoch00.bin 10:30:50
+
+- name: wholetable_3merge_tapex2shard_bart_bartmask_salientmask_tapexlinear_tapexbaseinit
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear-tapex_bart-20-2
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_tapex2shard_bart_bartmask_salientmask_tapexlinear_tapexbaseinit seq2seq 6 10
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-base
+- name: wholetable_3merge_tapex2shard_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_tapex2shard_bart_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch09.bin 10:30:50
+
+- name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_dense_span_context_as_whole_bartmask_salientmask
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit seq2seq 8 10
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 9 --base-model-name facebook/bart-base
+- name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_continue
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_bartmask_salientmask_tapexlinear
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_continue seq2seq 6 10
+    '"/mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch09.bin"'
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-base
+- name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch09.bin 10:30:50
+- name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_continue_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_continue/pytorch_model_epoch09.bin 10:30:50
+
+- name: wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_retbycontext_bartmask_salientmask
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-base
+- name: wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+
+- name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_dense_span_context_as_whole_bartmask_salientmask
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear seq2seq 8 10 null
+    --gradient-accumulation-steps 9 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+- name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 10:30:50
+
+- name: wholetable_3merge_bart_mlm_contextmention_bartbase_debug
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_3merge_bart_mlm_contextmention
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_bartbase_debug seq2seq 24 10 null
+    --gradient-accumulation-steps 3 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+- name: wholetable_3merge_bart_mlm_contextmention_bartbase_debug_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_deprecate base
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_bartbase_debug/pytorch_model_epoch09.bin 10

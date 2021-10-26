@@ -214,3 +214,9 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_deprecate base
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_bartbase_debug/pytorch_model_epoch09.bin 10
+
+- name: bart_base_wtqqa_deprecate_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_deprecate base full
+    /mnt/root/TaBERT/data/runs/bartbase_finetune 30:50

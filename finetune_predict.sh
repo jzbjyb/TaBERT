@@ -37,7 +37,7 @@ else
   exit 1
 fi
 
-model_ckpt=$4
+model_ckpt=$4  # use for initialization if it follows the pattern "*.bin"; otherwise use it as output directory
 epoch=$5
 args="${@:6}"  # additional args
 
@@ -59,11 +59,18 @@ for task in "${tasks[@]}"; do
     if [[ "$only_predict" == "true" ]]; then
       output=${model_ckpt}
     else
-      output="$(dirname "${model_ckpt}")"_${task}_ep${epoch}
       # finetune
-      ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} '"'${model_ckpt}'"' \
-        --gradient-accumulation-steps ${grad_acc} --base-model-name ${base_model_name} \
-        --mode ${mode} ${args}
+      if [[ ${model_ckpt} == *.bin ]]; then   # a real checkpoint
+        output="$(dirname "${model_ckpt}")"_${task}_ep${epoch}
+        ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} '"'${model_ckpt}'"' \
+          --gradient-accumulation-steps ${grad_acc} --base-model-name ${base_model_name} \
+          --mode ${mode} ${args}
+      else
+        output=${model_ckpt}_${task}_ep${epoch}
+        ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} null \
+          --gradient-accumulation-steps ${grad_acc} --base-model-name ${base_model_name} \
+          --mode ${mode} ${args}
+      fi
     fi
 
     # evaluate every checkpoint

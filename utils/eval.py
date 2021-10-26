@@ -1,7 +1,7 @@
 import os
 os.environ['USE_TRANSFORMER'] = 'True'  # use new version
 
-from typing import List, Union
+from typing import List, Union, Dict
 from argparse import ArgumentParser
 import json
 import numpy as np
@@ -15,6 +15,21 @@ from utils.wtq_evaluator import to_value, to_value_list, check_denotation
 AGG_OPS = ['', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG']
 COND_OPS = ['=', '>', '<', 'OP']
 only_alphanumeric = re.compile('[\W_]+')
+
+
+OP2WORDS: Dict[str, List[str]] = {
+    'select': ['which', 'what', 'who'],
+    'filter': ['within', 'in', 'after', 'before',
+               'with', 'only', 'other than', 'out of',
+               'besides', 'both', 'above', 'below'],
+    'aggregate': ['how many', 'how long', 'total',
+                  'number', 'time period'],
+    'superlative': ['most', '1st', 'first', 'last',
+                    'highest', 'top', 'least'],
+    'comparative': ['or', 'more', 'less', 'than',
+                    'larger', 'smaller'],
+    'group': ['each'],
+}
 
 
 def compute_f1(preds: List[str], golds: List[str]):
@@ -36,9 +51,9 @@ def source_contains(source: str, targets: Union[str, List[str]]):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--prediction', type=str, required=True)
+    parser.add_argument('--prediction', type=str, required=True, nargs='+')
     parser.add_argument('--gold', type=str, required=True)
-    parser.add_argument('--multi_ans_sep', type=str, default=None)
+    parser.add_argument('--multi_ans_sep', type=str, default=', ')
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--data', type=str, default='wtq', choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
     parser.add_argument('--model_type', type=str, default='facebook/bart-base')
@@ -48,9 +63,26 @@ if __name__ == '__main__':
         rouge = Rouge()
 
     cls_token, sep_token, pad_token = TableBertConfig.get_special_tokens(args.model_type)
+    def clean_output_from_model(text: str):
+        for rmt in [pad_token, cls_token, sep_token]:
+            text = text.replace(rmt, '')
+        return text.strip()
+
+    def get_ops(source: str):
+        ops: List[str] = []
+        for op, words in OP2WORDS.items():
+            for word in words:
+                if word in source:
+                    ops.append(op)
+                    break
+        return ops
+
+    ems: List[bool] = []
+    ems_all: List[List[bool]] = []
+
+    op2ems: Dict[str, List[bool]] = defaultdict(list)
 
     ans_in_inputs = []
-    ems = []
     tapas_ems = []  # follow the tapas filtering conditions
     num_cells = []
     agg2ems = defaultdict(list)
@@ -68,55 +100,76 @@ if __name__ == '__main__':
     numcoord2ems = defaultdict(list)
     answertype2ems = defaultdict(list)
 
+    pred_file1 = args.prediction[0]
+    pred_file_others = args.prediction[1:]
+
     prev_example = None
-    with open(args.prediction, 'r', encoding='utf-8') as pfin, \
+    with open(pred_file1, 'r', encoding='utf-8') as pfin, \
       open(args.gold, 'r', encoding='utf-8') as gfin:
+        pfin_others = [open(f, 'r', encoding='utf-8') for f in pred_file_others]
         #csv_reader = csv.reader(gfin, delimiter='\t')
         #_ = next(csv_reader)  # skip tsv head
         for i, p in enumerate(pfin):
+            # read predictions
             p = p.rstrip('\n').split('\t')
+            p_others = [f.readline().rstrip('\n').split('\t') for f in pfin_others]
             if len(p) == 2:
-                pred, gold = p[0].strip(), p[1].strip()
+                pred, gold = p[0].strip(), p[1].strip()  # use the gold from the first pred file
+                pred_others: List[str] = [po[0].strip() for po in p_others]
             elif len(p) == 3:
-                pred, gold, source = p[0].strip(), p[1].strip(), p[2].strip()
-                pred = pred.replace(pad_token, '')
-                gold = gold.replace(pad_token, '')
+                pred, gold, source = p[0].strip(), p[1].strip(), p[2].strip()  # use the gold from the first pred file
+                pred = clean_output_from_model(pred)
+                gold = clean_output_from_model(gold)
                 source = source.replace(pad_token, '')
+
+                pred_others: List[str] = [po[0].strip() for po in p_others]
+                source_others: List[str] = [po[2].strip() for po in p_others]
+                pred_others = [clean_output_from_model(po) for po in pred_others]
+                source_others = [so.replace(pad_token, '') for so in source_others]
+
                 num_cell = len(source.split(sep_token)) - 1
                 num_cells.append(num_cell)
                 first_word = source.split()[1].lower()  # skip cls
+            # evaluate
             if args.data == 'wikisql':  # exact match
-                pred = pred.replace(cls_token, '').replace(sep_token, '').strip()
-                gold = gold.replace(cls_token, '').replace(sep_token, '').strip()
                 em = pred.lower() == gold.lower()
-            elif args.data == 'wtq':  # official evaluation
-                pred = pred.replace(cls_token, '').replace(sep_token, '').strip()
-                gold = gold.replace(cls_token, '').replace(sep_token, '').strip()
+            elif args.data == 'wtq':  # official WTQ evaluation
                 if args.multi_ans_sep:
                     sep = args.multi_ans_sep
                     golds = gold.split(sep)
-                    em = check_denotation(to_value_list(golds), to_value_list(pred.split(sep)))
-                    ans_in_input = source_contains(source, golds)
+                    preds: List[str] = pred.split(sep)
+                    em = check_denotation(to_value_list(golds), to_value_list(preds))
+                    aii = source_contains(source, golds)
+                    ops = get_ops(source.lower())
+                    for op in ops:
+                        op2ems[op].append(em)
+
+                    pred_others: List[List[str]] = [po.split(sep) for po in pred_others]
+                    em_others = [check_denotation(to_value_list(golds), to_value_list(po)) for po in pred_others]
+                    aii_others = [source_contains(so, golds) for so in source_others]
                 else:
                     em = to_value(gold).match(to_value(pred))
-                    ans_in_input = source_contains(source, gold)
-                ans_in_inputs.append(ans_in_input)
+                    aii = source_contains(source, gold)
+
+                    ops = get_ops(source.lower())
+                    for op in ops:
+                        op2ems[op].append(em)
+
+                    em_others = [to_value(gold).match(to_value(po)) for po in pred_others]
+                    aii_others = [source_contains(so, golds) for so in source_others]
+                ans_in_inputs.append(aii)
             elif args.data == 'wikisql_sql':
                 em = rouge.get_scores([pred.lower()], [gold.lower()], avg=True)['rouge-l']['f']
             elif args.data == 'turl':
-                pred = pred.replace(cls_token, '').replace(sep_token, '')
-                gold = gold.replace(cls_token, '').replace(sep_token, '')
                 pred = re.sub('\s+', '', pred)
                 gold = re.sub('\s+', '', gold)
                 preds = [i for i in pred.split('<|>') if i != '']
                 golds = [i for i in gold.split('<|>') if i != '']
-                #print(preds)
-                #print(golds)
-                #input()
                 em = compute_f1(preds, golds)
             else:
                 raise NotImplementedError
             ems.append(em)
+            ems_all.append([em] + em_others)
             anstype = 'number' if BasicDataset.is_number(gold.strip()) else 'text'
             answertype2ems[anstype].append(em)
 
@@ -144,8 +197,12 @@ if __name__ == '__main__':
                 firstword2cases[first_word][int(em)].append((source, pred, gold))
 
     print(np.mean(ems))  # the fine line of output is used for automatic analysis
-    print(f'Exact match: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')
+    print(f'Exact match #1: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')
+    print(f'Exact match #-1: [Overall] {[np.mean(emsa) for emsa in zip(*ems_all)]}')
     print(f'Answer in input: {np.mean(ans_in_inputs)}')
+
+    for op, _ems in op2ems.items():
+        print(f'{op}\t{np.mean(_ems)}\t{len(_ems)}')
 
     firstword2ems = {k: v for k, v in firstword2ems.items() if len(v) >= 10}
     numcell2ems = {k: v for k, v in numcell2ems.items() if len(v) >= 100}

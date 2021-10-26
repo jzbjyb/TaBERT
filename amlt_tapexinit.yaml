@@ -66,6 +66,11 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_tapexlarge/pytorch_model_epoch09.bin"'
     --gradient-accumulation-steps 4
     --base-model-name facebook/bart-large --mode generate-test --output_file ep49.tsv
+- name: wholetable_3merge_bart_mlm_contextmention_tapexlarge_wtqqa_tapex_linear_1024_ep50_test
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa large full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_mlm_contextmention_tapexlarge_wtqqa_tapex_linear_1024_ep50 50
 
 - name: wholetable_tapas_bart_mlm_contextmention_retbycontext_tapexlarge
   sku: G8

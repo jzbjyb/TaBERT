@@ -199,6 +199,11 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
     --gradient-accumulation-steps 3
     --base-model-name facebook/bart-base --mode generate-test --output_file ep49.tsv
+- name: wtqqa_tapex_linear_1024_base_tapex_ep50_test
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa base full
+    /mnt/root/TaBERT/data/runs/tapex_base_wtq_tapex_linear_1024_ep50 50
 
 - name: wtqqa_tapex_linear_1024_large_tapex
   sku: G8

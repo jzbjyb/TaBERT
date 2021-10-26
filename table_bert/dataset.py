@@ -97,8 +97,10 @@ class TableDataset(Dataset):
     def __init__(self, training_path, epoch=0, config=None, tokenizer=None, reduce_memory=False, multi_gpu=False, indices=None, debug=False, not_even=False):
         # self.vocab = tokenizer.vocab
         # self.tokenizer = tokenizer
+        num_data_epochs = self.get_data_num_epochs(training_path)
         self.data_epoch = self.epoch = epoch
-        # self.data_epoch = epoch % num_data_epochs
+        if self.data_epoch >= num_data_epochs:
+            self.data_epoch = self.data_epoch % num_data_epochs  # reuse dataset for more epochs
         data_file_prefix = training_path / f"epoch_{self.data_epoch}"
         # metrics_file = training_path / f"epoch_{self.data_epoch}.metrics.json"
         # assert metrics_file.is_file()
@@ -161,8 +163,10 @@ class TableDataset(Dataset):
             max_epoch = max(epoch_ids) + 1
 
         data_size = 0
+        num_data_epochs = cls.get_data_num_epochs(data_path)
         for epoch_id in range(max_epoch):
-            epoch_file = data_path / f'epoch_{epoch_id}'
+            eid = epoch_id % num_data_epochs
+            epoch_file = data_path / f'epoch_{eid}'
             epoch_info = cls.get_epoch_shards_info(epoch_file)
             data_size += epoch_info['total_size']
 
@@ -177,6 +181,14 @@ class TableDataset(Dataset):
             shard_size = data['masked_lm_offsets'].shape[0]
 
         return shard_size
+
+    @classmethod
+    def get_data_num_epochs(cls, root_dir: Path):
+        prefix = root_dir / 'epoch_'
+        shard_files = list(prefix.parent.glob(prefix.name + '*.shard*.h5'))
+        epoch_ids = [int(re.search(r'epoch_(\d+)', str(f)).group(1)) for f in shard_files]
+        num_epochs = max(epoch_ids) + 1
+        return num_epochs
 
     @classmethod
     def get_epoch_shards_info(cls, shard_file_prefix: Path):

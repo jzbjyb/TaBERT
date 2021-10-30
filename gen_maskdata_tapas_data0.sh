@@ -2,8 +2,12 @@
 
 source initialize.sh
 
-input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_span_context_as_whole.jsonl.data0
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_dense_span_context_as_whole_bartmask_salientmask
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_span_context_as_whole.jsonl.data0
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_dense_span_context_as_whole_bartmask_salientmask
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_dense_span_context_as_whole_original_tabert.jsonl.data0
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_dense_span_context_as_whole_bartmask_salientmask_original_tabert
+input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_retbycontext_removeself.jsonl.data0
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_retbycontext_bartmask_salientmask
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=10000

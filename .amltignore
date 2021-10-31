@@ -8,3 +8,4 @@ test*
 *.jar
 *.ipynb
 index
+*.html

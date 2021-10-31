@@ -72,3 +72,14 @@ jobs:
     /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert_mc_othertable/index/tapas_data0_span_context_optimized/repr.npz
     /mnt/root/TaBERT/data/runs/ret_wholetable_3merge_bert_mc_othertable/index/tapas_data0_span_context_optimized/repr.npz.as_whole.ret_top10
     /mnt/root/tapas/data/pretrain/train/preprocessed_mention.jsonl.data0
+
+- name: dummy_test
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention
+    data/runs/wholetable_tapas_bart_mlm_contextmention seq2seq 24 5 null

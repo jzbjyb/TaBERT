@@ -52,6 +52,9 @@ RUN python -m nltk.downloader stopwords -d /usr/share/nltk_data
 # spacy
 RUN python -m spacy download en_core_web_sm
 
+# sling
+RUN pip install http://www.jbox.dk/sling/sling-2.0.0-py3-none-linux_x86_64.whl
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

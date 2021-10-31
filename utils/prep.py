@@ -1,4 +1,4 @@
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Union
 import argparse
 import random
 import json
@@ -8,7 +8,9 @@ from pathlib import Path
 from tqdm import tqdm
 from collections import defaultdict
 import numpy as np
+import matplotlib.pyplot as plt
 from table_bert.dataset_utils import BasicDataset
+from table_bert.utils import get_url
 
 
 def self_in_dense(ret_file: str):
@@ -28,15 +30,23 @@ def self_in_dense(ret_file: str):
   print(f'avg MRR {np.mean(mrrs)}')
 
 
-def count_mentions(prep_file: str, max_num_examples: int = 50000):
+def count_mentions(prep_file: str, max_num_examples: Union[int, None] = 50000):
   num_mentions: List[int] = []
+  context_lens: List[int] = []
   with open(prep_file, 'r') as fin:
     for i, l in tqdm(enumerate(fin)):
       if max_num_examples and i >= max_num_examples:
         break
-      num_ment = len(json.loads(l)['context_before_mentions'][0])
-      num_mentions.append(num_ment)
-  print(f'avg #mention {np.mean(num_mentions)}')
+      l = json.loads(l)
+      nm = len(l['context_before_mentions'][0])
+      cl = len(l['context_before'][0])
+      num_mentions.append(nm)
+      context_lens.append(cl)
+  print(f'avg #mention {np.mean(num_mentions)}, avg context len {np.mean(context_lens)}')
+  plt.hist(num_mentions, bins=100, weights=np.ones(len(num_mentions)) / len(num_mentions))
+  plt.savefig('test_num_mentions.png')
+  plt.hist(context_lens, bins=100, weights=np.ones(len(context_lens)) / len(context_lens))
+  plt.savefig('test_context_lens.png')
 
 
 def tapex_ans_in_source(pred_file: str):
@@ -99,12 +109,9 @@ def visualize_table(table: Dict):
   return table_str
 
 
-def get_url(text: str):
-  return text[text.find('http'):].rsplit('_', 1)[0]  # remove the suffix number
-
-
 def ret_compare(ret_files: List[str],
                 skip_first: List[bool],
+                is_ret: List[bool],
                 ret_query_file: str,
                 ret_doc_file: str,
                 output_file: str,
@@ -116,7 +123,7 @@ def ret_compare(ret_files: List[str],
   qid2docids: Dict[int, List[List[int]]] = defaultdict(list)
   all_qids: Set[int] = set()
   all_docids: Set[int] = set()
-  ret_fins = [open(rf, 'r') for rf in ret_files]
+  ret_fins = [open(rf, 'r') for ir, rf in zip(is_ret, ret_files) if ir]
   try:
     while True:
       try:
@@ -140,6 +147,27 @@ def ret_compare(ret_files: List[str],
   finally:
     for rf in ret_fins:
       if rf:  rf.close()
+
+  print('read prep file ...')
+  context2table: List[List[Tuple[str, Dict]]] = []
+  prep_fins = [open(rf, 'r') for ir, rf in zip(is_ret, ret_files) if not ir]
+  try:
+    while True:
+      try:
+        lines: List[str] = [pf.readline() for pf in prep_fins]
+        if lines[0] == '':
+          break
+        if random.random() > sample_ratio:
+          continue
+        context2table.append([])
+        for line in lines:
+          line = json.loads(line)
+          context2table[-1].append((line['context_before'][0], line['table']))
+      except StopIteration:
+        break
+  finally:
+    for pf in prep_fins:
+      if pf:  pf.close()
 
   print('read query/doc files ...')
   id2query: Dict[str, Dict] = {}
@@ -174,6 +202,7 @@ def ret_compare(ret_files: List[str],
     qid2docids: List[Tuple] = list(qid2docids.items())
 
     group2nm: Dict[int, List[int]] = defaultdict(list)
+    # analyze retrieval files
     for i in tqdm(np.random.permutation(len(qid2docids))):
       qid, docids = qid2docids[i]
       context_url = get_url(id2query[qid]['uuid'])
@@ -195,8 +224,14 @@ def ret_compare(ret_files: List[str],
       fout.write('<hr>\n')
     fout.write('</body>')
 
+    # analyze prep files
+    for _context2table in context2table:
+      for group, (context, table) in enumerate(_context2table):
+        nm = len(BasicDataset.get_mention_locations(context, table['data'])[0])
+        group2nm[group + len(ret_fins)].append(nm)
+
     print(f'total count {len(qid2docids)}')
-    group2nm = {k: np.mean(v) for k, v in group2nm.items()}
+    group2nm = {k: (np.mean(v), len(v)) for k, v in group2nm.items()}
     print(f'group2nm: {group2nm}')
 
 
@@ -226,8 +261,9 @@ if __name__ == '__main__':
 
   elif args.task == 'ret_compare':
     ret_files = args.inp[:-2]
-    skip_first = [False] * len(ret_files)
-    skip_first[-1] = True  # assume the last one is BM25
+    skip_first = [False, False, False, True, False]
+    is_ret_file = [True, True, True, True, False]
+    assert len(ret_files) == len(skip_first) == len(is_ret_file)
     ret_query_file, ret_doc_file = args.inp[-2:]
     output_file = args.out
-    ret_compare(ret_files, skip_first, ret_query_file, ret_doc_file, output_file, sample_ratio=0.001, topk=5)
+    ret_compare(ret_files, skip_first, is_ret_file, ret_query_file, ret_doc_file, output_file, sample_ratio=0.001, topk=5)

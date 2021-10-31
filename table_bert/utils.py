@@ -80,6 +80,10 @@ def compute_mrr(scores: List[float], labels: List[int]):
     return np.mean([1 / (i + 1) for i, (s, r) in enumerate(sorted(zip(scores, labels), key=lambda x: -x[0])) if r])
 
 
+def get_url(text: str):
+  return text[text.find('http'):].rsplit('_', 1)[0]  # remove the suffix number
+
+
 class BartTokenizerWrapper(BartTokenizer):
     def tokenize(self, *args, **kwargs):
         if 'add_prefix_space' in kwargs:

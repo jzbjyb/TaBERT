@@ -245,6 +245,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         use_row_data = self.config.top_row_count == 0 and len(row_data) > 0
         max_total_len = trim_long_table or TableBertConfig.MAX_SOURCE_LEN
 
+        additional_rows = copy.deepcopy(additional_rows)  # we will modify it in place
+
         if self.config.table_linearization == 'tapex':
             if use_row_data:
                 raise Exception('tapex linearization is only used on raw table data instead of sampled data')

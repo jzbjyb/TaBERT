@@ -53,7 +53,7 @@ jobs:
   sku: C40
   sku_count: 1
   command:
-  - ./gen_maskdata_tapas_data0.sh
+  - ./gen_maskdata.sh
 
 - name: ner
   sku: C40

@@ -3,6 +3,7 @@ import argparse
 import random
 import json
 import re
+import os
 from shutil import copyfile
 from pathlib import Path
 from tqdm import tqdm
@@ -75,7 +76,12 @@ def get_shard_num(dir: Path, epoch: int) -> int:
   return shard_num
 
 
-def merge_shards(dirs: List[Path], out_dir: Path, epochs: int = 10, keep_shards: List[int] = [-1, -1], skip_first: bool = False):
+def merge_shards(dirs: List[Path],
+                 out_dir: Path,
+                 epochs: int = 10,
+                 keep_shards: List[int] = [-1, -1],
+                 skip_first: bool = False,
+                 use_softlink: bool = False):
   assert len(dirs) == len(keep_shards)
   for e in range(epochs):
     sns: List[int] = [get_shard_num(dir, e) for dir in dirs]
@@ -88,7 +94,11 @@ def merge_shards(dirs: List[Path], out_dir: Path, epochs: int = 10, keep_shards:
         new_shard_id += 1
         if not skip_first or i != 0:
           print(f'{from_file} -> {to_file}')
-          copyfile(str(from_file), str(to_file))
+          if use_softlink:
+            from_file_rel = os.path.relpath(str(from_file), str(out_dir))
+            os.symlink(str(from_file_rel), str(to_file))
+          else:
+            copyfile(str(from_file), str(to_file))
 
 
 def visualize_table(table: Dict):
@@ -257,7 +267,7 @@ if __name__ == '__main__':
     tapex_ans_in_source(args.inp[0])
 
   elif args.task == 'merge_shards':
-    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, 2], skip_first=True)
+    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, -1], skip_first=False, use_softlink=True)
 
   elif args.task == 'ret_compare':
     ret_files = args.inp[:-2]

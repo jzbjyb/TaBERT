@@ -26,6 +26,7 @@ from table_bert.tablefact import TableFact
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.turl import TurlData
 from table_bert.tapas import TapasTables
+from table_bert.tapex import Tapex
 from table_bert.dataset_utils import BasicDataset
 from table_bert.dataset import Example
 from table_bert.faiss_utils import SpanFaiss, SpanFaissMulti, WholeFaiss
@@ -515,7 +516,7 @@ def ner_file(prep_file: str, out_file: str, batch_size: int, nthread: int):
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
-        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas',
+        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'tapex',
         'overlap', 'fakepair', 'match_context_table', 'tableshuffle',
         'whole_faiss', 'span_faiss', 'span_as_whole_faiss', 'ret_filter_by_faiss', 'random_neg',
         'mrr', 'filter_mention', 'ner'])
@@ -573,6 +574,12 @@ def main():
         tt = TapasTables(args.path[0])
         os.makedirs(args.output_dir / args.split, exist_ok=True)
         tt.convert_to_tabert_format(args.split, args.output_dir / args.split / 'preprocessed.jsonl')
+    elif args.data == 'tapex':
+        source_file = str(args.path[0])
+        output_file = str(args.output_dir)
+        tapex = Tapex(source_file)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        tapex.convert_to_tabert_format(output_file)
 
     # others
     elif args.data == 'fakepair':

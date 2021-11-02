@@ -5,6 +5,7 @@ import json
 import random
 from tqdm import tqdm
 from collections import defaultdict
+import functools
 import os
 import sling
 import re
@@ -43,6 +44,21 @@ def load_url2tables(prep_file: Path) -> Dict[str, List]:
   return url2tables
 
 
+def load_pageid2tables(prep_file: Path) -> Dict[str, List]:
+  table_count = 0
+  pageid2tables: Dict[str, List] = defaultdict(list)
+  with open(str(prep_file), 'r') as fin:
+    for l in tqdm(fin):
+      l = json.loads(l)
+      table = l['table']
+      pageid = l['pageid']
+      pageid2tables[pageid].append(table)
+      table_count += 1
+  pageid_count = len(pageid2tables)
+  print(f'#pageid {pageid_count}, #table {table_count}')
+  return pageid2tables
+
+
 class SlingExtractor(object):
   def __init__(self, root_dir: Path, num_splits: int = 10):
     self.root_dir = root_dir
@@ -51,7 +67,7 @@ class SlingExtractor(object):
 
   @staticmethod
   def get_metadata(frame: sling.Frame) -> Dict:
-    pageid = frame.get('/wp/page/pageid')  # wikiPEDIA page ID
+    pageid = str(frame.get('/wp/page/pageid'))  # wikiPEDIA page ID
     title = frame.get('/wp/page/title')  # article title
     item = frame.get('/wp/page/item')  # wikidata ID associated to the article
     url = frame.get('url')
@@ -103,7 +119,10 @@ class SlingExtractor(object):
     return tok_to_sent_id, sent_to_span
 
   @staticmethod
-  def annotate_sentence(urls: List[str], documents: List[bytes], tables_li: List[List[Dict]]) -> List[Dict]:
+  def annotate_sentence(urls: List[str],
+                        documents: List[bytes],
+                        tables_li: List[List[Dict]],
+                        use_all_more_than_num_mentions) -> List[Dict]:
     examples: List[Dict] = []
 
     for url, document, tables in zip(urls, documents, tables_li):
@@ -126,6 +145,7 @@ class SlingExtractor(object):
         max_number_ratio = None
 
         # find the best-matching sentence
+        local_num_context_count = 0
         for sent_id, (sent_start, sent_end) in sent_to_span.items():
           if sent_end - sent_start > 512:
             # rule 0: skip long sentence
@@ -145,36 +165,48 @@ class SlingExtractor(object):
           if cover_ratio > 0.8:
             # rule 3: skip text that has over 80% of overlap with the table, which is likely to be table snippets
             continue
-          if len(locations) > max_nl:
+          if not use_all_more_than_num_mentions and len(locations) > max_nl:
             max_nl = len(locations)
             max_locations = locations
             max_sent = sent
             max_cover_ratio = cover_ratio
             max_number_ratio = number_ratio
+          elif use_all_more_than_num_mentions and len(locations) >= use_all_more_than_num_mentions:
+            examples.append({
+              'uuid': f'sling_{url}_{index}_{local_num_context_count}',
+              'table': table,
+              'context_before': [sent],
+              'context_before_mentions': [locations],
+              'context_after': []
+            })
+            local_num_context_count += 1
 
         if max_nl == -1:
           continue
 
-        examples.append({
-          'uuid': f'sling_{url}_{index}',
-          'table': table,
-          'context_before': [max_sent],
-          'context_before_mentions': [max_locations],
-          'context_after': []
-        })
+        if not use_all_more_than_num_mentions:  # output the best one
+          examples.append({
+            'uuid': f'sling_{url}_{index}',
+            'table': table,
+            'context_before': [max_sent],
+            'context_before_mentions': [max_locations],
+            'context_after': []
+          })
     return examples
 
   @staticmethod
-  def match_sentence_with_table_worker(input_queue: Queue, output_queue: Queue):
+  def match_sentence_with_table_worker(input_queue: Queue, output_queue: Queue, use_all_more_than_num_mentions):
+    func = functools.partial(SlingExtractor.annotate_sentence,
+                             use_all_more_than_num_mentions=use_all_more_than_num_mentions)
     while True:
       args = input_queue.get()
       if type(args) is str and args == 'DONE':
         break
-      for example in SlingExtractor.annotate_sentence(**args):
+      for example in func(**args):
         output_queue.put(example)
 
   @staticmethod
-  def write_worker(output_file: str, output_queue: Queue):
+  def write_worker(output_file: str, output_queue: Queue, log_interval):
     sent_len_li: List[int] = []
     num_mentions_li: List[int] = []
     empty_count = non_empty_count = 0
@@ -188,18 +220,21 @@ class SlingExtractor(object):
         sent_len_li.append(len(example['context_before'][0]))
         num_mentions_li.append(nm)
         fout.write(json.dumps(example) + '\n')
-        if i > 0 and i % 5000 == 0:
+        if i > 0 and i % log_interval == 0:
           print(f'avg sent len {np.mean(sent_len_li)}, '
                 f'avg #mentions {np.mean(num_mentions_li)} '
                 f'empty/non-empty {empty_count}/{non_empty_count}')
 
   def match_sentence_with_table(self,
                                 url2tables: Dict[str, List],
+                                key_feild: str,
                                 from_split: int,  # inclusive
                                 to_split: int,  # exclusive
                                 output_file: str,
+                                use_all_more_than_num_mentions: int = 0,
                                 batch_size: int = 16,
-                                num_threads: int = 1):
+                                num_threads: int = 1,
+                                log_interval: int = 5000):
 
     input_queue = Queue()
     output_queue = Queue()
@@ -207,11 +242,14 @@ class SlingExtractor(object):
 
     # start processes
     for _ in range(num_threads):
-      p = Process(target=self.match_sentence_with_table_worker, args=(input_queue, output_queue))
+      p = Process(target=functools.partial(self.match_sentence_with_table_worker,
+                                           use_all_more_than_num_mentions=use_all_more_than_num_mentions),
+                  args=(input_queue, output_queue))
       p.daemon = True
       p.start()
       processes.append(p)
-    write_p = Process(target=self.write_worker, args=(output_file, output_queue))
+    write_p = Process(target=functools.partial(self.write_worker, log_interval=log_interval),
+                      args=(output_file, output_queue))
     write_p.start()
 
     # read data
@@ -226,7 +264,7 @@ class SlingExtractor(object):
         store = sling.Store(self_commons)
         doc_frame = store.parse(doc_raw)
         metadata = self.get_metadata(doc_frame)
-        url = metadata['url']
+        url = metadata[key_feild]
 
         if url not in url2tables:
           continue
@@ -256,7 +294,7 @@ class SlingExtractor(object):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--task', type=str, choices=['gen_sling'], default='gen_sling')
+  parser.add_argument('--task', type=str, choices=['url_as_key', 'pageid_as_key'], default='url_as_key')
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--threads', type=int, default=40)
@@ -269,7 +307,16 @@ if __name__ == '__main__':
   prep_file, sling_root = args.inp
   out_file = args.out
 
-  url2tables = load_url2tables(prep_file)
-  se = SlingExtractor(sling_root)
-  se.match_sentence_with_table(
-    url2tables, from_split=0, to_split=10, output_file=out_file, batch_size=16, num_threads=args.threads)
+  if args.task == 'url_as_key':
+    url2tables = load_url2tables(prep_file)
+    se = SlingExtractor(sling_root)
+    se.match_sentence_with_table(
+      url2tables, key_feild='url', from_split=0, to_split=10, output_file=out_file,
+      use_all_more_than_num_mentions=0, batch_size=16, num_threads=args.threads, log_interval=5000)
+
+  elif args.task == 'pageid_as_key':
+    pageid2tables = load_pageid2tables(prep_file)
+    se = SlingExtractor(sling_root)
+    se.match_sentence_with_table(
+      pageid2tables, key_feild='pageid', from_split=0, to_split=10, output_file=out_file,
+      use_all_more_than_num_mentions=1, batch_size=16, num_threads=args.threads, log_interval=100)

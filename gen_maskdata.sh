@@ -28,8 +28,12 @@ source initialize.sh
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_bartmask_salientmask
 
 # -- TAPEX data --
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.preprocessed.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_bart_bartmask_salientmask
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_bart_bartmask_salientmask
+
+# -- WTQ data --
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/samepage_hardmatch/train.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_wtq_bart_samepage_hardmatch_bartmask_salientmask
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0

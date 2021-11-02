@@ -9,10 +9,13 @@ from table_bert.dataset_utils import BasicDataset
 
 class WikiTQ(BasicDataset):
     def __init__(self, root_dir: Path):
-        self.train_data = self.load(root_dir / 'random-split-5-train.tsv')
-        self.dev_data = self.load(root_dir / 'random-split-5-dev.tsv')
-        self.test_data = self.load(root_dir / 'pristine-unseen-tables.tsv')
+        # TODO: previously we were using split 5
+        self.train_data = self.load(root_dir / 'data' / 'random-split-1-train.tsv')
+        self.dev_data = self.load(root_dir / 'data' / 'random-split-1-dev.tsv')
+        self.test_data = self.load(root_dir / 'data' / 'pristine-unseen-tables.tsv')
         self.table_root_dir = root_dir
+        self.misc_file = root_dir / 'misc' / 'table-metadata.tsv'
+        self.tableid2pageid = self.get_tableid2pageid(self.misc_file)
 
     @staticmethod
     def get_table(filename: Path):
@@ -27,14 +30,28 @@ class WikiTQ(BasicDataset):
                 header_types = ['real' if WikiTQ.is_number(cell) else 'text' for cell in data[0]]
             return header, header_types, data
 
+    @staticmethod
+    def get_tableid2pageid(mis_file: Path):
+        tableid2pageid: Dict[str, str] = {}
+        with open(mis_file, 'r') as fin:
+            csv_reader = csv.reader(fin, delimiter='\t')
+            _ = next(csv_reader)  # skip tsv head
+            for row in csv_reader:
+                tableid, pageid = row[:2]
+                assert tableid not in tableid2pageid, 'duplicate table id'
+                tableid2pageid[tableid] = pageid
+        return tableid2pageid
+
     def load(self, filename: Path):
         numans2count: Dict[int, int] = defaultdict(lambda: 0)
         data: List[Dict] = []
         with open(filename, 'r') as fin:
-            csv_reader = csv.reader(fin, delimiter='\t')
-            _ = next(csv_reader)  # skip tsv head
-            for row in csv_reader:
-                id, utterance, table_id, targets = row
+            #csv_reader = csv.reader(fin, delimiter='\t')
+            #_ = next(csv_reader)  # skip tsv head
+            _ = fin.readline()  # skip tsv head
+            #for row in csv_reader:
+            for row in fin:
+                id, utterance, table_id, targets = row.rstrip('\n').split('\t')
                 targets = targets.split('|')
                 numans2count[len(targets)] += 1
                 data.append({'id': id, 'utterance': utterance, 'table_id': table_id, 'targets': targets})
@@ -47,6 +64,7 @@ class WikiTQ(BasicDataset):
             for idx, example in tqdm(enumerate(data)):
                 td = {
                     'uuid': None,
+                    'pageid': self.tableid2pageid[example['table_id']],
                     'table': {'caption': '', 'header': [], 'data': [], 'used_header': []},
                     'context_before': [],
                     'context_after': []

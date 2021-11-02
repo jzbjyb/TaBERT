@@ -83,6 +83,7 @@ def merge_shards(dirs: List[Path],
                  skip_first: bool = False,
                  use_softlink: bool = False):
   assert len(dirs) == len(keep_shards)
+  os.makedirs(str(out_dir), exist_ok=True)
   for e in range(epochs):
     sns: List[int] = [get_shard_num(dir, e) for dir in dirs]
     keep_sns: List[int] = [sn if keep_shards[i] == -1 else min(sn, keep_shards[i]) for i, sn in enumerate(sns)]
@@ -161,23 +162,24 @@ def ret_compare(ret_files: List[str],
   print('read prep file ...')
   context2table: List[List[Tuple[str, Dict]]] = []
   prep_fins = [open(rf, 'r') for ir, rf in zip(is_ret, ret_files) if not ir]
-  try:
-    while True:
-      try:
-        lines: List[str] = [pf.readline() for pf in prep_fins]
-        if lines[0] == '':
+  if len(prep_fins) > 0:
+    try:
+      while True:
+        try:
+          lines: List[str] = [pf.readline() for pf in prep_fins]
+          if lines[0] == '':
+            break
+          if random.random() > sample_ratio:
+            continue
+          context2table.append([])
+          for line in lines:
+            line = json.loads(line)
+            context2table[-1].append((line['context_before'][0], line['table']))
+        except StopIteration:
           break
-        if random.random() > sample_ratio:
-          continue
-        context2table.append([])
-        for line in lines:
-          line = json.loads(line)
-          context2table[-1].append((line['context_before'][0], line['table']))
-      except StopIteration:
-        break
-  finally:
-    for pf in prep_fins:
-      if pf:  pf.close()
+    finally:
+      for pf in prep_fins:
+        if pf:  pf.close()
 
   print('read query/doc files ...')
   id2query: Dict[str, Dict] = {}
@@ -267,7 +269,7 @@ if __name__ == '__main__':
     tapex_ans_in_source(args.inp[0])
 
   elif args.task == 'merge_shards':
-    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, -1], skip_first=False, use_softlink=True)
+    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, -1], skip_first=True, use_softlink=False)
 
   elif args.task == 'ret_compare':
     ret_files = args.inp[:-2]

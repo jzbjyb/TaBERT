@@ -516,7 +516,7 @@ def ner_file(prep_file: str, out_file: str, batch_size: int, nthread: int):
 def main():
     parser = ArgumentParser()
     parser.add_argument('--data', type=str, required=True, choices=[
-        'totto', 'wikisql', 'tablefact', 'wtq', 'turl', 'tapas', 'tapex',
+        'totto', 'wikisql', 'tablefact', 'wikitq', 'wikitq-pageid', 'turl', 'tapas', 'tapex',
         'overlap', 'fakepair', 'match_context_table', 'tableshuffle',
         'whole_faiss', 'span_faiss', 'span_as_whole_faiss', 'ret_filter_by_faiss', 'random_neg',
         'mrr', 'filter_mention', 'ner'])
@@ -558,6 +558,13 @@ def main():
                           args.output_dir / 'converted' / split2file[args.split],
                           args.output_dir / args.split / 'preprocessed_with_ans.jsonl',
                           string_match=True)
+    elif args.data == 'wikitq-pageid':  # to get page id of the table
+        split = args.split
+        wikitq_root = args.path[0]
+        output_file = args.output_dir
+        wtq = WikiTQ(wikitq_root)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        wtq.convert_to_tabert_format(split, output_file)
     elif args.data == 'turl':
         avoid_titles = set()
         with open(str(args.path[0] / 'titles_in_3merge.txt'), 'r') as fin:

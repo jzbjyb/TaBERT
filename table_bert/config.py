@@ -160,6 +160,7 @@ class TableBertConfig(SimpleNamespace):
         contrastive_emb_size: int = 512,
         additional_row_count: int = 0,
         top_row_count: int = 0,
+        only_keep_highlighted_rows: bool = False,
         max_num_mention_per_example: int = 0,
         use_sampled_value: bool = False,
         mask_used_column_prob: float = 0.0,
@@ -258,6 +259,7 @@ class TableBertConfig(SimpleNamespace):
         self.table_mask_strategy = table_mask_strategy
         self.additional_row_count = additional_row_count
         self.top_row_count = top_row_count
+        self.only_keep_highlighted_rows = only_keep_highlighted_rows
         assert additional_row_count >= 0 and top_row_count >= 0
         assert not additional_row_count or not top_row_count, \
             'additional_row_count and top_row_count cannot be non-zero at the same time'
@@ -332,6 +334,7 @@ class TableBertConfig(SimpleNamespace):
                             choices=['column', 'column_token'])
         parser.add_argument('--additional_row_count', type=int, default=0)
         parser.add_argument('--top_row_count', type=int, default=0)
+        parser.add_argument('--only_keep_highlighted_rows', action='store_true')
         parser.add_argument('--max_num_mention_per_example', type=int, default=5,
                             help='max number of mentions (in either context or table) to use')
         parser.add_argument('--use_sampled_value', action='store_true')
@@ -342,7 +345,7 @@ class TableBertConfig(SimpleNamespace):
                             help='specifies how to linearize tables')
         parser.add_argument('--seq2seq_format', type=str,
                             choices=[None, 'mlm', 'mlm_single-c2v', 'mlm_single-v2c', 'mlm_single-c2v_single-v2c', 'single-c2v_single-v2c',
-                                     'qa_firstansrow', 'qa_allrow', 'qa_tapex', 'sql',
+                                     'qa_firstansrow', 'qa_allrow', 'qa_tapex', 'sql', 'totto',
                                      'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
                                      'mention-context', 'mention-table', 'mlm_mention-context',
                                      'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1',

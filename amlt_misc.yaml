@@ -82,4 +82,4 @@ jobs:
   command:
   - ./run_vanilla.sh 24
     /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention
-    data/runs/wholetable_tapas_bart_mlm_contextmention seq2seq 24 5 null
+    data/runs/test seq2seq 24 5 null

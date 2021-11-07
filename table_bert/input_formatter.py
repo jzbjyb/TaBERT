@@ -402,7 +402,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 additional_rows[i].append(self.tokenizer.tokenize(example.column_data[col_idx][row_idx]))
         return additional_rows
 
-    def get_a_row(self, example):
+    def get_a_row(self, example: Example):
         additional_rows = []
         answer = None
         if 'qa' in self.config.seq2seq_format:  # use the first answer
@@ -510,6 +510,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_qa_allrow_instances(context, example.header, answer, additional_rows))
                 if 'qa_tapex' in seq2seq_format:
                     instances.extend(self.create_qa_tapex_instances(context, example.header, answer, additional_rows))
+                if 'totto' in seq2seq_format:
+                    instances.extend(self.create_totto_instances(example.metadata, example.header, context, additional_rows))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
@@ -773,6 +775,33 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         seq_a_len = instance['segment_a_length']
         # answer as target
         target = [self.config.cls_token] + self.tokenizer.tokenize(answer)[:mtl - 2] + [self.config.sep_token]
+        instance = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance]
+
+    def create_totto_instances(self,
+                               metadata: Dict[str, str],
+                               header: List[Column],
+                               context: List[str],
+                               additional_rows: List[List[Any]] = []):
+        metadata: str = ' / '.join([metadata['page_title'], metadata['section_title'], metadata['section_text']]).strip()
+        metadata: List[str] = self.tokenizer.tokenize(metadata)
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        table = Table('fake_table', header)  # the dummy header is for the first index element
+        instance = self.get_input(metadata, table, additional_rows)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        # context as target
+        target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
             'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),

@@ -1,0 +1,64 @@
+description: data2text on totto
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: bart_base_totto_official
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_official base full bart_base 50
+- name: bart_base_totto_official_wholetable
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_official_wholetable base full bart_base 50
+- name: bart_base_totto
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto base full bart_base 50
+
+- name: tapex_base_totto_official
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_official base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: tapex_base_totto_official_wholetable
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_official_wholetable base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: tapex_base_totto
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+
+- name: 3merge_totto_official
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_official base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 50
+- name: 3merge_totto_official_wholetable
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_official_wholetable base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 50
+- name: 3merge_totto
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 50

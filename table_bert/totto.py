@@ -148,7 +148,9 @@ class Totto(BasicDataset):
         data = getattr(self, '{}_data'.format(split))
         return set(e['table_page_title'] for e in data)
 
-    def convert_to_tabert_format(self, split: str, output_path: Path):
+    def convert_to_tabert_format(self,
+                                 split: str,
+                                 output_path: Path):
         count = num_rows = num_cols = num_used_rows = num_used_cols = 0
         data = getattr(self, '{}_data'.format(split))
 
@@ -163,6 +165,11 @@ class Totto(BasicDataset):
             for example in tqdm(data):
                 td = {
                     'uuid': None,
+                    'metadata': {
+                        'page_title': example['table_page_title'],
+                        'section_title': example['table_section_title'],
+                        'section_text': example['table_section_text']
+                    },
                     'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
                     'context_before': [],
                     'context_before_mentions': [],

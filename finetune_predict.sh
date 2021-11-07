@@ -53,6 +53,15 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "wtqqa_deprecate" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
     mode=generate-test
+  elif [[ "$task" == "totto_official" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/totto_data2text_official_bart
+    mode=generate-dev
+  elif [[ "$task" == "totto_official_wholetable" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/totto_data2text_official_wholetable_bart
+    mode=generate-dev
+  elif [[ "$task" == "totto" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart
+    mode=generate-dev
   fi
 
   for epoch in "${epochs[@]}"; do

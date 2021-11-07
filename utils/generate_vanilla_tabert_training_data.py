@@ -155,7 +155,12 @@ def generate_for_epoch(table_db: TableDatabase,
     _save_shard()
 
 
-def convert_tapex_data(tapex_path: Path, output_dir: Path, tokenizer, indices: List[int], args: Namespace, config: TableBertConfig):
+def convert_already_preprocessed_data(datapath: Path,
+                                      output_dir: Path,
+                                      data_iterator: Callable,
+                                      tokenizer, indices: List[int],
+                                      args: Namespace,
+                                      config: TableBertConfig):
     output_dir.mkdir(exist_ok=True, parents=True)
     (output_dir / 'train').mkdir(exist_ok=True)
 
@@ -179,46 +184,36 @@ def convert_tapex_data(tapex_path: Path, output_dir: Path, tokenizer, indices: L
 
         is_positives = []
 
-        with open(str(tapex_path), 'r') as sfin, open(str(tapex_path).replace('.src', '.tgt'), 'r') as tfin:
-            for line_id, source in tqdm(enumerate(sfin)):
-                source = source.strip()
-                target = tfin.readline().strip()
-                if line_id not in indices:
-                    continue
+        for context, table, target in data_iterator(datapath, indices):
+            # get source tokens
+            context_tokens: List[str] = tokenizer.tokenize(context)
+            table_tokens: List[str] = tokenizer.tokenize(table)
 
-                cp = source.find('col :')
-                context = source[:cp].strip()
-                table = source[cp:].strip()
+            context_tokens = context_tokens[:config.MAX_SOURCE_LEN - 2]  # cls and sep
+            seg_a_len = len(context_tokens) + 1  # cls
+            source_tokens = [config.cls_token] + \
+                            (context_tokens + table_tokens)[:config.MAX_SOURCE_LEN - 2] + \
+                            [config.sep_token]
+            source_token_ids: List[int] = tokenizer.convert_tokens_to_ids(source_tokens)
 
-                # get source tokens
-                context_tokens: List[str] = tokenizer.tokenize(context)
-                table_tokens: List[str] = tokenizer.tokenize(table)
+            # get target tokens
+            target_tokens: List[str] = [config.cls_token] + \
+                                       tokenizer.tokenize(target)[:config.MAX_TARGET_LEN - 2] + \
+                                       [config.sep_token]
+            target_token_ids: List[int] = tokenizer.convert_tokens_to_ids(target_tokens)
 
-                context_tokens = context_tokens[:config.MAX_SOURCE_LEN - 2]  # cls and sep
-                seg_a_len = len(context_tokens) + 1  # cls
-                source_tokens = [config.cls_token] + \
-                                (context_tokens + table_tokens)[:config.MAX_SOURCE_LEN - 2] + \
-                                [config.sep_token]
-                source_token_ids: List[int] = tokenizer.convert_tokens_to_ids(source_tokens)
+            # save
+            cur_pos = len(sequences)
+            sequence_offsets.append([cur_pos, cur_pos + len(source_token_ids)])
+            sequences.extend(source_token_ids)
+            segment_a_lengths.append(seg_a_len)
 
-                # get target tokens
-                target_tokens: List[str] = [config.cls_token] + \
-                                           tokenizer.tokenize(target)[:config.MAX_TARGET_LEN - 2] + \
-                                           [config.sep_token]
-                target_token_ids: List[int] = tokenizer.convert_tokens_to_ids(target_tokens)
+            cur_pos_tgt = len(target_sequences)
+            target_sequence_offsets.append([cur_pos_tgt, cur_pos_tgt + len(target_token_ids)])
+            target_sequences.extend(target_token_ids)
 
-                # save
-                cur_pos = len(sequences)
-                sequence_offsets.append([cur_pos, cur_pos + len(source_token_ids)])
-                sequences.extend(source_token_ids)
-                segment_a_lengths.append(seg_a_len)
-
-                cur_pos_tgt = len(target_sequences)
-                target_sequence_offsets.append([cur_pos_tgt, cur_pos_tgt + len(target_token_ids)])
-                target_sequences.extend(target_token_ids)
-
-                masked_lm_offsets.append([0, 0])
-                is_positives.append(1)
+            masked_lm_offsets.append([0, 0])
+            is_positives.append(1)
 
         data = {
             'sequences': np.uint16(sequences),
@@ -258,7 +253,8 @@ def main():
     parser.add_argument('--world_size', type=int, default=os.environ.get('SLURM_NTASKS', 1))
     parser.add_argument('--no_shuffle', action='store_true')
     parser.add_argument('--dev_num', type=int, default=None, help='number of examples used for validation')
-    parser.add_argument('--tapex', action='store_true', help='generate tapex data')
+    parser.add_argument('--already_preprocessed', type=str, default=None, choices=['tapex', 'totto', None],
+                        help='type of the already preprocessed data')
 
     TableBertConfig.add_args(parser)
 
@@ -305,15 +301,44 @@ def main():
     logger.debug(f'local dev table indices: {local_dev_table_indices[:1000]}')
     logger.debug(f'local train table indices: {local_train_table_indices[:1000]}')
 
-    if args.tapex:
-        convert_tapex_data(args.train_corpus, args.output_dir,
-                           tokenizer=tokenizer, indices=local_indices, args=args, config=table_bert_config)
+    def tapex_data_iterator(datapath: Path, indices: List[int]):
+        with open(str(datapath), 'r') as sfin, open(str(datapath).replace('.src', '.tgt'), 'r') as tfin:
+            for line_id, source in tqdm(enumerate(sfin)):
+                source = source.strip()
+                target = tfin.readline().strip()
+                if line_id not in indices:
+                    continue
+                cp = source.find('col :')
+                context = source[:cp].strip()
+                table = source[cp:].strip()
+                yield context, table, target
+
+    def totto_data_iterator(datapath: Path, indices: List[int], field: str = 'subtable'):
+        assert field in {'full_table', 'subtable'}
+        with open(str(datapath), 'r') as fin:
+            for line_id, l in tqdm(enumerate(fin)):
+                l = json.loads(l)
+                if line_id not in indices:
+                    continue
+                source = l[f'{field}_metadata_str']
+                target = l['sentence_annotations'][0]['final_sentence'].strip()
+                cp = source.find('<table>')
+                context = source[:cp].strip()
+                table = source[cp:].strip()
+                yield context, table, target
+
+    if args.already_preprocessed:
+        di = eval(f'{args.already_preprocessed}_data_iterator')
+        convert_already_preprocessed_data(
+            args.train_corpus, args.output_dir, data_iterator=di,
+            tokenizer=tokenizer, indices=local_indices, args=args, config=table_bert_config)
         exit()
 
     with TableDatabase.from_jsonl(args.train_corpus, backend='memory', tokenizer=tokenizer, tokenizer_fast=tokenizer_fast,
                                   indices=local_indices,
                                   skip_column_name_longer_than=table_bert_config.skip_column_name_longer_than,
-                                  not_skip_empty_column_name=table_bert_config.not_skip_empty_column_name) as table_db:
+                                  not_skip_empty_column_name=table_bert_config.not_skip_empty_column_name,
+                                  only_keep_highlighted_rows=table_bert_config.only_keep_highlighted_rows) as table_db:
         local_indices = {idx for idx in local_indices if idx in table_db}
         local_dev_table_indices = [idx for idx in local_dev_table_indices if idx in local_indices]
         local_train_table_indices = [idx for idx in local_train_table_indices if idx in local_indices]

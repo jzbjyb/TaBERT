@@ -161,7 +161,7 @@ class Totto(BasicDataset):
         nummentions2count = defaultdict(lambda: 0)
         find_mention_ratios: List[float] = []
 
-        with open(output_path, 'w') as fout:
+        with open(output_path, 'w') as fout, open(str(output_path) + '.raw', 'w') as rfout:
             for example in tqdm(data):
                 td = {
                     'uuid': None,
@@ -268,6 +268,7 @@ class Totto(BasicDataset):
 
                 # write
                 fout.write(json.dumps(td) + '\n')
+                rfout.write(json.dumps(example) + '\n')
                 count += 1
         print('total count {}, used rows {}/{}, used columns {}/{}'.format(
             count, num_used_rows, num_rows, num_used_cols, num_cols))

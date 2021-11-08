@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-task=wtqqa
+task=$1
+pred=$2
 
 host=$(hostname)
 if [[ "$host" == "GPU02" ]]; then
@@ -10,10 +11,12 @@ else
   prefix=""
 fi
 
-pred=$1
-
 if [[ "$task" == "wtqqa" ]]; then
   gold=${prefix}/mnt/root/TaBERT/data/wikitablequestions/test/preprocessed_with_ans.jsonl
+elif [[ "$task" == "totto_official" ]]; then
+  gold=$(pwd)/data/totto_data/totto_dev_data.jsonl
+elif [[ "$task" == "totto" ]]; then
+  gold=$(pwd)/data/totto_data/dev/preprocessed_mention_cell.jsonl.raw
 else
   exit
 fi
@@ -24,10 +27,19 @@ if [[ -d $pred ]]; then
     echo $(basename $i) ${result}
   done
 elif [[ -f $pred ]]; then
-  python -m utils.eval \
-    --prediction ${pred} \
-    --gold ${gold} \
-    --multi_ans_sep ", "
+  if [[ "$task" == totto* ]]; then
+    # clean the prediction file
+    temp_file=$(mktemp)
+    python -m utils.eval --prediction ${pred} --clean > ${temp_file}
+    pushd ~/exp/language
+    bash language/totto/totto_eval.sh --prediction_path ${temp_file} --target_path ${gold}
+    popd
+  else
+    python -m utils.eval \
+      --prediction ${pred} \
+      --gold ${gold} \
+      --multi_ans_sep ", "
+  fi
 else
   exit
 fi

@@ -52,11 +52,13 @@ def source_contains(source: str, targets: Union[str, List[str]]):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--prediction', type=str, required=True, nargs='+')
-    parser.add_argument('--gold', type=str, required=True)
+    parser.add_argument('--gold', type=str, default=None)
     parser.add_argument('--multi_ans_sep', type=str, default=', ')
     parser.add_argument('--output', type=str, default=None)
-    parser.add_argument('--data', type=str, default='wtq', choices=['wikisql', 'wtq', 'wikisql_sql', 'turl'])
+    parser.add_argument('--data', type=str, default='wtq', choices=['wikisql', 'wtq', 'wikisql_sql', 'turl', 'totto'])
     parser.add_argument('--model_type', type=str, default='facebook/bart-base')
+    parser.add_argument('--clean', action='store_true',
+                        help='clean the output file and print (which can be followed by other evaluation scripts)')
     args = parser.parse_args()
     if '_sql' in args.data:
         from rouge import Rouge
@@ -103,12 +105,11 @@ if __name__ == '__main__':
     pred_file1 = args.prediction[0]
     pred_file_others = args.prediction[1:]
 
+    if args.gold is None:  args.gold = pred_file1
     prev_example = None
     with open(pred_file1, 'r', encoding='utf-8') as pfin, \
       open(args.gold, 'r', encoding='utf-8') as gfin:
         pfin_others = [open(f, 'r', encoding='utf-8') for f in pred_file_others]
-        #csv_reader = csv.reader(gfin, delimiter='\t')
-        #_ = next(csv_reader)  # skip tsv head
         for i, p in enumerate(pfin):
             # read predictions
             p = p.rstrip('\n').split('\t')
@@ -130,6 +131,9 @@ if __name__ == '__main__':
                 num_cell = len(source.split(sep_token)) - 1
                 num_cells.append(num_cell)
                 first_word = source.split()[1].lower()  # skip cls
+            if args.clean:
+                print(pred)
+                continue
             # evaluate
             if args.data == 'wikisql':  # exact match
                 em = pred.lower() == gold.lower()
@@ -166,6 +170,8 @@ if __name__ == '__main__':
                 preds = [i for i in pred.split('<|>') if i != '']
                 golds = [i for i in gold.split('<|>') if i != '']
                 em = compute_f1(preds, golds)
+            elif args.data == 'totto':
+                em = gold == pred
             else:
                 raise NotImplementedError
             ems.append(em)
@@ -195,6 +201,9 @@ if __name__ == '__main__':
                 numcell2ems[num_cell].append(em)
                 firstword2ems[first_word].append(em)
                 firstword2cases[first_word][int(em)].append((source, pred, gold))
+
+    if args.clean:
+        exit(0)
 
     print(np.mean(ems))  # the fine line of output is used for automatic analysis
     print(f'Exact match #1: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')

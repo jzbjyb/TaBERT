@@ -6,7 +6,7 @@ import random
 from tqdm import tqdm
 from collections import defaultdict
 import functools
-import os
+import time
 import sling
 import re
 import numpy as np
@@ -122,7 +122,8 @@ class SlingExtractor(object):
   def annotate_sentence(urls: List[str],
                         documents: List[bytes],
                         tables_li: List[List[Dict]],
-                        use_all_more_than_num_mentions) -> List[Dict]:
+                        use_all_more_than_num_mentions: int,
+                        topk: int) -> List[Dict]:
     examples: List[Dict] = []
 
     for url, document, tables in zip(urls, documents, tables_li):
@@ -138,13 +139,8 @@ class SlingExtractor(object):
       tok_to_sent_id, sent_to_span = SlingExtractor.split_document_by_sentence(document.tokens)
 
       for index, table in enumerate(tables):
-        max_nl = -1
-        max_locations: List[Tuple] = None
-        max_sent = None
-        max_cover_ratio = None
-        max_number_ratio = None
-
-        # find the best-matching sentence
+        kept_sent_with_locations: List[Tuple[str, List[Tuple]]] = []
+        # find the topk best-matching sentence
         local_num_context_count = 0
         for sent_id, (sent_start, sent_end) in sent_to_span.items():
           if sent_end - sent_start > 512:
@@ -165,12 +161,8 @@ class SlingExtractor(object):
           if cover_ratio > 0.8:
             # rule 3: skip text that has over 80% of overlap with the table, which is likely to be table snippets
             continue
-          if not use_all_more_than_num_mentions and len(locations) > max_nl:
-            max_nl = len(locations)
-            max_locations = locations
-            max_sent = sent
-            max_cover_ratio = cover_ratio
-            max_number_ratio = number_ratio
+          if not use_all_more_than_num_mentions:
+            kept_sent_with_locations.append((sent, locations))
           elif use_all_more_than_num_mentions and len(locations) >= use_all_more_than_num_mentions:
             examples.append({
               'uuid': f'sling_{url}_{index}_{local_num_context_count}',
@@ -181,23 +173,34 @@ class SlingExtractor(object):
             })
             local_num_context_count += 1
 
-        if max_nl == -1:
+        if len(kept_sent_with_locations) <= 0:
           continue
 
-        if not use_all_more_than_num_mentions:  # output the best one
+        if not use_all_more_than_num_mentions:  # output topk
+          kept_sent_with_locations = sorted(kept_sent_with_locations, key=lambda x: -len(x[1]))[:topk]
+          merge_sent: str = ''
+          merge_locations: List[Tuple] = []
+          for sent, locations in kept_sent_with_locations:
+            offset = len(merge_sent) + int(len(merge_sent) > 0)
+            merge_sent = (merge_sent + ' ' + sent) if len(merge_sent) > 0 else sent
+            merge_locations.extend([(s + offset, e + offset) for s, e in locations])
+
           examples.append({
             'uuid': f'sling_{url}_{index}',
             'table': table,
-            'context_before': [max_sent],
-            'context_before_mentions': [max_locations],
+            'context_before': [merge_sent],
+            'context_before_mentions': [merge_locations],
             'context_after': []
           })
     return examples
 
   @staticmethod
-  def match_sentence_with_table_worker(input_queue: Queue, output_queue: Queue, use_all_more_than_num_mentions):
+  def match_sentence_with_table_worker(input_queue: Queue,
+                                       output_queue: Queue,
+                                       use_all_more_than_num_mentions: int,
+                                       topk: int):
     func = functools.partial(SlingExtractor.annotate_sentence,
-                             use_all_more_than_num_mentions=use_all_more_than_num_mentions)
+                             use_all_more_than_num_mentions=use_all_more_than_num_mentions, topk=topk)
     while True:
       args = input_queue.get()
       if type(args) is str and args == 'DONE':
@@ -232,6 +235,7 @@ class SlingExtractor(object):
                                 to_split: int,  # exclusive
                                 output_file: str,
                                 use_all_more_than_num_mentions: int = 0,
+                                topk: int = 1,
                                 batch_size: int = 16,
                                 num_threads: int = 1,
                                 log_interval: int = 5000):
@@ -243,7 +247,8 @@ class SlingExtractor(object):
     # start processes
     for _ in range(num_threads):
       p = Process(target=functools.partial(self.match_sentence_with_table_worker,
-                                           use_all_more_than_num_mentions=use_all_more_than_num_mentions),
+                                           use_all_more_than_num_mentions=use_all_more_than_num_mentions,
+                                           topk=topk),
                   args=(input_queue, output_queue))
       p.daemon = True
       p.start()
@@ -297,6 +302,7 @@ if __name__ == '__main__':
   parser.add_argument('--task', type=str, choices=['url_as_key', 'pageid_as_key'], default='url_as_key')
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
+  parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
   parser.add_argument('--threads', type=int, default=40)
   args = parser.parse_args()
 
@@ -312,11 +318,11 @@ if __name__ == '__main__':
     se = SlingExtractor(sling_root)
     se.match_sentence_with_table(
       url2tables, key_feild='url', from_split=0, to_split=10, output_file=out_file,
-      use_all_more_than_num_mentions=0, batch_size=16, num_threads=args.threads, log_interval=5000)
+      use_all_more_than_num_mentions=0, topk=args.topk, batch_size=16, num_threads=args.threads, log_interval=5000)
 
   elif args.task == 'pageid_as_key':
     pageid2tables = load_pageid2tables(prep_file)
     se = SlingExtractor(sling_root)
     se.match_sentence_with_table(
       pageid2tables, key_feild='pageid', from_split=0, to_split=10, output_file=out_file,
-      use_all_more_than_num_mentions=1, batch_size=16, num_threads=args.threads, log_interval=100)
+      use_all_more_than_num_mentions=1, topk=args.topk, batch_size=16, num_threads=args.threads, log_interval=100)

@@ -21,19 +21,28 @@ else
   exit
 fi
 
+eval_totto() {
+  pred=$1
+  temp_file=$(mktemp)
+  python -m utils.eval --prediction ${pred} --clean 2> /dev/null 1> ${temp_file}
+  pushd ~/exp/language
+  bash language/totto/totto_eval.sh --prediction_path ${temp_file} --target_path ${gold}
+  popd
+}
+
 if [[ -d $pred ]]; then
   for i in ${pred}/*.tsv; do
-    result=$(python -W ignore -m utils.eval --prediction ${i} --gold ${gold} --multi_ans_sep ", " 2> /dev/null | head -n 1)
+    if [[ "$task" == totto* ]]; then
+      result=$(eval_totto ${i} | grep 'BLEU+' | tr -s " " | cut -f3 -d" ")
+    else
+      result=$(python -W ignore -m utils.eval --prediction ${i} --gold ${gold} --multi_ans_sep ", " 2> /dev/null | head -n 1)
+    fi
     echo $(basename $i) ${result}
   done
 elif [[ -f $pred ]]; then
   if [[ "$task" == totto* ]]; then
     # clean the prediction file
-    temp_file=$(mktemp)
-    python -m utils.eval --prediction ${pred} --clean > ${temp_file}
-    pushd ~/exp/language
-    bash language/totto/totto_eval.sh --prediction_path ${temp_file} --target_path ${gold}
-    popd
+    eval_totto ${pred}
   else
     python -m utils.eval \
       --prediction ${pred} \

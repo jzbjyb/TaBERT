@@ -559,32 +559,45 @@ class Example(object):
         for key, val in kwargs.items():
             setattr(self, key, val)
 
-    def only_keep_highlighted(self, tokenizer, highlight_template: str = '* {}'):
+    def highlight_table(self,
+                        tokenizer,
+                        highlight_parts: str = 'all',
+                        highlight_template: str = '* {}'):
+        assert highlight_parts in {'all', 'data', 'header'}
+        if highlight_parts in {'data', 'all'}:  # highlight table data
+            col2hl_rows: Dict[int, Set[int]] = defaultdict(set)
+            for row_idx, col_idx in self.column_data_used:
+                col2hl_rows[col_idx].add(row_idx)
+            new_column_data: List[List[str]] = []
+            for col_idx, column in enumerate(self.column_data):
+                new_column_data.append([])
+                for row_idx, cell in enumerate(column):
+                    if row_idx in col2hl_rows[col_idx]:
+                        cell = highlight_template.format(cell)
+                    new_column_data[-1].append(cell)
+            self.column_data = new_column_data
+
+        if highlight_parts in {'header', 'all'}:  # hightlight table header
+            for h in self.header:
+                if h.used:
+                    h.name = highlight_template.format(h.name)
+                    h.name_tokens = tokenizer.tokenize(h.name)
+
+    def only_keep_highlighted(self):
         # modify table data
         keep_rows: Set[int] = set()
-        col2hl_rows: Dict[int, Set[int]] = defaultdict(set)
         for row_idx, col_idx in self.column_data_used:
             keep_rows.add(row_idx)
-            col2hl_rows[col_idx].add(row_idx)
         new_column_data: List[List[str]] = []
         for col_idx, column in enumerate(self.column_data):
             new_column_data.append([])
             for row_idx, cell in enumerate(column):
                 if row_idx not in keep_rows:
                     continue
-                if row_idx in col2hl_rows[col_idx]:
-                    cell = highlight_template.format(cell)
                 new_column_data[-1].append(cell)
         # remove highted cell info because this is now stale
         self.column_data_used = None
         self.column_data = new_column_data
-
-        # modify table header
-        for h in self.header:
-            if h.used:
-                h.name = highlight_template.format(h.name)
-                h.name_tokens = tokenizer.tokenize(h.name)
-
 
     @staticmethod
     def shuffle_table(example: Dict):
@@ -1022,6 +1035,7 @@ class TableDatabase:
         skip_column_name_longer_than: int=10,
         not_skip_empty_column_name: bool=False,
         only_keep_highlighted_rows: bool = False,
+        highlight_table: str = None,
     ) -> 'TableDatabase':
         file_path = Path(file_path)
 
@@ -1045,8 +1059,10 @@ class TableDatabase:
                         tokenizer_fast=tokenizer_fast,
                         suffix=None
                     )
+                    if highlight_table:
+                        example.highlight_table(tokenizer, highlight_parts=highlight_table)
                     if only_keep_highlighted_rows:
-                        example.only_keep_highlighted(tokenizer)
+                        example.only_keep_highlighted()
 
                     if TableDatabase.is_valid_example(
                             example,

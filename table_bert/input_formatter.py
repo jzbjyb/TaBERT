@@ -511,7 +511,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 if 'qa_tapex' in seq2seq_format:
                     instances.extend(self.create_qa_tapex_instances(context, example.header, answer, additional_rows))
                 if 'totto' in seq2seq_format:
-                    instances.extend(self.create_totto_instances(example.metadata, example.header, context, additional_rows))
+                    instances.extend(self.create_data2text_instances(context, example.header,
+                                                                     metadata=example.metadata,
+                                                                     additional_rows=additional_rows))
+                if 'data2text' in seq2seq_format:
+                    instances.extend(self.create_data2text_instances(context, example.header, additional_rows=additional_rows))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
@@ -788,13 +792,16 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         }
         return [instance]
 
-    def create_totto_instances(self,
-                               metadata: Dict[str, str],
-                               header: List[Column],
-                               context: List[str],
-                               additional_rows: List[List[Any]] = []):
-        metadata: str = ' / '.join([metadata['page_title'], metadata['section_title'], metadata['section_text']]).strip()
-        metadata: List[str] = self.tokenizer.tokenize(metadata)
+    def create_data2text_instances(self,
+                                   context: List[str],
+                                   header: List[Column],
+                                   metadata: Dict[str, str] = None,
+                                   additional_rows: List[List[Any]] = []):
+        if metadata is not None:  # totto metadata
+            metadata: str = ' / '.join([metadata['page_title'], metadata['section_title'], metadata['section_text']]).strip()
+            metadata: List[str] = self.tokenizer.tokenize(metadata)
+        else:
+            metadata: List[str] = []
         mtl = TableBertConfig.MAX_TARGET_LEN
         table = Table('fake_table', header)  # the dummy header is for the first index element
         instance = self.get_input(metadata, table, additional_rows)

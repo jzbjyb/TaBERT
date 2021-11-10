@@ -111,7 +111,7 @@ class BasicDataset(object):
     @staticmethod
     def get_mention_locations(context: str, table: List[List[str]], highlighed_cells: Set[Tuple[int, int]] = None):
         locations: Set[Tuple[int, int]] = set()  # (inclusive, exclusive)
-        location2cell: Dict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
+        location2cells: Dict[Tuple[int, int], List[Tuple[int, int]]] = defaultdict(list)
         context = context.lower()
         annotated = True
         if highlighed_cells is None:  # assume all cells are highlighted
@@ -137,5 +137,5 @@ class BasicDataset(object):
                 start = context.find(common)
                 loc = (start, start + len(common))
                 locations.add(loc)
-                location2cell[loc].append((r, c))
-        return sorted(list(locations)), location2cell
+                location2cells[loc].append((r, c))
+        return sorted(list(locations)), location2cells

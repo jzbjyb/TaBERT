@@ -161,6 +161,7 @@ class TableBertConfig(SimpleNamespace):
         additional_row_count: int = 0,
         top_row_count: int = 0,
         only_keep_highlighted_rows: bool = False,
+        highlight_table: str = None,
         max_num_mention_per_example: int = 0,
         use_sampled_value: bool = False,
         mask_used_column_prob: float = 0.0,
@@ -260,6 +261,7 @@ class TableBertConfig(SimpleNamespace):
         self.additional_row_count = additional_row_count
         self.top_row_count = top_row_count
         self.only_keep_highlighted_rows = only_keep_highlighted_rows
+        self.highlight_table = highlight_table
         assert additional_row_count >= 0 and top_row_count >= 0
         assert not additional_row_count or not top_row_count, \
             'additional_row_count and top_row_count cannot be non-zero at the same time'
@@ -335,6 +337,7 @@ class TableBertConfig(SimpleNamespace):
         parser.add_argument('--additional_row_count', type=int, default=0)
         parser.add_argument('--top_row_count', type=int, default=0)
         parser.add_argument('--only_keep_highlighted_rows', action='store_true')
+        parser.add_argument('--highlight_table', type=str, default=None)
         parser.add_argument('--max_num_mention_per_example', type=int, default=5,
                             help='max number of mentions (in either context or table) to use')
         parser.add_argument('--use_sampled_value', action='store_true')
@@ -349,7 +352,8 @@ class TableBertConfig(SimpleNamespace):
                                      'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
                                      'mention-context', 'mention-table', 'mlm_mention-context',
                                      'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1',
-                                     'bart-mask', 'salient-mask', 'bart-mask_salient-mask'],
+                                     'bart-mask', 'salient-mask', 'bart-mask_salient-mask',
+                                     'data2text'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument('--column_wise', action='store_true', help='linearize the table by columns')
         parser.add_argument('--not_strict_mask', action='store_true', help='skip errors during masking')

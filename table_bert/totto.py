@@ -167,6 +167,7 @@ class Totto(BasicDataset):
                     'uuid': None,
                     'metadata': {
                         'page_title': example['table_page_title'],
+                        'page_url': example['table_webpage_url'],
                         'section_title': example['table_section_title'],
                         'section_text': example['table_section_text']
                     },

@@ -102,11 +102,29 @@ def merge_shards(dirs: List[Path],
             copyfile(str(from_file), str(to_file))
 
 
-def visualize_table(table: Dict):
-  headers = [h['name'] for h in table['header']]
-  headers = '<tr>' + ' '.join([f'<th>{h}</th>' for h in headers]) + '</tr>'
+def get_table_style() -> str:
+  return """
+    <head>
+      <style>
+      table, th, td {
+        border: 1px solid black;
+        border-collapse: collapse;
+      }
+      </style>
+    </head>
+  """
+
+
+def get_table_html(table: Dict):
+  headers = table['header']
+  highlight_stype = 'style="color:red;"'
+  headers = '<tr>' + ' '.join(
+    [f'<th {highlight_stype if h["used"] else ""}>{h["name"]}</th>' for h in headers]) + '</tr>'
   data = table['data']
-  data = '<tr>' + '</tr><tr>'.join([' '.join([f'<th>{c}</th>' for c in row]) for row in data]) + '</tr>'
+  data_used = set(map(tuple, table['data_used']))
+  data = '<tr>' + '</tr><tr>'.join([' '.join(
+    [f'<th {highlight_stype if (row_idx, col_idx) in data_used else ""}>{c}</th>' for col_idx, c in enumerate(row)])
+    for row_idx, row in enumerate(data)]) + '</tr>'
   table_str = f"""
     <table>
       <thead>
@@ -118,6 +136,17 @@ def visualize_table(table: Dict):
     </table>
   """
   return table_str
+
+
+def get_context_html(context: str, highlight_spans: List[Tuple[int, int]]):
+  prev = 0
+  context_: List[str] = []
+  for s, e in highlight_spans:
+    context_.append(context[prev:s])
+    context_.append(f'<span style="color:red;">{context[s:e]}</span>')
+    prev = e
+  context_.append(context[prev:])
+  return ''.join(context_)
 
 
 def ret_compare(ret_files: List[str],
@@ -200,16 +229,7 @@ def ret_compare(ret_files: List[str],
 
   print('output ...')
   with open(output_file, 'w') as fout:
-    fout.write("""
-      <head>
-        <style>
-        table, th, td {
-          border: 1px solid black;
-          border-collapse: collapse;
-        }
-        </style>
-      </head>
-    """)
+    fout.write(get_table_style())
     fout.write('<body>\n')
     qid2docids: List[Tuple] = list(qid2docids.items())
 
@@ -230,7 +250,7 @@ def ret_compare(ret_files: List[str],
             max_nm = num_mentions
             max_docid = docid
         table_url = get_url(id2doc[max_docid]['uuid'])
-        table = visualize_table(id2doc[max_docid]['table'])
+        table = get_table_html(id2doc[max_docid]['table'])
         group2nm[group].append(max_nm)
         fout.write(f'<div><a href="{table_url}">{table_url}</a><br>{table}</div><br>\n')
       fout.write('<hr>\n')
@@ -247,10 +267,26 @@ def ret_compare(ret_files: List[str],
     print(f'group2nm: {group2nm}')
 
 
+def visualize_prep_file(prep_file: str, output_file: str, sample_ratio: float = 1.0):
+  with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
+    fout.write(get_table_style())
+    for i, l in tqdm(enumerate(fin)):
+      if random.random() > sample_ratio:
+        continue
+      l = json.loads(l)
+      url = get_url(l['uuid']) if 'metadata' not in l else l['metadata']['page_url']
+      context = get_context_html(l['context_before'][0], l['context_before_mentions'][0])
+      table = l['table']
+      table_html = get_table_html(table)
+      fout.write(f'<div><a href="{url}">{url}</a><br><h3>{context}</h3></div>\n')
+      fout.write(f'{table_html}\n')
+      fout.write('<hr>\n')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
-    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards', 'ret_compare'])
+    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards', 'ret_compare', 'vis_prep'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -279,3 +315,8 @@ if __name__ == '__main__':
     ret_query_file, ret_doc_file = args.inp[-2:]
     output_file = args.out
     ret_compare(ret_files, skip_first, is_ret_file, ret_query_file, ret_doc_file, output_file, sample_ratio=0.001, topk=5)
+
+  elif args.task == 'vis_prep':
+    prep_file = args.inp[0]
+    output_file = args.out
+    visualize_prep_file(prep_file, output_file, sample_ratio=1)

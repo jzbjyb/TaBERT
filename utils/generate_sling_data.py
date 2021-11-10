@@ -26,9 +26,10 @@ self_commons, self_docschema = get_commons_docschema()
 only_alphanumeric = re.compile('[\W_]+')
 
 
-def load_url2tables(prep_file: Path) -> Dict[str, List]:
+def load_url2tables(prep_file: Path) -> Tuple[Dict[str, List], List[Dict]]:
   table_count = image_url_count = 0
   url2tables: Dict[str, List] = defaultdict(list)
+  raw_examples: List[Dict] = []
   with open(str(prep_file), 'r') as fin:
     for l in tqdm(fin):
       l = json.loads(l)
@@ -38,10 +39,11 @@ def load_url2tables(prep_file: Path) -> Dict[str, List]:
         image_url_count += 1
         continue
       url2tables[url].append(table)
+      raw_examples.append(l)
       table_count += 1
   url_count = len(url2tables)
   print(f'#url {url_count}, #table {table_count}, #image url {image_url_count}')
-  return url2tables
+  return url2tables, raw_examples
 
 
 def load_pageid2tables(prep_file: Path) -> Dict[str, List]:
@@ -57,6 +59,63 @@ def load_pageid2tables(prep_file: Path) -> Dict[str, List]:
   pageid_count = len(pageid2tables)
   print(f'#pageid {pageid_count}, #table {table_count}')
   return pageid2tables
+
+
+def match_raw_worker(input_queue, output_queue):
+  while True:
+    args = input_queue.get()
+    if type(args) is str and args == 'DONE':
+      break
+    examples = args['examples']
+    for example in examples:
+      context = example['context_before'][0]
+      table = example['table']
+      locations, location2cells = BasicDataset.get_mention_locations(context, table['data'])
+      mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
+      data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
+
+      table['data_used'] = data_used
+      example = {
+        'uuid': example['uuid'],
+        'table': table,
+        'context_before': [context],
+        'context_before_mentions': [locations],
+        'context_before_mentions_cells': [mention_cells],
+        'context_after': []
+      }
+      output_queue.put(example)
+
+
+def match_raw(examples: List[Dict],
+              output_file: str,
+              batch_size: int = 16,
+              num_threads: int = 1,
+              log_interval: int = 100):
+  input_queue = Queue()
+  output_queue = Queue()
+  processes = []
+
+  # start processes
+  for _ in range(num_threads):
+    p = Process(target=match_raw_worker,
+                args=(input_queue, output_queue))
+    p.daemon = True
+    p.start()
+    processes.append(p)
+  write_p = Process(target=functools.partial(SlingExtractor.write_worker, log_interval=log_interval),
+                    args=(output_file, output_queue))
+  write_p.start()
+
+  for i in range(0, len(examples), batch_size):
+    batch = examples[i:i + batch_size]
+    input_queue.put({'examples': batch})
+
+  for _ in processes:
+    input_queue.put('DONE')
+  for p in processes:
+    p.join()
+  output_queue.put('DONE')
+  write_p.join()
 
 
 class SlingExtractor(object):
@@ -139,7 +198,7 @@ class SlingExtractor(object):
       tok_to_sent_id, sent_to_span = SlingExtractor.split_document_by_sentence(document.tokens)
 
       for index, table in enumerate(tables):
-        kept_sent_with_locations: List[Tuple[str, List[Tuple]]] = []
+        kept_sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]] = []
         # find the topk best-matching sentence
         local_num_context_count = 0
         for sent_id, (sent_start, sent_end) in sent_to_span.items():
@@ -156,40 +215,49 @@ class SlingExtractor(object):
           if number_ratio > 0.8:
             # rule 2: skip text where most characters are numeric characters
             continue
-          locations = BasicDataset.get_mention_locations(sent, table['data'])[0]
+          locations, location2cells = BasicDataset.get_mention_locations(sent, table['data'])
+          mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
+          data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
           cover_ratio = np.sum([e - s for s, e in locations]) / (len(sent) or 1)
           if cover_ratio > 0.8:
             # rule 3: skip text that has over 80% of overlap with the table, which is likely to be table snippets
             continue
           if not use_all_more_than_num_mentions:
-            kept_sent_with_locations.append((sent, locations))
+            kept_sent_with_mentions.append((sent, locations, mention_cells))
           elif use_all_more_than_num_mentions and len(locations) >= use_all_more_than_num_mentions:
+            table['data_used'] = data_used
             examples.append({
               'uuid': f'sling_{url}_{index}_{local_num_context_count}',
               'table': table,
               'context_before': [sent],
               'context_before_mentions': [locations],
+              'context_before_mentions_cells': [mention_cells],
               'context_after': []
             })
             local_num_context_count += 1
 
-        if len(kept_sent_with_locations) <= 0:
+        if len(kept_sent_with_mentions) <= 0:
           continue
 
         if not use_all_more_than_num_mentions:  # output topk
-          kept_sent_with_locations = sorted(kept_sent_with_locations, key=lambda x: -len(x[1]))[:topk]
+          # sort by number of mentions
+          kept_sent_with_mentions = sorted(kept_sent_with_mentions, key=lambda x: -len(x[1]))[:topk]
           merge_sent: str = ''
           merge_locations: List[Tuple] = []
-          for sent, locations in kept_sent_with_locations:
+          merge_mention_cells: List[List[Tuple]] = []
+          for sent, locations, mention_cells in kept_sent_with_mentions:
             offset = len(merge_sent) + int(len(merge_sent) > 0)
             merge_sent = (merge_sent + ' ' + sent) if len(merge_sent) > 0 else sent
             merge_locations.extend([(s + offset, e + offset) for s, e in locations])
-
+            merge_mention_cells.extend(mention_cells)
+          data_used = sorted(list(set(mc for mcs in merge_mention_cells for mc in mcs)))
+          table['data_used'] = data_used
           examples.append({
             'uuid': f'sling_{url}_{index}',
             'table': table,
             'context_before': [merge_sent],
             'context_before_mentions': [merge_locations],
+            'context_before_mentions_cells': [merge_mention_cells],
             'context_after': []
           })
     return examples
@@ -212,9 +280,14 @@ class SlingExtractor(object):
   def write_worker(output_file: str, output_queue: Queue, log_interval):
     sent_len_li: List[int] = []
     num_mentions_li: List[int] = []
-    empty_count = non_empty_count = 0
-    with open(output_file, 'w') as fout:
-      for i, example in tqdm(enumerate(iter(output_queue.get, 'DONE'))):
+    empty_count = non_empty_count = i = 0
+    with open(output_file, 'w') as fout, tqdm() as pbar:
+      while True:
+        example = output_queue.get()
+        i += 1
+        if type(example) is str and example == 'DONE':
+          break
+        pbar.update(1)
         nm = len(example['context_before_mentions'][0])
         if nm <= 0:
           empty_count += 1
@@ -287,7 +360,8 @@ class SlingExtractor(object):
           doc_raws = []
           tables_li = []
 
-    input_queue.put('DONE')
+    for _ in processes:
+      input_queue.put('DONE')
     for p in processes:
       p.join()
     output_queue.put('DONE')
@@ -299,7 +373,7 @@ class SlingExtractor(object):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--task', type=str, choices=['url_as_key', 'pageid_as_key'], default='url_as_key')
+  parser.add_argument('--task', type=str, choices=['url_as_key', 'pageid_as_key', 'match_raw'], default='url_as_key')
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
@@ -310,19 +384,29 @@ if __name__ == '__main__':
   random.seed(SEED)
   np.random.seed(SEED)
 
-  prep_file, sling_root = args.inp
-  out_file = args.out
-
   if args.task == 'url_as_key':
-    url2tables = load_url2tables(prep_file)
+    prep_file, sling_root = args.inp
+    out_file = args.out
+
+    url2tables = load_url2tables(prep_file)[0]
     se = SlingExtractor(sling_root)
     se.match_sentence_with_table(
       url2tables, key_feild='url', from_split=0, to_split=10, output_file=out_file,
       use_all_more_than_num_mentions=0, topk=args.topk, batch_size=16, num_threads=args.threads, log_interval=5000)
 
   elif args.task == 'pageid_as_key':
+    prep_file, sling_root = args.inp
+    out_file = args.out
+
     pageid2tables = load_pageid2tables(prep_file)
     se = SlingExtractor(sling_root)
     se.match_sentence_with_table(
       pageid2tables, key_feild='pageid', from_split=0, to_split=10, output_file=out_file,
       use_all_more_than_num_mentions=1, topk=args.topk, batch_size=16, num_threads=args.threads, log_interval=100)
+
+  elif args.task == 'match_raw':
+    prep_file = args.inp[0]
+    out_file = args.out
+
+    url2tables, raw_examples = load_url2tables(prep_file)
+    match_raw(raw_examples, output_file=out_file, batch_size=16, num_threads=args.threads, log_interval=5000)

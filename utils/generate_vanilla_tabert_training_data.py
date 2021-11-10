@@ -338,7 +338,8 @@ def main():
                                   indices=local_indices,
                                   skip_column_name_longer_than=table_bert_config.skip_column_name_longer_than,
                                   not_skip_empty_column_name=table_bert_config.not_skip_empty_column_name,
-                                  only_keep_highlighted_rows=table_bert_config.only_keep_highlighted_rows) as table_db:
+                                  only_keep_highlighted_rows=table_bert_config.only_keep_highlighted_rows,
+                                  highlight_table=table_bert_config.highlight_table) as table_db:
         local_indices = {idx for idx in local_indices if idx in table_db}
         local_dev_table_indices = [idx for idx in local_dev_table_indices if idx in local_indices]
         local_train_table_indices = [idx for idx in local_train_table_indices if idx in local_indices]

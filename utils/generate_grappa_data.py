@@ -89,6 +89,7 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
     for i, (example_line, ret_examples) in enumerate(zip(example_lines, ret_examples_li)):
         example = json.loads(example_line)
         best_match_mentions = None
+        best_match_mentions_cells = None
         best_match = None
         for _example in ret_examples:
             if bywhich == 'context':
@@ -104,24 +105,32 @@ def _generate_retrieval_data_single(example_lines: List[str], ret_examples_li: L
             if max_num_rows:
                 table = table[:max_num_rows]
             try:
-                locations, _ = BasicDataset.get_mention_locations(context, table)
+                locations, location2cells = BasicDataset.get_mention_locations(context, table)
+                mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
             except TimeoutError:
                 print(f'timeout {context} {table}')
                 locations = []
+                mention_cells = []
             if best_match_mentions is None or \
                     (op == 'max' and len(locations) > len(best_match_mentions)) or \
                     (op == 'min' and len(locations) < len(best_match_mentions)):
                 best_match_mentions = locations
+                best_match_mentions_cells = mention_cells
                 best_match = _example
         if best_match is not None:
+            data_used = sorted(list(set(mc for mcs in best_match_mentions_cells for mc in mcs)))
             if bywhich == 'context':
                 example['table'] = best_match['table']
+                example['table']['data_used'] = data_used
                 example['context_before_mentions'] = [best_match_mentions]
-                if op == 'min': example['is_positive'] = False
+                example['context_before_mentions_cells'] = [best_match_mentions_cells]
+                if op == 'min':  example['is_positive'] = False
             elif bywhich == 'table':
+                example['table']['data_used'] = data_used
                 example['context_before'] = best_match['context_before']
                 example['context_before_mentions'] = [best_match_mentions]
-                if op == 'min': example['is_positive'] = False
+                example['context_before_mentions_cells'] = [best_match_mentions_cells]
+                if op == 'min':  example['is_positive'] = False
         examples.append(example)  # use the original if there is no retrieved examples
     print(f'batch {batch_id} completed')
     return examples

@@ -182,8 +182,7 @@ ALLOWED_SPECIAL_SYMBOLS = {'£', '°', '§', '€'}
 class ContextProcessor(object):
     def __init__(self):
         nlp = English()  # just the language with no table_bert
-        sentencizer = nlp.create_pipe("sentencizer")
-        nlp.add_pipe(sentencizer)
+        nlp.add_pipe("sentencizer")
 
         self.nlp = nlp
 
@@ -287,8 +286,10 @@ def process_example(example_dict: Dict, context_processor: ContextProcessor, nlp
 
     uuid = '{}_{}_{}'.format(example_dict['s3Link'],
                              example_dict['recordOffset'], example_dict['recordEndOffset'])
+    url = example_dict['url']
 
     return {'uuid': uuid,
+            'metadata': {'page_url': url},
             'table': table.to_dict(),
             'context_before': context_before,
             'context_after': context_after}

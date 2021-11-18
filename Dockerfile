@@ -58,6 +58,8 @@ RUN pip install http://www.jbox.dk/sling/sling-2.0.0-py3-none-linux_x86_64.whl
 # misc
 RUN pip install absl-py==0.15.0
 
+RUN pip install datasets==1.15.1
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

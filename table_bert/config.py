@@ -352,7 +352,7 @@ class TableBertConfig(SimpleNamespace):
                                      'cell-filling-mask', 'cell-filling-gen', 'schema-augmentation-mask', 'schema-augmentation-gen',
                                      'mention-context', 'mention-table', 'mlm_mention-context',
                                      'mlm_mention-table', 'mlm_mention-dedup-table', 'mlm_table-row-1',
-                                     'bart-mask', 'salient-mask', 'bart-mask_salient-mask',
+                                     'bart-mask', 'salient-mask', 'bart-mask_salient-mask', 'bart-mask_mention-context',
                                      'data2text'],
                             help='seq2seq examples for BART-like models')
         parser.add_argument('--column_wise', action='store_true', help='linearize the table by columns')

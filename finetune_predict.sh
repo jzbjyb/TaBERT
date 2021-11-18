@@ -62,6 +62,15 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "totto" ]]; then
     data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart
     mode=generate-dev
+  elif [[ "$task" == "totto_1_10" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart_1_10
+    mode=generate-dev
+  elif [[ "$task" == "totto_1_20" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart_1_20
+    mode=generate-dev
+  elif [[ "$task" == "totto_1_100" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart_1_100
+    mode=generate-dev
   fi
 
   for epoch in "${epochs[@]}"; do

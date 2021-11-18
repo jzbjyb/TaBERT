@@ -319,4 +319,4 @@ if __name__ == '__main__':
   elif args.task == 'vis_prep':
     prep_file = args.inp[0]
     output_file = args.out
-    visualize_prep_file(prep_file, output_file, sample_ratio=1)
+    visualize_prep_file(prep_file, output_file, sample_ratio=0.01)

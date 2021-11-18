@@ -30,6 +30,10 @@ jobs:
   sku: G8
   command:
   - ./finetune_predict.sh totto base full /mnt/root/TaBERT/data/runs/bart_base 50
+- name: bart_base_totto_1_100
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_1_100 base full /mnt/root/TaBERT/data/runs/bart_base 50
 
 - name: tapex_base_totto_official
   sku: G8
@@ -46,6 +50,11 @@ jobs:
   command:
   - ./finetune_predict.sh totto base full
     /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: tapex_base_totto_1_100
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_1_100 base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
 
 - name: 3merge_totto_official
   sku: G8
@@ -61,4 +70,9 @@ jobs:
   sku: G8
   command:
   - ./finetune_predict.sh totto base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 50
+- name: 3merge_totto_1_100
+  sku: G8
+  command:
+  - ./finetune_predict.sh totto_1_100 base full
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 50

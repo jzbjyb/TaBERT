@@ -730,6 +730,8 @@ class VanillaTableBert(TableBertModel):
 
     def generate(self, data_loader, args):
         output_file = 'generation.tsv' if args.output_file is None else args.output_file
+        if args.multi_gpu:
+            output_file += f'.{args.global_rank}'
         was_training = self.training
         self.eval()
 
@@ -742,12 +744,13 @@ class VanillaTableBert(TableBertModel):
                         num_beams=args.num_beams, min_length=args.min_generate_length,
                         max_length=args.max_generate_length, early_stopping=True)
                     gold_ids = batch['target_input_ids']
-                    for input_id, target_id, gold_id in zip(batch['input_ids'], target_ids, gold_ids):
+                    for b_idx, (input_id, target_id, gold_id) in enumerate(zip(batch['input_ids'], target_ids, gold_ids)):
                         source = self.tokenizer.decode(input_id, skip_special_tokens=False).replace('\n', '\\n').replace('\t', '\\t')
                         pred = self.tokenizer.decode(target_id, skip_special_tokens=False).replace('\n', '\\n').replace('\t', '\\t')
                         gold = self.tokenizer.decode(gold_id, skip_special_tokens=False).replace('\n', '\\n').replace('\t', '\\t')
                         results.append(pred)
-                        fout.write(f'{pred}\t{gold}\t{source}\n')
+                        global_idx = batch['idx'][b_idx].item()
+                        fout.write(f'{pred}\t{gold}\t{source}\t{global_idx}\n')
                     pbar.update(1)
 
         if was_training:

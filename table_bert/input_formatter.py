@@ -516,6 +516,13 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                                                      additional_rows=additional_rows))
                 if 'data2text' in seq2seq_format:
                     instances.extend(self.create_data2text_instances(context, example.header, additional_rows=additional_rows))
+                if 'clean-text' in seq2seq_format:
+                    instances.extend(self.create_clean_text_instances(context, example.header,
+                                                                      metadata=example.metadata,
+                                                                      additional_rows=additional_rows))
+                if 'clean-fake-text' in seq2seq_format:
+                    instances.extend(self.create_clean_text_instances(context, example.header,
+                                                                      additional_rows=additional_rows, fake=True))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
@@ -542,7 +549,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
             stop = False
-            for fm in {'mlm', 'qa', 'sql', 'cell-filling', 'schema-augmentation'}:
+            for fm in {'mlm', 'qa', 'sql', 'cell-filling', 'schema-augmentation', 'clean-text'}:
                 # for these formats, do not iterative over context
                 if fm in seq2seq_format:
                     stop = True
@@ -796,18 +803,21 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                    context: List[str],
                                    header: List[Column],
                                    metadata: Dict[str, str] = None,
-                                   additional_rows: List[List[Any]] = []):
+                                   additional_rows: List[List[Any]] = [],
+                                   use_metadata_context: bool = False):
         if metadata is not None:  # totto metadata
-            metadata: str = ' / '.join([metadata['page_title'], metadata['section_title'], metadata['section_text']]).strip()
-            metadata: List[str] = self.tokenizer.tokenize(metadata)
+            metastr: str = ' / '.join([metadata['page_title'], metadata['section_title'], metadata['section_text']]).strip()
+            metastr: List[str] = self.tokenizer.tokenize(metastr)
         else:
-            metadata: List[str] = []
+            metastr: List[str] = []
         mtl = TableBertConfig.MAX_TARGET_LEN
         table = Table('fake_table', header)  # the dummy header is for the first index element
-        instance = self.get_input(metadata, table, additional_rows)
+        instance = self.get_input(metastr, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
         # context as target
+        if use_metadata_context:
+            context = self.tokenizer.tokenize(metadata['sentence_annotations'][0]['original_sentence'])
         target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
         instance = {
             'tokens': tokens,
@@ -821,6 +831,55 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'info': None
         }
         return [instance]
+
+    def create_clean_text_instances(self,
+                                    context: List[str],
+                                    header: List[Column],
+                                    metadata: Dict[str, str] = None,
+                                    additional_rows: List[List[Any]] = [],
+                                    fake: bool = False):
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        instances = []
+        if fake:
+            table = Table('fake_table', header)  # the dummy header is for the first index element
+            instance = self.get_input(context, table, additional_rows)
+            target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
+            tokens = instance['tokens']
+            seq_a_len = instance['segment_a_length']
+            instance = {
+                'tokens': tokens,
+                'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+                'target_tokens': target,
+                'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+                'segment_a_length': seq_a_len,
+                'masked_lm_positions': [],
+                'masked_lm_labels': [],
+                'masked_lm_label_ids': [],
+                'info': None
+            }
+            instances.append(instance)
+            return instances
+        for sa in metadata['sentence_annotations']:
+            noisy_text: List[str] = self.tokenizer.tokenize(sa['original_sentence'])
+            clean_text: List[str] = self.tokenizer.tokenize(sa['final_sentence'])
+            table = Table('fake_table', header)  # the dummy header is for the first index element
+            instance = self.get_input(noisy_text, table, additional_rows)
+            target = [self.config.cls_token] + clean_text[:mtl - 2] + [self.config.sep_token]
+            tokens = instance['tokens']
+            seq_a_len = instance['segment_a_length']
+            instance = {
+                'tokens': tokens,
+                'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+                'target_tokens': target,
+                'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+                'segment_a_length': seq_a_len,
+                'masked_lm_positions': [],
+                'masked_lm_labels': [],
+                'masked_lm_label_ids': [],
+                'info': None
+            }
+            instances.append(instance)
+        return instances
 
     def create_qa_allrow_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
         mtl = TableBertConfig.MAX_TARGET_LEN

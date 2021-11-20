@@ -735,7 +735,7 @@ class Example(object):
         location2cells: Dict[Tuple[int, int], Set[Tuple[int, int]]] = {}
         for tm in token_mentions:
             if tm is None:
-                logging.warning(f'char2token index error {offsets} {char_mentions}')
+                #logging.warning(f'char2token index error {offsets} {char_mentions}')
                 continue
             if tm[0] not in location2cells:
                 location2cells[tm[0]] = set(tm[1])

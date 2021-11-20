@@ -283,10 +283,35 @@ def visualize_prep_file(prep_file: str, output_file: str, sample_ratio: float = 
       fout.write('<hr>\n')
 
 
+def combine_clean_text(clean_file: str, prep_file: str, output_file: str, num_files: int):
+  idx2clean: Dict[int, str] = {}
+  for i in range(num_files):
+    with open(f'{clean_file}.{i}', 'r') as fin:
+      for l in tqdm(fin):
+        clean_text, _, _, idx = l.strip().split('\t')
+        for rmt in ['<pad>', '<s>', '</s>']:
+          clean_text = clean_text.replace(rmt, '')
+        idx2clean[int(idx)] = clean_text.strip()
+
+  prev_len: List[int] = []
+  new_len: List[int] = []
+  with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
+    for idx, l in enumerate(tqdm(fin)):
+      l = json.loads(l)
+      if idx not in idx2clean:
+        continue
+      prev_len.append(len(l['context_before'][0]))
+      l['context_before'] = [idx2clean[idx]]
+      new_len.append(len(l['context_before'][0]))
+      fout.write(json.dumps(l) + '\n')
+
+  print(f'#len {np.mean(prev_len)} -> {np.mean(new_len)}')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
-    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards', 'ret_compare', 'vis_prep'])
+    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards', 'ret_compare', 'vis_prep', 'combine_clean_text'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -320,3 +345,9 @@ if __name__ == '__main__':
     prep_file = args.inp[0]
     output_file = args.out
     visualize_prep_file(prep_file, output_file, sample_ratio=0.01)
+
+  elif args.task == 'combine_clean_text':
+    clean_file, prep_file = args.inp
+    output_file = args.out
+    num_gpu = 7
+    combine_clean_text(clean_file, prep_file, output_file, num_files=num_gpu)

@@ -117,7 +117,8 @@ if __name__ == '__main__':
             if len(p) == 2:
                 pred, gold = p[0].strip(), p[1].strip()  # use the gold from the first pred file
                 pred_others: List[str] = [po[0].strip() for po in p_others]
-            elif len(p) == 3:
+            elif len(p) >= 3:
+                p = p[:3]
                 pred, gold, source = p[0].strip(), p[1].strip(), p[2].strip()  # use the gold from the first pred file
                 pred = clean_output_from_model(pred)
                 gold = clean_output_from_model(gold)

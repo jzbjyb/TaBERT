@@ -160,6 +160,7 @@ class Totto(BasicDataset):
         numusedcells2count = defaultdict(lambda: 0)
         nummentions2count = defaultdict(lambda: 0)
         find_mention_ratios: List[float] = []
+        num_sent_ann: List[int] = []
 
         with open(output_path, 'w') as fout, open(str(output_path) + '.raw', 'w') as rfout:
             for example in tqdm(data):
@@ -169,7 +170,8 @@ class Totto(BasicDataset):
                         'page_title': example['table_page_title'],
                         'page_url': example['table_webpage_url'],
                         'section_title': example['table_section_title'],
-                        'section_text': example['table_section_text']
+                        'section_text': example['table_section_text'],
+                        'sentence_annotations': example['sentence_annotations'],
                     },
                     'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
                     'context_before': [],
@@ -178,6 +180,7 @@ class Totto(BasicDataset):
                     'context_after': []
                 }
 
+                num_sent_ann.append(len(example['sentence_annotations']))
                 td['uuid'] = 'totto_{}'.format(example['example_id'])
                 context = example['sentence_annotations'][0]['final_sentence']  # use the first annotated sentence
                 table = example['table']
@@ -278,3 +281,4 @@ class Totto(BasicDataset):
         print(f'#used cells -> count {sorted(numusedcells2count.items())}')
         print(f'#mentions -> count {sorted(nummentions2count.items())}')
         print(f'find mention ratio {np.mean(find_mention_ratios)}')
+        print(f'#sentence annotations {np.mean(num_sent_ann)}')

@@ -80,6 +80,18 @@ jobs:
   - ./finetune_predict.sh totto base full
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned/pytorch_model_epoch04.bin 30
 
+- name: tapas_data0_samepage_hardmatch_data2text_cleaned_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned_bartlarge
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned_bartlarge seq2seq 6 5 null
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh totto_1_100 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned_bartlarge/pytorch_model_epoch04.bin 30
+  - ./finetune_predict.sh totto base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned_bartlarge/pytorch_model_epoch04.bin 30
+
 - name: tapas_data0_samepage_hardmatch_morethan3_data2text
   sku: G8
   command:

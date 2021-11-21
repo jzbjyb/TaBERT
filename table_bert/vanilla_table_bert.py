@@ -735,22 +735,41 @@ class VanillaTableBert(TableBertModel):
         was_training = self.training
         self.eval()
 
-        results: List[str] = []
+        nrs = args.num_return_sequences
+        sst = nrs > 1
+        post_process = lambda x: self.tokenizer.decode(x, skip_special_tokens=sst).replace('\n', '\\n').replace('\t', '\\t')
         with torch.no_grad(), open(args.output_dir / output_file, 'w') as fout:
             with tqdm(total=len(data_loader), desc='Generation', file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
-                    target_ids = self._bart.generate(
-                        batch['input_ids'], attention_mask=batch['attention_mask'],
-                        num_beams=args.num_beams, min_length=args.min_generate_length,
-                        max_length=args.max_generate_length, early_stopping=True)
+                    if args.top_k is not None or args.top_p is not None:  # sampling
+                        target_ids = self._bart.generate(
+                            batch['input_ids'],
+                            attention_mask=batch['attention_mask'],
+                            num_return_sequences=nrs,
+                            do_sample=True,
+                            top_k=args.top_k,
+                            top_p=args.top_p,
+                            min_length=args.min_generate_length,
+                            max_length=args.max_generate_length,
+                            early_stopping=True)
+                    else:
+                        target_ids = self._bart.generate(
+                            batch['input_ids'],
+                            attention_mask=batch['attention_mask'],
+                            num_beams=args.num_beams,
+                            num_return_sequences=nrs,
+                            min_length=args.min_generate_length,
+                            max_length=args.max_generate_length,
+                            early_stopping=True)
                     gold_ids = batch['target_input_ids']
-                    for b_idx, (input_id, target_id, gold_id) in enumerate(zip(batch['input_ids'], target_ids, gold_ids)):
-                        source = self.tokenizer.decode(input_id, skip_special_tokens=False).replace('\n', '\\n').replace('\t', '\\t')
-                        pred = self.tokenizer.decode(target_id, skip_special_tokens=False).replace('\n', '\\n').replace('\t', '\\t')
-                        gold = self.tokenizer.decode(gold_id, skip_special_tokens=False).replace('\n', '\\n').replace('\t', '\\t')
-                        results.append(pred)
+                    for b_idx, (input_id, gold_id) in enumerate(zip(batch['input_ids'], gold_ids)):
+                        target_id = target_ids[b_idx * nrs:b_idx * nrs + nrs]
+                        source: str = post_process(input_id)
+                        preds: List[str] = [post_process(tis) for tis in target_id]
+                        preds: str = '\t'.join(preds)
+                        gold: str = post_process(gold_id)
                         global_idx = batch['idx'][b_idx].item()
-                        fout.write(f'{pred}\t{gold}\t{source}\t{global_idx}\n')
+                        fout.write(f'{preds}\t{gold}\t{source}\t{global_idx}\n')
                     pbar.update(1)
 
         if was_training:

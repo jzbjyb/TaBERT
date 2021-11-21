@@ -13,8 +13,11 @@ source initialize.sh
 #input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_withcells.jsonl.data0
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_data2text
 
-input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_withcells_cleaned.jsonl.data0
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_withcells_cleaned.jsonl.data0
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned
+
+input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_withcells_cleaned_bartlarge.jsonl.data0
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_data2text_cleaned_bartlarge
 
 #input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_morethan3.jsonl.data0
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_morethan3_data2text

@@ -283,35 +283,125 @@ def visualize_prep_file(prep_file: str, output_file: str, sample_ratio: float = 
       fout.write('<hr>\n')
 
 
-def combine_clean_text(clean_file: str, prep_file: str, output_file: str, num_files: int):
-  idx2clean: Dict[int, str] = {}
+def combine_clean_text(clean_file: str, prep_file: str, output_file: str, num_files: int, remove_dup: bool = False):
+  idx2cleans: Dict[int, List[str]] = {}
+  num_cleans_after_dedup: List[int] = []
   for i in range(num_files):
     with open(f'{clean_file}.{i}', 'r') as fin:
       for l in tqdm(fin):
-        clean_text, _, _, idx = l.strip().split('\t')
-        for rmt in ['<pad>', '<s>', '</s>']:
-          clean_text = clean_text.replace(rmt, '')
-        idx2clean[int(idx)] = clean_text.strip()
+        l = l.strip().split('\t')
+        idx = int(l[-1])
+        cleans = l[:-3]
+        idx2cleans[idx] = []
+        used: Set[str] = set()
+        for clean in cleans:
+          for rmt in ['<pad>', '<s>', '</s>']:
+            clean = clean.replace(rmt, '')
+          clean = clean.strip()
+          if not remove_dup or clean not in used:
+            used.add(clean)
+            idx2cleans[idx].append(clean)
+        num_cleans_after_dedup.append(len(used))
+  print(f'#sentences after dedup {np.mean(num_cleans_after_dedup)}')
 
   prev_len: List[int] = []
   new_len: List[int] = []
+  ids: Set[str] = set()
   with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
     for idx, l in enumerate(tqdm(fin)):
       l = json.loads(l)
-      if idx not in idx2clean:
+      if idx not in idx2cleans:
         continue
       prev_len.append(len(l['context_before'][0]))
-      l['context_before'] = [idx2clean[idx]]
-      new_len.append(len(l['context_before'][0]))
-      fout.write(json.dumps(l) + '\n')
+      assert l['uuid'] not in ids
+      ids.add(l['uuid'])
+      for clean in idx2cleans[idx]:
+        l['context_before'] = [clean]
+        new_len.append(len(clean))
+        fout.write(json.dumps(l) + '\n')
 
   print(f'#len {np.mean(prev_len)} -> {np.mean(new_len)}')
+
+
+def process_bidirection(bi_file: str, prep_file: str, output_file: str, num_files: int):
+  idx2lp: Dict[int, float] = {}
+  for i in range(num_files):
+    with open(f'{bi_file}.{i}', 'r') as fin:
+      for l in tqdm(fin):
+        loss, idx = l.strip().split('\t')
+        idx, lp = int(idx), -float(loss)
+        if idx >= 15539230:  # TODO: some unknow preprocessing errors
+          continue
+        idx2lp[idx] = lp
+
+  print(f'#idx in bidirection file {len(idx2lp)} with the max idx {np.max(list(idx2lp.keys()))}')
+
+  prev_uuid = None
+  example = None
+  context_with_score: List[Tuple[str, Tuple[float, float]]] = []
+  num_contexts_to_choose_from: List[int] = []
+
+  def choose(context_with_score, example, fout):
+    best_context = sorted(context_with_score, key=lambda x: -sum(x[1]))[0][0]
+    example['context_before'] = [best_context]
+    fout.write(json.dumps(example) + '\n')
+
+  with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
+    for _idx, l in enumerate(tqdm(fin)):
+      l = json.loads(l)
+      uuid = l['uuid']
+      context = l['context_before'][0]
+      taidx = _idx * 2
+      teidx = _idx * 2 + 1
+      if taidx not in idx2lp or teidx not in idx2lp:
+        continue
+      table2text_lp = idx2lp[taidx]
+      text2table_lp = idx2lp[teidx]
+      if prev_uuid is not None and uuid != prev_uuid:  # choose the best context
+        num_contexts_to_choose_from.append(len(context_with_score))
+        choose(context_with_score, example, fout)
+        context_with_score = []
+      context_with_score.append((context, (table2text_lp, text2table_lp)))
+      example = l
+      prev_uuid = uuid
+    if len(context_with_score) > 0:
+      num_contexts_to_choose_from.append(len(context_with_score))
+      choose(context_with_score, example, fout)
+      context_with_score = []
+
+  print(f'avg #context {np.mean(num_contexts_to_choose_from)}')
+
+
+def compare_two_files(prep_file1: str, prep_file2: str):
+  '''
+  prep_file2 might include only a subset from prep_file1
+  '''
+  lens1: List[int] = []
+  lens2: List[int] = []
+  with open(prep_file1, 'r') as fin1, open(prep_file2, 'r') as fin2:
+    for l2 in tqdm(fin2):
+      l1 = fin1.readline()
+      if l1 == '': break
+      e1 = json.loads(l1)
+      e2 = json.loads(l2)
+      while e1['uuid'] != e2['uuid']:
+        l1 = fin1.readline()
+        if l1 == '': break
+        e1 = json.loads(l1)
+      assert e1['uuid'] == e2['uuid']
+      c1 = e1['context_before'][0]
+      c2 = e2['context_before'][0]
+      #print(c1, '\n', c2)
+      lens1.append(len(c1))
+      lens2.append(len(c2))
+  print(f'compare count {len(lens1)}, avg len {np.mean(lens1)}, {np.mean(lens2)}')
 
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
-    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards', 'ret_compare', 'vis_prep', 'combine_clean_text'])
+    'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
+    'ret_compare', 'vis_prep', 'combine_clean_text', 'process_bidirection', 'compare_two_files'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -349,5 +439,15 @@ if __name__ == '__main__':
   elif args.task == 'combine_clean_text':
     clean_file, prep_file = args.inp
     output_file = args.out
-    num_gpu = 7
-    combine_clean_text(clean_file, prep_file, output_file, num_files=num_gpu)
+    num_gpu = 40
+    combine_clean_text(clean_file, prep_file, output_file, num_files=num_gpu, remove_dup=True)
+
+  elif args.task == 'process_bidirection':
+    bi_file, prep_file = args.inp
+    output_file = args.out
+    num_gpu = 64
+    process_bidirection(bi_file, prep_file, output_file, num_files=num_gpu)
+
+  elif args.task == 'compare_two_files':
+    prep_file1, prep_file2 = args.inp
+    compare_two_files(prep_file1, prep_file2)

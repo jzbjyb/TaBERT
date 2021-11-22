@@ -56,3 +56,28 @@ jobs:
     --base-model-name facebook/bart-large --only_test --mode generate-train
     --output_file /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_cleanfakedata/cleaned_bartlarge_bs20/cleaned.txt
     --num_beams 20 --num_return_sequences 20
+
+- name: bidirection_bartlarge
+  sku: G8
+  sku_count: 6
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 48
+    /mnt/root/TaBERT/data/train_data/wholetable_totto_bart_bidirection
+    /mnt/root/TaBERT/data/runs/wholetable_totto_bart_bidirection_bartlarge seq2seq 2 20 null
+    --gradient-accumulation-steps 6 --base-model-name facebook/bart-large
+- name: bidirection_bartlarge_apply
+  sku: G8
+  sku_count: 8
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 64
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_cleaned_bartlarge_bs20_bidirection_noshuf
+    /mnt/root/TaBERT/data/runs/wholetable_totto_bart_bidirection_bartlarge seq2seq 2 1
+    '"/mnt/root/TaBERT/data/runs/wholetable_totto_bart_bidirection_bartlarge/pytorch_model_epoch19.bin"'
+    --base-model-name facebook/bart-large --only_test --mode computeloss-train
+    --output_file /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_cleaned_bartlarge_bs20_bidirection_noshuf/computeloss_bartlarge/loss.txt

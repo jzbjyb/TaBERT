@@ -226,6 +226,8 @@ class Trainer(object):
             result = model.evaluate(data_loader, self.args)
         elif mode == 'represent':
             result = model.represent(data_loader, self.args)
+        elif mode == 'computeloss':
+            result = model.computeloss(data_loader, self.args)
         else:
             raise NotImplementedError
         return result

@@ -523,6 +523,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                 if 'clean-fake-text' in seq2seq_format:
                     instances.extend(self.create_clean_text_instances(context, example.header,
                                                                       additional_rows=additional_rows, fake=True))
+                if 'bidirection' in seq2seq_format:
+                    instances.extend(self.create_bidirection_instances(example, context, example.header, additional_rows=additional_rows))
                 if 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
@@ -549,7 +551,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
             stop = False
-            for fm in {'mlm', 'qa', 'sql', 'cell-filling', 'schema-augmentation', 'clean-text'}:
+            for fm in {'mlm', 'qa', 'sql', 'cell-filling', 'schema-augmentation', 'clean-text', 'bidirection'}:
                 # for these formats, do not iterative over context
                 if fm in seq2seq_format:
                     stop = True
@@ -880,6 +882,61 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             }
             instances.append(instance)
         return instances
+
+    def create_bidirection_instances(self,
+                                     example: Example,
+                                     context: List[str],
+                                     header: List[Column],
+                                     additional_rows: List[List[Any]] = []):
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        # table (with highlights) -> text
+        table = Table('fake_table', header)  # the dummy header is for the first index element
+        instance = self.get_input([], table, additional_rows)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
+        instance_table2text = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+
+        # text + table (exclude highlights) -> highlights
+        target_cells: List[str] = []
+        target_cell_ind: int = 1
+        _additional_rows = copy.deepcopy(additional_rows)
+        for row_idx, col_idx in sorted(example.column_data_used):  # predict cells in normal order
+            if row_idx < len(_additional_rows) and col_idx < len(_additional_rows[row_idx]):
+                cell: str = self.tokenizer.convert_tokens_to_string(_additional_rows[row_idx][col_idx]).strip()
+                assert cell.startswith('*')  # TODO: use argument
+                cell = cell.lstrip('*').strip()  # remove the highlight mark
+                target_cells.extend(self.tokenizer.tokenize(f'({target_cell_ind}) {cell}'))  # append sentinel tokens and cell tokens
+                _additional_rows[row_idx][col_idx] = self.tokenizer.tokenize(f'({target_cell_ind})')
+                target_cell_ind += 1
+
+        table = Table('fake_table', header)
+        instance = self.get_input(context, table, _additional_rows)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        target = [self.config.cls_token] + target_cells[:mtl - 2] + [self.config.sep_token]
+        instance_text2table = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance_table2text, instance_text2table]
 
     def create_qa_allrow_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
         mtl = TableBertConfig.MAX_TARGET_LEN

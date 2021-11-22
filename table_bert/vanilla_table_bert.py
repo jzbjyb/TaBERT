@@ -380,6 +380,7 @@ class VanillaTableBert(TableBertModel):
             loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='none')
             # masked_lm_labels is a combination of real mlm and seq2seq targets
             combined_loss = loss_fct(logits.view(-1, logits.size(-1)), masked_lm_labels.view(-1)).view(bs, -1)  # (bs, seq_len)
+            per_example_loss = (combined_loss * masked_lm_labels.ne(-1)).sum(-1)  # (bs, seq_len)
             combined_loss_avg = combined_loss.sum() / (masked_lm_labels.ne(-1).sum() or 1.0)
             total_loss += combined_loss_avg  # loss is proportional to the number of tokens of each type (mlm or seq2seq)
             # separate mlm and seq2seq loss for logging
@@ -391,7 +392,12 @@ class VanillaTableBert(TableBertModel):
 
         logging_output['loss'] = total_loss.item()
         total_loss = total_loss * (sample_size or 1)
+        if 'return_per_example_loss' in kwargs and kwargs['return_per_example_loss']:
+            return per_example_loss, logging_output
         return total_loss, logging_output
+
+    def computeloss_bart(self, batch):
+        return self.forward_bart(**batch)[0]
 
     def evaluate_bart(self, batch):
         results: List[Dict] = []
@@ -725,6 +731,27 @@ class VanillaTableBert(TableBertModel):
                         fout.write(json.dumps(result) + '\n')
                     pbar.update(1)
 
+        if was_training:
+            self.train()
+
+    def computeloss(self, data_loader, args):
+        output_file = 'computeloss.jsonl' if args.output_file is None else args.output_file
+        if args.multi_gpu:
+            output_file += f'.{args.global_rank}'
+        output_file = args.output_dir / output_file
+        os.makedirs(os.path.dirname(str(output_file)), exist_ok=True)
+
+        was_training = self.training
+        self.eval()
+        with torch.no_grad(), open(output_file, 'w') as fout:
+            with tqdm(total=len(data_loader), desc='Compute Loss', file=sys.stdout) as pbar:
+                for step, batch in enumerate(data_loader):
+                    batch['return_per_example_loss'] = True
+                    results = getattr(self, f'computeloss_{self.config.model_type.value}')(batch)
+                    for b_idx, result in enumerate(results.detach().cpu().numpy()):
+                        global_idx = batch['idx'][b_idx].item()
+                        fout.write(f'{result}\t{global_idx}\n')
+                    pbar.update(1)
         if was_training:
             self.train()
 

@@ -334,6 +334,8 @@ def main():
             tokenizer=tokenizer, indices=local_indices, args=args, config=table_bert_config)
         exit()
 
+    # use noshuf as the name for train to distinguish it from randomly sampled train
+    train_subdir = 'train_noshuf' if args.no_shuffle else 'train'
     with TableDatabase.from_jsonl(args.train_corpus, backend='memory', tokenizer=tokenizer, tokenizer_fast=tokenizer_fast,
                                   indices=local_indices,
                                   skip_column_name_longer_than=table_bert_config.skip_column_name_longer_than,
@@ -351,7 +353,7 @@ def main():
             with (args.output_dir / 'config.json').open('w') as f:
                 json.dump(vars(args), f, indent=2, sort_keys=True, default=str)
 
-        (args.output_dir / 'train').mkdir(exist_ok=True)
+        (args.output_dir / train_subdir).mkdir(exist_ok=True)
         (args.output_dir / 'dev').mkdir(exist_ok=True)
 
         # generate dev data first
@@ -360,7 +362,7 @@ def main():
 
         for epoch in trange(args.epochs_to_generate, desc='Epoch'):
             gc.collect()
-            epoch_filename = args.output_dir / 'train' / f"epoch_{epoch}.shard{args.global_rank}.h5"
+            epoch_filename = args.output_dir / train_subdir / f"epoch_{epoch}.shard{args.global_rank}.h5"
             generate_for_epoch(table_db, local_train_table_indices, epoch_filename, input_formatter, args)
 
     print('trimed table statistics', trim_count)

@@ -53,7 +53,7 @@ jobs:
   sku: C40
   sku_count: 1
   command:
-  - ./gen_maskwithanswer.sh
+  - ./gen_bidirection.sh
 
 - name: ner
   sku: C40

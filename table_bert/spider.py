@@ -71,6 +71,23 @@ class Spider(BasicDataset):
                         n_db_id, n_tn = s.split('|||', 1)
                         fout.write('{}\t{}\t{}\t{}\n'.format(question, n_db_id, n_tn, 0))
 
+    def gen_sql2nl_data(self, split: str, output_path: Path):
+        with open(output_path, 'w') as fout:
+            for eid, example in tqdm(enumerate(getattr(self, '{}_data'.format(split)))):
+                sql = example['query']
+                nl = example['question']
+                td = {
+                    'uuid': f'spider_{eid}',
+                    'metadata': {
+                        'sql': sql,
+                        'nl': nl,
+                    },
+                    'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
+                    'context_before': [nl],
+                    'context_after': []
+                }
+                fout.write(json.dumps(td) + '\n')
+
     def convert_to_tabert_format(self, split: str, output_path: Path):
         all_types = set()
         no_row_count = 0

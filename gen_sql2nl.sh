@@ -2,12 +2,13 @@
 
 source initialize.sh
 
-# -- TAPEX data --
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_bart_qa
+# -- Spider data --
+#input_dir=data/spider/train/sqlnl.json
+#output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl
 
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.preprocessed.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_bart_qa
+# -- TAPEX data --
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -28,7 +29,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 10 \
+    --epochs_to_generate 1 \
     --max_source_len ${max_source_len} \
     --max_target_len ${max_target_len} \
     --max_context_len ${max_context_len} \
@@ -51,9 +52,10 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format qa_tapex \
+    --seq2seq_format sql2nl \
     --table_linearization tapex \
     --dev_num 0 \
+    --no_shuffle \
     --global_rank $i &
 done
 wait

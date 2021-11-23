@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # --- arguments ---
-only_predict=false  # use "true" if only perform prediction
+only_predict=false  # true: perform prediction for all checkpoints; single: perform prediction for a single checkpoint
 task=$1  # "wtqqa"
 model_size=$2  # "base", "large"
 scale=$3  # "full" (8 gpus), "half" (4 gpus)
@@ -50,6 +50,9 @@ for task in "${tasks[@]}"; do
   if [[ "$task" == "wtqqa" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024
     mode=generate-test
+  elif [[ "$task" == "wtqqa_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024_num128
+    mode=generate-test
   elif [[ "$task" == "wtqqa_deprecate" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
     mode=generate-test
@@ -71,6 +74,16 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "totto_1_100" ]]; then
     data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart_1_100
     mode=generate-dev
+  fi
+
+  if [[ "$only_predict" == "single" ]]; then
+    output="$(dirname "${model_ckpt}")"
+    prediction_file=${model_ckpt}.tsv
+    ./run_vanilla.sh \
+      1 ${data} ${output} seq2seq ${batch_size} 1 '"'${model_ckpt}'"' \
+      --base-model-name ${base_model_name} \
+      --only_test --mode ${mode} --output_file ${prediction_file}
+    exit
   fi
 
   for epoch in "${epochs[@]}"; do

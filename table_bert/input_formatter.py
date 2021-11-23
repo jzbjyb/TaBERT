@@ -525,7 +525,9 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                                                       additional_rows=additional_rows, fake=True))
                 if 'bidirection' in seq2seq_format:
                     instances.extend(self.create_bidirection_instances(example, context, example.header, additional_rows=additional_rows))
-                if 'sql' in seq2seq_format:
+                if 'sql2nl' in seq2seq_format:
+                    instances.extend(self.create_sql2nl_instances(example.metadata))
+                elif 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
                 if 'cell-filling-mask' in seq2seq_format:
                     instance = self.create_cf_mask_instance(context, example.header)
@@ -551,7 +553,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
             stop = False
-            for fm in {'mlm', 'qa', 'sql', 'cell-filling', 'schema-augmentation', 'clean-text', 'bidirection'}:
+            for fm in {'mlm', 'qa', 'sql', 'sql2nl', 'cell-filling', 'schema-augmentation', 'clean-text', 'bidirection'}:
                 # for these formats, do not iterative over context
                 if fm in seq2seq_format:
                     stop = True
@@ -953,6 +955,26 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'target_tokens': target,
             'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
             'segment_a_length': seq_a_len,
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance]
+
+    def create_sql2nl_instances(self, metadata: Dict):
+        msl = TableBertConfig.MAX_SOURCE_LEN
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        sql: List[str] = self.tokenizer.tokenize(metadata['sql'].strip())
+        nl: List[str] = self.tokenizer.tokenize(metadata['nl'].strip())
+        source = [self.config.cls_token] + sql[:msl - 2] + [self.config.sep_token]
+        target = [self.config.cls_token] + nl[:mtl - 2] + [self.config.sep_token]
+        instance = {
+            'tokens': source,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(source),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': len(source),
             'masked_lm_positions': [],
             'masked_lm_labels': [],
             'masked_lm_label_ids': [],

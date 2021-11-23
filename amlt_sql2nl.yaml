@@ -1,0 +1,40 @@
+description: sql2nl
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: spider_sql2nl_bartlarge
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/spider_sql2nl
+    /mnt/root/TaBERT/data/runs/spider_sql2nl_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 12 --base-model-name facebook/bart-large
+- name: spider_sql2nl_bartlarge_apply
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/spider_sql2nl_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/spider_sql2nl_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/sql2nl/nl.txt

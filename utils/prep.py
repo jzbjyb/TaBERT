@@ -283,26 +283,26 @@ def visualize_prep_file(prep_file: str, output_file: str, sample_ratio: float = 
       fout.write('<hr>\n')
 
 
-def combine_clean_text(clean_file: str, prep_file: str, output_file: str, num_files: int, remove_dup: bool = False):
-  idx2cleans: Dict[int, List[str]] = {}
-  num_cleans_after_dedup: List[int] = []
+def replace_context(generation_file: str, prep_file: str, output_file: str, num_files: int, remove_dup: bool = False):
+  idx2gens: Dict[int, List[str]] = {}
+  num_gens_after_dedup: List[int] = []
   for i in range(num_files):
-    with open(f'{clean_file}.{i}', 'r') as fin:
+    with open(f'{generation_file}.{i}', 'r') as fin:
       for l in tqdm(fin):
         l = l.strip().split('\t')
         idx = int(l[-1])
-        cleans = l[:-3]
-        idx2cleans[idx] = []
+        gens = l[:-3]
+        idx2gens[idx] = []
         used: Set[str] = set()
-        for clean in cleans:
+        for gen in gens:
           for rmt in ['<pad>', '<s>', '</s>']:
-            clean = clean.replace(rmt, '')
-          clean = clean.strip()
-          if not remove_dup or clean not in used:
-            used.add(clean)
-            idx2cleans[idx].append(clean)
-        num_cleans_after_dedup.append(len(used))
-  print(f'#sentences after dedup {np.mean(num_cleans_after_dedup)}')
+            gen = gen.replace(rmt, '')
+          gen = gen.strip()
+          if not remove_dup or gen not in used:
+            used.add(gen)
+            idx2gens[idx].append(gen)
+        num_gens_after_dedup.append(len(used))
+  print(f'#sentences after dedup {np.mean(num_gens_after_dedup)}')
 
   prev_len: List[int] = []
   new_len: List[int] = []
@@ -310,14 +310,14 @@ def combine_clean_text(clean_file: str, prep_file: str, output_file: str, num_fi
   with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
     for idx, l in enumerate(tqdm(fin)):
       l = json.loads(l)
-      if idx not in idx2cleans:
+      if idx not in idx2gens:
         continue
       prev_len.append(len(l['context_before'][0]))
       assert l['uuid'] not in ids
       ids.add(l['uuid'])
-      for clean in idx2cleans[idx]:
-        l['context_before'] = [clean]
-        new_len.append(len(clean))
+      for gen in idx2gens[idx]:
+        l['context_before'] = [gen]
+        new_len.append(len(gen))
         fout.write(json.dumps(l) + '\n')
 
   print(f'#len {np.mean(prev_len)} -> {np.mean(new_len)}')
@@ -401,7 +401,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
-    'ret_compare', 'vis_prep', 'combine_clean_text', 'process_bidirection', 'compare_two_files'])
+    'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -420,7 +420,7 @@ if __name__ == '__main__':
     tapex_ans_in_source(args.inp[0])
 
   elif args.task == 'merge_shards':
-    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, -1], skip_first=True, use_softlink=False)
+    merge_shards(args.inp[:2], args.out, epochs=1, keep_shards=[-1, -1], skip_first=True, use_softlink=False)
 
   elif args.task == 'ret_compare':
     ret_files = args.inp[:-2]
@@ -436,11 +436,11 @@ if __name__ == '__main__':
     output_file = args.out
     visualize_prep_file(prep_file, output_file, sample_ratio=0.01)
 
-  elif args.task == 'combine_clean_text':
-    clean_file, prep_file = args.inp
+  elif args.task == 'replace_context':
+    generation_file, prep_file = args.inp
     output_file = args.out
-    num_gpu = 40
-    combine_clean_text(clean_file, prep_file, output_file, num_files=num_gpu, remove_dup=True)
+    num_gpu = 8
+    replace_context(generation_file, prep_file, output_file, num_files=num_gpu, remove_dup=False)
 
   elif args.task == 'process_bidirection':
     bi_file, prep_file = args.inp

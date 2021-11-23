@@ -2,8 +2,12 @@
 
 source initialize.sh
 
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024
+
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.128
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024_num128
+
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=10000
@@ -14,7 +18,7 @@ max_num_mention_per_example=3
 column_delimiter='|'
 row_delimiter="[SEP]"
 mkdir -p ${output_dir}
-worldsize=3
+worldsize=1
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -23,7 +27,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 50 \
+    --epochs_to_generate 1 \
     --max_source_len ${max_source_len} \
     --max_target_len ${max_target_len} \
     --max_context_len ${max_context_len} \

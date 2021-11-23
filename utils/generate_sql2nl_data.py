@@ -38,12 +38,6 @@ def main():
                     'context_after': []
                 }
                 fout.write(json.dumps(td) + '\n')
-    elif args.task == 'combine_nl':
-        nl_file, prep_file = args.path
-        out = args.output
-
-        with open(nl_file, 'r') as fin:
-
 
 
 if __name__ == '__main__':

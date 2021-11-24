@@ -53,6 +53,12 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "wtqqa_128" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024_num128
     mode=generate-test
+  elif [[ "$task" == "wtqqa_strict" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num128
+    mode=generate-test
   elif [[ "$task" == "wtqqa_deprecate" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30
     mode=generate-test
@@ -74,11 +80,14 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "totto_1_100" ]]; then
     data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart_1_100
     mode=generate-dev
+  else
+    echo 'unsupported tasks' ${task}
+    exit 1
   fi
 
   if [[ "$only_predict" == "single" ]]; then
     output="$(dirname "${model_ckpt}")"
-    prediction_file=${model_ckpt}.tsv
+    prediction_file=${model_ckpt}.${task}.tsv
     ./run_vanilla.sh \
       1 ${data} ${output} seq2seq ${batch_size} 1 '"'${model_ckpt}'"' \
       --base-model-name ${base_model_name} \

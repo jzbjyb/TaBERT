@@ -3,10 +3,10 @@
 source initialize.sh
 
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src
-#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024
 
 input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.128
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_1024_num128
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num128
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -16,7 +16,8 @@ max_target_len=1024
 max_context_len=128
 max_num_mention_per_example=3
 column_delimiter='|'
-row_delimiter="[SEP]"
+column_delimiter_first=':'
+row_delimiter='none'
 mkdir -p ${output_dir}
 worldsize=1
 
@@ -40,6 +41,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --max_predictions_per_seq 200 \
     --cell_input_template 'value' \
     --column_delimiter ${column_delimiter} \
+    --column_delimiter_first ${column_delimiter_first} \
     --row_delimiter ${row_delimiter} \
     --world_size ${worldsize} \
     --additional_row_count ${additional_row_count} \
@@ -52,6 +54,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --not_skip_empty_column_name \
     --seq2seq_format qa_tapex \
     --table_linearization tapex \
+    --skip_sep_in_middle \
     --dev_num 0 \
     --global_rank $i &
 done

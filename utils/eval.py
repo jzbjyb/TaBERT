@@ -210,6 +210,7 @@ if __name__ == '__main__':
     print(f'Exact match #1: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')
     print(f'Exact match #-1: [Overall] {[np.mean(emsa) for emsa in zip(*ems_all)]}')
     print(f'Answer in input: {np.mean(ans_in_inputs)}')
+    exit()
 
     for op, _ems in op2ems.items():
         print(f'{op}\t{np.mean(_ems)}\t{len(_ems)}')

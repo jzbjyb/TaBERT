@@ -129,9 +129,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         column_token_span_maps = []
         column_start_idx = table_tokens_start_idx
         column_delimiters = column_delimiters or [self.config.column_delimiter]
+        column_delimiters_first = [self.config.column_delimiter_first] or column_delimiters
         row_delimiters = [self.config.row_delimiter] if self.config.row_delimiter is not None else []
 
         col_id = 0
+        prev_is_mrs = True
         for col_id, column in enumerate(header):
             value_tokens = row_data[col_id]
             is_mrs = False if multi_row_split is None else multi_row_split[col_id]
@@ -151,8 +153,10 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     token_offset=column_start_idx,
                     cell_input_template=cell_input_template
                 )
-                column_input_tokens.extend(row_delimiters if is_mrs else column_delimiters)
+                cd = column_delimiters_first if prev_is_mrs else column_delimiters
+                column_input_tokens.extend(row_delimiters if is_mrs else cd)
 
+            prev_is_mrs = is_mrs
             early_stop = False
             if trim_long_table is not None:
                 trim_count['total'] += 1
@@ -195,16 +199,11 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             if early_stop: break
 
         # delete delimiters at the end
-        cd = column_delimiters
-        rd = row_delimiters
-        if len(cd) == 1 and row_input_tokens[-1] == cd[0]:
-            del row_input_tokens[-1]
-        elif len(cd) > 1 and ''.join(row_input_tokens[-len(cd):]) == ''.join(cd):
-            row_input_tokens = row_input_tokens[:-len(cd)]
-        if len(rd) == 1 and row_input_tokens[-1] == rd[0]:
-            del row_input_tokens[-1]
-        elif len(rd) > 1 and ''.join(row_input_tokens[-len(rd):]) == ''.join(rd):
-            row_input_tokens = row_input_tokens[:-len(rd)]
+        for deli in [column_delimiters, column_delimiters_first, row_delimiters]:
+            if len(deli) == 1 and row_input_tokens[-1] == deli[0]:
+                del row_input_tokens[-1]
+            elif len(deli) > 1 and ''.join(row_input_tokens[-len(deli):]) == ''.join(deli):
+                row_input_tokens = row_input_tokens[:-len(deli)]
 
         return row_input_tokens, column_token_span_maps, col_id
 
@@ -244,6 +243,8 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         column_wise = self.config.column_wise
         use_row_data = self.config.top_row_count == 0 and len(row_data) > 0
         max_total_len = trim_long_table or TableBertConfig.MAX_SOURCE_LEN
+        skip_sep_in_middle = self.config.skip_sep_in_middle
+        num_sp_tokens = 1 if skip_sep_in_middle else 2
 
         additional_rows = copy.deepcopy(additional_rows)  # we will modify it in place
 
@@ -257,13 +258,13 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             header = [Column.get_dummy()] + header  # the dummy header is for the first index element
 
         if self.config.context_first:
-            table_tokens_start_idx = len(context) + 2  # account for cls and sep
+            table_tokens_start_idx = len(context) + num_sp_tokens  # account for cls and sep
             # account for cls and sep, and the ending sep
-            max_table_token_length = max_total_len - len(context) - 2 - 1
+            max_table_token_length = max_total_len - len(context) - num_sp_tokens - 1
         else:
             table_tokens_start_idx = 1  # account for starting cls
             # account for cls and sep, and the ending sep
-            max_table_token_length = max_total_len - len(context) - 2 - 1
+            max_table_token_length = max_total_len - len(context) - num_sp_tokens - 1
 
         if column_wise and len(additional_rows) > 0:
             # get max #rows that can fit into the max length which is necessary for column_wise iteration
@@ -310,18 +311,15 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         if len(row_input_tokens) == 0:
             raise TableTooLongError()
 
+        middle_sep = [] if skip_sep_in_middle else [self.config.sep_token]
         if self.config.context_first:
-            sequence = [self.config.cls_token] + context + [self.config.sep_token] + row_input_tokens + [self.config.sep_token]
-            # segment_ids = [0] * (len(context) + 2) + [1] * (len(row_input_tokens) + 1)
-            segment_a_length = len(context) + 2
-            context_span = (0, 1 + len(context))
-            # context_token_indices = list(range(0, 1 + len(context)))
+            sequence = [self.config.cls_token] + context + middle_sep + row_input_tokens + [self.config.sep_token]
+            segment_a_length = len(context) + num_sp_tokens
+            context_span = (0, num_sp_tokens - 1 + len(context))
         else:
-            sequence = [self.config.cls_token] + row_input_tokens + [self.config.sep_token] + context + [self.config.sep_token]
-            # segment_ids = [0] * (len(row_input_tokens) + 2) + [1] * (len(context) + 1)
-            segment_a_length = len(row_input_tokens) + 2
-            context_span = (len(row_input_tokens) + 1, len(row_input_tokens) + 1 + 1 + len(context) + 1)
-            # context_token_indices = list(range(len(row_input_tokens) + 1, len(row_input_tokens) + 1 + 1 + len(context) + 1))
+            sequence = [self.config.cls_token] + row_input_tokens + middle_sep + context + [self.config.sep_token]
+            segment_a_length = len(row_input_tokens) + num_sp_tokens
+            context_span = (len(row_input_tokens) + num_sp_tokens - 1, len(row_input_tokens) + num_sp_tokens - 1 + 1 + len(context) + 1)
 
         # get column_token_to_column_id
         column_token_to_column_id = np.full(len(sequence), dtype=np.int, fill_value=-1)  # init with -1

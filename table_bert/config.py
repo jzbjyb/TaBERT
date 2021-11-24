@@ -142,6 +142,8 @@ class TableBertConfig(SimpleNamespace):
         base_model_name: str = 'bert-base-uncased',
         load_model_from: str = None,
         column_delimiter: str = '[SEP]',
+        column_delimiter_first: str = None,
+        skip_sep_in_middle: bool = False,
         row_delimiter: str = '[SEP]',
         context_first: bool = True,
         cell_input_template: str = 'column | type | value',
@@ -195,13 +197,13 @@ class TableBertConfig(SimpleNamespace):
         tokenizer = self.tokenizer_cls.from_pretrained(self.base_model_name)
 
         self.column_delimiter = column_delimiter
+        self.column_delimiter_first = column_delimiter_first or self.column_delimiter
+        self.column_delimiter: str = self.preprocess_column_delimiter(
+            self.column_delimiter, self.model_type, tokenizer)
+        self.column_delimiter_first: str = self.preprocess_column_delimiter(
+            self.column_delimiter_first, self.model_type, tokenizer)
+        self.skip_sep_in_middle = skip_sep_in_middle
         self.row_delimiter = row_delimiter
-        if column_delimiter == '[SEP]':  # model-dependent delimiter
-            self.column_delimiter = MODEL2SEP[self.model_type]
-        else:
-            self.column_delimiter = tokenizer.tokenize(self.column_delimiter)
-            assert len(self.column_delimiter) == 1, 'column_delimiter should only contain a single word piece'
-            self.column_delimiter =  self.column_delimiter[0]
         if row_delimiter == '[SEP]':  # model-dependent delimiter
             self.row_delimiter = MODEL2SEP[self.model_type]
         elif row_delimiter == 'none':
@@ -299,6 +301,16 @@ class TableBertConfig(SimpleNamespace):
                 raise NotImplementedError
 
     @classmethod
+    def preprocess_column_delimiter(cls, delimiter: str, model_type: ModelType, tokenizer) -> str:
+        if delimiter == '[SEP]':  # model-dependent delimiter
+            delimiter = MODEL2SEP[model_type]
+        else:
+            delimiter = tokenizer.tokenize(delimiter)
+            assert len(delimiter) == 1, 'column_delimiter should only contain a single word piece'
+            delimiter = delimiter[0]
+        return delimiter
+
+    @classmethod
     def add_args(cls, parser: ArgumentParser):
         parser.add_argument('--base_model_name', type=str, default='bert-base-uncased')
 
@@ -307,6 +319,8 @@ class TableBertConfig(SimpleNamespace):
         parser.set_defaults(context_first=True)
 
         parser.add_argument("--column_delimiter", type=str, default='[SEP]', help='Column delimiter')
+        parser.add_argument("--column_delimiter_first", type=str, default=None, help='delimiter for the first column (used fro TAPEX)')
+        parser.add_argument('--skip_sep_in_middle', action='store_true', help='whether to skip the sep between text and table')
         parser.add_argument("--row_delimiter", type=str, default='[SEP]', help='row delimiter')
         parser.add_argument("--cell_input_template", type=str, default='column | type | value', help='Cell representation')
         parser.add_argument("--column_representation", type=str, default='mean_pool', help='Column representation')

@@ -9,7 +9,9 @@ from pathlib import Path
 from tqdm import tqdm
 from collections import defaultdict
 import numpy as np
+import torch
 import matplotlib.pyplot as plt
+from transformers import BartForConditionalGeneration
 from table_bert.dataset_utils import BasicDataset
 from table_bert.utils import get_url
 
@@ -401,7 +403,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
-    'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files'])
+    'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files', 'dump_correct_bart'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -451,3 +453,12 @@ if __name__ == '__main__':
   elif args.task == 'compare_two_files':
     prep_file1, prep_file2 = args.inp
     compare_two_files(prep_file1, prep_file2)
+
+  elif args.task == 'dump_correct_bart':
+    # the mask embedding in old verions of BART-base is incorrect
+    # use the latest version of transformers when running this function
+    model_name = 'facebook/bart-large'
+    dump_dir = '/mnt/root/TaBERT/data/runs/bart_large'
+    model = BartForConditionalGeneration.from_pretrained(model_name).eval()
+    save_function = lambda obj, f: torch.save(obj, f, _use_new_zipfile_serialization=False)
+    model.save_pretrained(dump_dir, save_function=save_function)

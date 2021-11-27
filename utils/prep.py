@@ -83,16 +83,17 @@ def merge_shards(dirs: List[Path],
                  epochs: int = 10,
                  keep_shards: List[int] = [-1, -1],
                  skip_first: bool = False,
-                 use_softlink: bool = False):
-  assert len(dirs) == len(keep_shards)
+                 use_softlink: bool = False,
+                 alway_use_epochs: List[int] = [None, None]):
+  assert len(dirs) == len(keep_shards) == len(alway_use_epochs)
   os.makedirs(str(out_dir), exist_ok=True)
   for e in range(epochs):
-    sns: List[int] = [get_shard_num(dir, e) for dir in dirs]
+    sns: List[int] = [get_shard_num(dir, aue if aue is not None else e) for aue, dir in zip(alway_use_epochs, dirs)]
     keep_sns: List[int] = [sn if keep_shards[i] == -1 else min(sn, keep_shards[i]) for i, sn in enumerate(sns)]
     new_shard_id = 0
-    for i, (dir, ksn) in enumerate(zip(dirs, keep_sns)):
+    for i, (dir, ksn, aue) in enumerate(zip(dirs, keep_sns, alway_use_epochs)):
       for s in range(ksn):
-        from_file = dir / f'epoch_{e}.shard{s}.h5'
+        from_file = dir / (f'epoch_{aue}.shard{s}.h5' if aue is not None else f'epoch_{e}.shard{s}.h5')
         to_file = out_dir / f'epoch_{e}.shard{new_shard_id}.h5'
         new_shard_id += 1
         if not skip_first or i != 0:
@@ -422,7 +423,8 @@ if __name__ == '__main__':
     tapex_ans_in_source(args.inp[0])
 
   elif args.task == 'merge_shards':
-    merge_shards(args.inp[:2], args.out, epochs=1, keep_shards=[-1, -1], skip_first=True, use_softlink=False)
+    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, -1],
+                 skip_first=True, use_softlink=False, alway_use_epochs=[None, None])
 
   elif args.task == 'ret_compare':
     ret_files = args.inp[:-2]

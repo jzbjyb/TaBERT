@@ -423,7 +423,7 @@ if __name__ == '__main__':
     tapex_ans_in_source(args.inp[0])
 
   elif args.task == 'merge_shards':
-    merge_shards(args.inp[:2], args.out, epochs=10, keep_shards=[-1, -1],
+    merge_shards(args.inp[:2], args.out, epochs=1, keep_shards=[-1, -1],
                  skip_first=True, use_softlink=False, alway_use_epochs=[None, None])
 
   elif args.task == 'ret_compare':

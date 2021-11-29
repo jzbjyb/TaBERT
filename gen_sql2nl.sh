@@ -6,9 +6,12 @@ source initialize.sh
 #input_dir=data/spider/train/sqlnl.json
 #output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl
 
+input_dir=data/spider/train/sqlnl.json.2048
+output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl_num2048
+
 # -- TAPEX data --
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -20,7 +23,7 @@ max_num_mention_per_example=3
 column_delimiter='|'
 row_delimiter='none'
 mkdir -p ${output_dir}
-worldsize=20
+worldsize=1
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -55,7 +58,6 @@ for (( i=0; i<${worldsize}; ++i)); do
     --seq2seq_format sql2nl \
     --table_linearization tapex \
     --dev_num 0 \
-    --no_shuffle \
     --global_rank $i &
 done
 wait

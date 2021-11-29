@@ -215,8 +215,6 @@ def main():
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
             args.gradient_accumulation_steps))
 
-    real_batch_size = args.train_batch_size  # // args.gradient_accumulation_steps
-
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -268,8 +266,11 @@ def main():
     dataset_cls = task['dataset']
 
     if not args.only_test:
-        # set up update parameters for LR scheduler
         train_set_info = dataset_cls.get_dataset_info(train_data_dir, args.max_epoch)
+        # adjust batch size for really small datasets (or few-shot learning)
+        args.train_batch_size = min(args.train_batch_size, train_set_info['one_epoch_size'] // args.world_size // args.gradient_accumulation_steps)
+        assert args.train_batch_size >= 1, 'batch size is not positive'
+        # set up update parameters for LR scheduler
         total_num_updates = train_set_info['total_size'] // args.train_batch_size // args.world_size // args.gradient_accumulation_steps
         args.max_epoch = train_set_info['max_epoch']
         logger.info(f'Train data size: {train_set_info["total_size"]} for {args.max_epoch} epochs, total num. updates: {total_num_updates}')
@@ -328,7 +329,7 @@ def main():
             epoch_dataset = dataset_cls(epoch=trainer.epoch, training_path=train_data_dir, config=table_bert_config,
                                         tokenizer=model_ptr.tokenizer, multi_gpu=args.multi_gpu, debug=args.debug_dataset)
             train_sampler = RandomSampler(epoch_dataset)
-            train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=real_batch_size, num_workers=0,
+            train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=0,
                                           collate_fn=partial(
                                               epoch_dataset.collate,
                                               pad_id=table_bert_config.pad_id,

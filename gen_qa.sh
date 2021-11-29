@@ -6,8 +6,11 @@ source initialize.sh
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.preprocessed.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_bart_qa
 
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.preprocessed.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_bart_qa
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_bart_qa
+
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.num512_preprocessed.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -28,7 +31,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 10 \
+    --epochs_to_generate 1 \
     --max_source_len ${max_source_len} \
     --max_target_len ${max_target_len} \
     --max_context_len ${max_context_len} \

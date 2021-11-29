@@ -56,8 +56,26 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "wtqqa_strict" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024
     mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_32" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num32
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_64" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num64
+    mode=generate-test
   elif [[ "$task" == "wtqqa_strict_128" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_256" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num256
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_512" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num512
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num1024
     mode=generate-test
   elif [[ "$task" == "wtqqa_deprecate" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30

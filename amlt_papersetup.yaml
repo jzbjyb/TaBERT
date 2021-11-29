@@ -103,6 +103,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 10:30:50
+- name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_finetune3
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_bart_bartmask_salientmask_tapexlinear/pytorch_model_epoch09.bin 50
 
 - name: wholetable_3merge_bart_bartmask_salientmask_tapexlinear_tapexbaseinit_and_finetune
   sku: G8
@@ -205,6 +210,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit_finetune4
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_bart_retbycontext_bartmask_salientmask_tapexlinear_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_tapas_data0_bart_bartmask_salientmask_tapexlinear
   sku: G8
@@ -267,6 +277,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_samepage_hardmatch_bartmask_salientmask/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_tapas_data0_bart_samepage_hardmatch_bartmask_salientmask_finetune4
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_bart_samepage_hardmatch_bartmask_salientmask/pytorch_model_epoch04.bin 50
 
 - name: wholetable_tapas_data0_bart_samepage_hardmatch_topk3_bartmask_salientmask_and_finetune
   sku: G8
@@ -364,6 +379,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_tapex_05m_bart_qa_tapexbaseinit_finetune3
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_3merge_tapex05m_bart_bartmask_salientmask_tapexbaseinit_and_finetune
   sku: G8
@@ -385,6 +405,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_3merge_tapex05m_bart_bartmask_salientmask_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_3merge_tapex05m_bart_bartmask_salientmask_tapexbaseinit_finetune3
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_3merge_tapex05m_bart_bartmask_salientmask_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_wtq_bart_samepage_hardmatch_bartmask_salientmask_and_finetune
   sku: G8
@@ -411,6 +436,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_tapex_05m_nl_bart_qa_tapexbaseinit_finetune2
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_tapex_05m_sqlandnl_bart_qa_tapexbaseinit_and_finetune
   sku: G8
@@ -427,6 +457,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_128 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_tapex_05m_sqlandnl_bart_qa_tapexbaseinit_finetune2
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_tapas_data0_samepage_hardmatch_tapex05m_bart_bartmask_salientmask_tapexbaseinit_and_finetune
   sku: G8
@@ -438,3 +473,30 @@ jobs:
     --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
   - ./finetune_predict.sh wtqqa_strict_128:wtqqa_128:wtqqa_strict:wtqqa base full
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_samepage_hardmatch_tapex05m_bart_bartmask_salientmask_tapexbaseinit/pytorch_model_epoch04.bin 10:30:50
+- name: wholetable_tapas_data0_samepage_hardmatch_tapex05m_bart_bartmask_salientmask_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_samepage_hardmatch_tapex05m_bart_bartmask_salientmask_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_sqlandnl_num512_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50

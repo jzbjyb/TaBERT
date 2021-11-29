@@ -5,8 +5,8 @@ source initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.128
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num128
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.1024
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num1024
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0

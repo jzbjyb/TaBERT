@@ -38,3 +38,17 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/spider_sql2nl_bartlarge/pytorch_model_epoch49.bin"'
     --base-model-name facebook/bart-large --only_test --mode generate-train
     --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/sql2nl/nl.txt
+
+- name: spider_sql2nl_num512_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/spider_sql2nl_num512
+    /mnt/root/TaBERT/data/runs/spider_sql2nl_num512_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/spider_sql2nl_num512_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/spider_sql2nl_num512_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/sql2nl_num512/nl.txt

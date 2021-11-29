@@ -173,7 +173,8 @@ class TableDataset(Dataset):
 
         return {
             'total_size': data_size,
-            'max_epoch': max_epoch
+            'max_epoch': max_epoch,
+            'one_epoch_size': data_size // max_epoch,
         }
 
     @classmethod

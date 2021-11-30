@@ -204,6 +204,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
     /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_base_tapex4
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_num128_base_bart
   sku: G8
@@ -219,6 +224,11 @@ jobs:
   sku: G8
   command:
   - ./finetune_predict.sh wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/bart_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_base_bart4
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict base full
     /mnt/root/TaBERT/data/runs/bart_base/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_base_tapex_ep50
@@ -260,6 +270,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_128 large full
     /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 100
+- name: wtqqa_tapex_linear_1024_num128_large_tapex3
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 large full
+    /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_num128_large_bart
   sku: G8
@@ -286,6 +301,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_128 large full
     /mnt/root/TaBERT/data/runs/bart_large/pytorch_model.bin 200:500
+- name: wtqqa_tapex_linear_1024_num128_large_bart6
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 large full
+    /mnt/root/TaBERT/data/runs/bart_large/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_large_bartxsum
   sku: G8

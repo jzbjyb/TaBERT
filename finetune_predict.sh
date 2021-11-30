@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
 # --- arguments ---
-only_predict=false  # true: perform prediction for all checkpoints; single: perform prediction for a single checkpoint
+pipeline=all
+# all: (default) run all
+# single: only perform evaluation for a single checkpoint
+# multi: only perform evaluation for all checkpoints
+# skip: skip evaluation
 task=$1  # "wtqqa"
 model_size=$2  # "base", "large"
 scale=$3  # "full" (8 gpus), "half" (4 gpus)
@@ -103,7 +107,7 @@ for task in "${tasks[@]}"; do
     exit 1
   fi
 
-  if [[ "$only_predict" == "single" ]]; then
+  if [[ "$pipeline" == "single" ]]; then
     output="$(dirname "${model_ckpt}")"
     prediction_file=${model_ckpt}.${task}.tsv
     ./run_vanilla.sh \
@@ -114,8 +118,12 @@ for task in "${tasks[@]}"; do
   fi
 
   for epoch in "${epochs[@]}"; do
-    if [[ "$only_predict" == "true" ]]; then
-      output=${model_ckpt}
+    if [[ "$pipeline" == "multi" ]]; then
+      if [[ ${model_ckpt} == *.bin ]]; then   # a real checkpoint
+        output="$(dirname "${model_ckpt}")"_${task}_ep${epoch}
+      else
+        output=${model_ckpt}_${task}_ep${epoch}
+      fi
     else
       # finetune
       if [[ ${model_ckpt} == *.bin ]]; then   # a real checkpoint
@@ -131,29 +139,31 @@ for task in "${tasks[@]}"; do
       fi
     fi
 
-    # evaluate every checkpoint
-    remain=${ngpu}
-    isfirst=true
-    max_epoch=$(expr $epoch - 1)  # skip the last epoch because it's already evaluated
-    for (( i=0; i<$max_epoch; ++i )); do
-      iwz=$(printf "%02d" $i)  # add a preceding zero
-      inter_ckpt=${output}/pytorch_model_epoch${iwz}.bin
-      prediction_file=ep${iwz}.tsv
-      CUDA_VISIBLE_DEVICES="$((remain - 1))" ./run_vanilla.sh \
-        1 ${data} ${output} seq2seq ${batch_size} 1 '"'${inter_ckpt}'"' \
-        --base-model-name ${base_model_name} \
-        --only_test --mode ${mode} --output_file ${prediction_file} &
-      if [[ "$isfirst" == "true" ]]; then
-        # run the first exclusively to download necessary files
-        wait
-        isfirst=false
-      fi
-      remain="$((remain - 1))"
-      if (( ${remain} == 0 )); then
-        wait
-        remain=${ngpu}
-      fi
-    done
-    wait
+    if [[ "$pipeline" != "skip" ]]; then
+      # evaluate every checkpoint
+      remain=${ngpu}
+      isfirst=true
+      max_epoch=$(expr $epoch - 1)  # skip the last epoch because it's already evaluated
+      for (( i=0; i<$max_epoch; ++i )); do
+        iwz=$(printf "%02d" $i)  # add a preceding zero
+        inter_ckpt=${output}/pytorch_model_epoch${iwz}.bin
+        prediction_file=ep${iwz}.tsv
+        CUDA_VISIBLE_DEVICES="$((remain - 1))" ./run_vanilla.sh \
+          1 ${data} ${output} seq2seq ${batch_size} 1 '"'${inter_ckpt}'"' \
+          --base-model-name ${base_model_name} \
+          --only_test --mode ${mode} --output_file ${prediction_file} &
+        if [[ "$isfirst" == "true" ]]; then
+          # run the first exclusively to download necessary files
+          wait
+          isfirst=false
+        fi
+        remain="$((remain - 1))"
+        if (( ${remain} == 0 )); then
+          wait
+          remain=${ngpu}
+        fi
+      done
+      wait
+    fi
   done
 done

@@ -5,8 +5,22 @@ source initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.1024
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num1024
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.1024
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num1024
+
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/topic/train.src.Culture.exclude
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/topic/valid.src.Culture
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_dev
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/topic/test.src.Culture
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_test
+
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/topic/train.src.Culture.exclude.1024
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude_num1024
+
+input_dir=$1
+output_dir=$2
+noshuf=$3
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -20,6 +34,12 @@ column_delimiter_first=':'
 row_delimiter='none'
 mkdir -p ${output_dir}
 worldsize=1
+
+if [[ "$noshuf" == "true" ]]; then
+  noshuf='--no_shuffle'
+else
+  noshuf=""
+fi
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -56,6 +76,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --table_linearization tapex \
     --skip_sep_in_middle \
     --dev_num 0 \
+    ${noshuf} \
     --global_rank $i &
 done
 wait

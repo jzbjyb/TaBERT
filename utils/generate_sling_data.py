@@ -14,6 +14,7 @@ from multiprocessing import Process, Queue
 from table_bert.utils import get_url
 from table_bert.dataset_utils import BasicDataset
 from table_bert.wikidata import topic2categories, WikipediaCategory
+from table_bert.wikitablequestions import WikiTQ
 
 
 def get_commons_docschema():
@@ -454,7 +455,8 @@ class SlingExtractor(object):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, choices=[
-    'url_as_key', 'pageid_as_key', 'match_raw', 'build_category_hierarchy', 'pageid2topic', 'assign_topic'], default='url_as_key')
+    'url_as_key', 'pageid_as_key', 'match_raw', 'build_category_hierarchy',
+    'pageid2topic', 'assign_topic', 'wikitq'], default='url_as_key')
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
@@ -558,9 +560,35 @@ if __name__ == '__main__':
             cates = cates.split(',')
             pageid2cates[pageid] = cates
             topics, counts = np.unique([cate2topic[cate] for cate in cates], return_counts=True)
-            topic = topics[0]
+            topic = topics[np.argsort(-counts)[0]]
             pageid2topic[pageid] = topic
             topic2count[topic] += 1
             fout.write(f'{pageid}\t{topic}\n')
+
+    print('topic2count', sorted(topic2count.items(), key=lambda x: -x[1]))
+
+  elif args.task == 'wikitq':
+    pageid2topic_file, prep_file, wtq_path = args.inp
+    out_path = args.out
+    split = 'train'
+
+    pageid2topic: Dict[str, str] = dict(l.strip().split('\t') for l in open(pageid2topic_file, 'r').readlines())
+
+    wtq = WikiTQ(wtq_path)
+    data = getattr(wtq, f'{split}_data')
+    id2tableid = {e['id']: e['table_id'] for e in data}
+
+    topic2file = {}
+    topic2count = defaultdict(lambda: 0)
+    with open(prep_file, 'r') as fin:
+      for l in fin:
+        uuid = json.loads(l)['uuid']
+        pageid = wtq.tableid2pageid[id2tableid[uuid]]
+        if pageid in pageid2topic:
+          topic = pageid2topic[pageid]
+          if topic not in topic2file:
+            topic2file[topic] = open(str(out_path) + f'.{topic.lower()}', 'w')
+          topic2file[topic].write(l)
+          topic2count[topic] += 1
 
     print('topic2count', sorted(topic2count.items(), key=lambda x: -x[1]))

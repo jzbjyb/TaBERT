@@ -209,6 +209,11 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict base full
     /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_base_tapex5
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_sports_exclude_128:wtqqa_strict_politics_exclude_128:wtqqa_strict_people_exclude_128:wtqqa_strict_culture_exclude_128:wtqqa_strict_misc_exclude_128:wtqqa_strict_sports_exclude:wtqqa_strict_politics_exclude:wtqqa_strict_people_exclude:wtqqa_strict_culture_exclude:wtqqa_strict_misc_exclude base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_num128_base_bart
   sku: G8
@@ -274,6 +279,11 @@ jobs:
   sku: G8
   command:
   - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 large full
+    /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_large_tapex4
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_sports_exclude_128:wtqqa_strict_politics_exclude_128:wtqqa_strict_people_exclude_128:wtqqa_strict_culture_exclude_128:wtqqa_strict_misc_exclude_128:wtqqa_strict_sports_exclude:wtqqa_strict_politics_exclude:wtqqa_strict_people_exclude:wtqqa_strict_culture_exclude:wtqqa_strict_misc_exclude large full
     /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_num128_large_bart

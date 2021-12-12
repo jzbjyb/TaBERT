@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # --- arguments ---
-pipeline=all
+pipeline=skip
 # all: (default) run all
 # single: only perform evaluation for a single checkpoint
 # multi: only perform evaluation for all checkpoints
@@ -80,6 +80,66 @@ for task in "${tasks[@]}"; do
     mode=generate-test
   elif [[ "$task" == "wtqqa_strict_1024" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_exclude" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_exclude_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_exclude_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_exclude_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_exclude" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_exclude
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_exclude_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_exclude_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_exclude_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_exclude_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_exclude_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_exclude_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_exclude" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_exclude
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_exclude_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_exclude_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_exclude_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_exclude_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_exclude_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_exclude_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_exclude" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_exclude
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_exclude_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_exclude_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_exclude_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_exclude_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_exclude_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_exclude_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_exclude" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_exclude
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_exclude_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_exclude_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_exclude_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_exclude_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_exclude_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_exclude_num1024
     mode=generate-test
   elif [[ "$task" == "wtqqa_deprecate" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_firstansrow_add30

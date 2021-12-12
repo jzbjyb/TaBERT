@@ -13,6 +13,7 @@ import numpy as np
 from multiprocessing import Process, Queue
 from table_bert.utils import get_url
 from table_bert.dataset_utils import BasicDataset
+from table_bert.wikidata import topic2categories, WikipediaCategory
 
 
 def get_commons_docschema():
@@ -136,6 +137,10 @@ class SlingExtractor(object):
       'item': item,
       'url': url,
     }
+
+  @staticmethod
+  def get_categories(frame: sling.Frame) -> List[str]:
+    return [v.id for k, v in frame if k.id == '/wp/page/category']
 
   @staticmethod
   def get_linked_entity(mention):
@@ -370,10 +375,86 @@ class SlingExtractor(object):
     print(f'#coverted urls {len(coverted_urls)}, #total urls {len(url2tables)}')
     print(f'uncovered urls {list(set(url2tables.keys()) - coverted_urls)[:10]}')
 
+  def build_category_hierarchy(self, out_file: str):
+    child2parents: Dict[str, List[str]] = {}
+    for sp in range(0, 10):
+      corpus = sling.Corpus(str(self.root_dir / self.lang / f'category-documents-0000{sp}-of-00010.rec'))
+      for n, (wid, doc_raw) in tqdm(enumerate(corpus.input)):
+        wid = wid.decode('utf-8')
+        store = sling.Store(self_commons)
+        doc_frame = store.parse(doc_raw)
+        categories = self.get_categories(doc_frame)
+        assert wid not in child2parents
+        child2parents[wid] = categories
+    with open(out_file, 'w') as fout:
+      for c, ps in child2parents.items():
+        fout.write('{}\t{}\n'.format(c, ','.join(ps)))
+
+  @classmethod
+  def get_top_category_by_request(cls,
+                                  pageids: List[str],
+                                  wc: WikipediaCategory,
+                                  top_categories: Set[str],
+                                  out_file: str = None):
+    pageid2cates = wc.pageid2cate(pageids, max_limit=1)
+
+    all_cates = list(set(c for cates in pageid2cates.values() for c in cates))
+    print(f'#categories {len(all_cates)}')
+    title2wid = wc.titles2other(all_cates, field='wikidata')
+
+    out_file = out_file or '/tmp/test'
+    with open(out_file, 'w') as fout:
+      for pageid, cates in pageid2cates.items():
+        cates = [title2wid[c] for c in cates if c in title2wid]
+        try:
+          if len(cates) <= 0:
+            raise Exception('not categories as wikidata ids')
+          top_category = wc.find_closest_top_category(cates, top_categories)
+          top_category: str = ','.join(top_category)
+          fout.write(f'{pageid}\t{top_category}\n')
+        except KeyboardInterrupt as e:
+          raise e
+        except:
+          print(f'error {pageid}')
+
+
+  def get_top_category(self,
+                       pageids: Set[str],
+                       wc: WikipediaCategory,
+                       top_categories: Set[str],
+                       from_split: int = 0,
+                       to_split: int = 10,
+                       out_file: str = None):
+    out_file = out_file or '/tmp/test'
+    pageid2topcate: Dict[str, str] = {}
+    with open(out_file, 'w') as fout:
+      for sp in range(from_split, to_split):
+        corpus = sling.Corpus(str(self.root_dir / self.lang / f'documents-0000{sp}-of-00010.rec'))
+        for n, (doc_id, doc_raw) in tqdm(enumerate(corpus.input), disable=False):
+          doc_id = doc_id.decode('utf-8')
+          store = sling.Store(self_commons)
+          doc_frame = store.parse(doc_raw)
+          metadata = self.get_metadata(doc_frame)
+          pageid = metadata['pageid']
+          if pageid not in pageids:
+            continue
+          categories = self.get_categories(doc_frame)
+          try:
+            top_category = wc.find_closest_top_category(categories, top_categories)
+            pageid2topcate[pageid] = top_category
+            top_category: str = ','.join(top_category)
+            fout.write(f'{pageid}\t{top_category}\n')
+          except KeyboardInterrupt as e:
+            raise e
+          except:
+            print(f'error {pageid}')
+    return pageid2topcate
+
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--task', type=str, choices=['url_as_key', 'pageid_as_key', 'match_raw'], default='url_as_key')
+  parser.add_argument('--task', type=str, choices=[
+    'url_as_key', 'pageid_as_key', 'match_raw', 'build_category_hierarchy', 'pageid2topic', 'assign_topic'], default='url_as_key')
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
@@ -410,3 +491,76 @@ if __name__ == '__main__':
 
     url2tables, raw_examples = load_url2tables(prep_file)
     match_raw(raw_examples, output_file=out_file, batch_size=16, num_threads=args.threads, log_interval=5000)
+
+  elif args.task == 'build_category_hierarchy':
+    sling_root = args.inp[0]
+    out_file = args.out
+    se = SlingExtractor(sling_root)
+    se.build_category_hierarchy(out_file)
+
+  elif args.task == 'pageid2topic':
+    find_missing_from_sling = 2
+    wikipedia_cate_hierachy = 'data/wikipedia_category/sling_category_child2parents.txt'
+
+    if find_missing_from_sling:
+      prep_files = args.inp[:-find_missing_from_sling]
+      pageid2cate_files = args.inp[-find_missing_from_sling:]
+    else:
+      prep_files = args.inp[:-1]
+      sling_root = args.inp[-1]
+    out_file = args.out
+
+    pids: Set[str] = set()
+    for prep_file in prep_files:
+      with open(prep_file, 'r') as fin:
+        for l in fin:
+          pid = json.loads(l)['pageid']
+          pids.add(pid)
+
+    if find_missing_from_sling:
+      found_pids: Set[str] = set()
+      for pageid2cate_file in pageid2cate_files:
+        with open(pageid2cate_file, 'r') as fin:
+          for l in fin:
+            pageid, cates = l.rstrip('\n').split('\t')
+            found_pids.add(pageid)
+
+    wc = WikipediaCategory(child2parent_file=wikipedia_cate_hierachy, format='sling')
+    top_categories: Set[str] = set(c for cs in topic2categories.values() for c in cs)
+    print(f'#page ids {len(pids)}')
+
+    if find_missing_from_sling:
+      miss_pids = list(pids - found_pids)
+      print(f'#missing page ids {len(miss_pids)}')
+      SlingExtractor.get_top_category_by_request(miss_pids, wc, top_categories, out_file=out_file)
+    else:
+      se = SlingExtractor(sling_root)
+      pageid2category: Dict[str, str] = se.get_top_category(
+        pids, wc, top_categories, from_split=0, to_split=10, out_file=out_file)
+
+  elif args.task == 'assign_topic':
+    pageid2cate_files = args.inp
+    out_file = args.out
+
+    cate2topic: Dict[str, str] = {}
+    for topic, cates in topic2categories.items():
+      for cate in cates:
+        cate2topic[cate] = topic
+
+    pageid2cates: Dict[str, List[str]] = {}
+    pageid2topic: Dict[str, str] = {}
+    topic2count: Dict[str, int] = defaultdict(lambda: 0)
+    with open(out_file, 'w') as fout:
+      for pageid2cate_file in pageid2cate_files:
+        with open(pageid2cate_file, 'r') as fin:
+          for l in fin:
+            pageid, cates = l.rstrip('\n').split('\t')
+            cates = cates.split(',')
+            pageid2cates[pageid] = cates
+            topics, counts = np.unique([cate2topic[cate] for cate in cates], return_counts=True)
+            topic = topics[0]
+            pageid2topic[pageid] = topic
+            topic2count[topic] += 1
+            fout.write(f'{pageid}\t{topic}\n')
+
+    print('topic2count', sorted(topic2count.items(), key=lambda x: -x[1]))

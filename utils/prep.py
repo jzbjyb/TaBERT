@@ -11,9 +11,11 @@ from collections import defaultdict
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import functools
+from multiprocessing import Queue
 from transformers import BartForConditionalGeneration
 from table_bert.dataset_utils import BasicDataset
-from table_bert.utils import get_url
+from table_bert.utils import get_url, MultiprocessWrapper
 
 
 def self_in_dense(ret_file: str):
@@ -400,11 +402,121 @@ def compare_two_files(prep_file1: str, prep_file2: str):
   print(f'compare count {len(lens1)}, avg len {np.mean(lens1)}, {np.mean(lens2)}')
 
 
+def tapex_which_table(wtq_prep_files: List[str], tapex_prep_file: str, out_file: str, threads: int = 1):
+  def get_table_cells(table: Dict):
+    cells: List[str] = []
+    columns = [h['name'] for h in table['header']]
+    rows = table['data']
+    for r in [columns] + rows:
+      for c in r:
+        c = c.lower()
+        c = '' if c == 'none' else c
+        c = re.sub(r'[^a-zA-Z0-9_ ]+', '', c).strip()
+        if len(c):
+          cells.append(c)
+    return cells
+
+  def get_table_signature(table: Dict):
+    columns = [h['name'] for h in table['header']]
+    rows = table['data']
+    # it seems that the TAPEX pretrain data use none for empty cell
+    # use ten characters at most
+    sig = ' '.join([' '.join(map(lambda x: '' if x == 'none' else x[:20], r)) for r in ([columns] + rows)]).lower()
+    sig_normalized = re.sub(r'[^a-zA-Z0-9_ ]+', '', sig)
+    return sig, sig_normalized
+
+  def worker(input_queue: Queue, output_queue: Queue, sig2id: Dict[str, str], cell2id: Dict[str, Set[str]]):
+    while True:
+      examples = input_queue.get()
+      if type(examples) is str and examples == 'DONE':
+        break
+      for example in examples:
+        jd: Dict = json.loads(example['json_str'])
+        sig = get_table_signature(jd['table'])[-1]
+        found = sig in sig2id
+
+        id2count: Dict[str, int] = defaultdict(lambda: 0)
+        cells = get_table_cells(jd['table'])
+        used_cells = 0
+        for cell in cells:
+          if len(cell2id[cell]) >= 100:  # skip common cells
+            continue
+          used_cells += 1
+          for id in cell2id[cell]:
+            id2count[id] += 1
+        id2count: List[Tuple[str, int]] = sorted(id2count.items(), key=lambda x: -x[1])
+        found_by_cell = len(id2count) > 0 and (id2count[0][1] / (used_cells or 1)) >= 0.5
+
+        found_by_cell_id = None
+        if found_by_cell:
+          found_by_cell_id = id2count[0][0]
+        jd['wtq_id'] = found_by_cell_id
+
+        output_queue.put(jd)
+
+  def writer(output_file: str, output_queue: Queue, monitored_ids: Set[str]):
+    founds: List[bool] = []
+    found_in_monitored = 0
+    count = 0
+
+    with open(output_file, 'w') as fout, tqdm(disable=False) as pbar:
+      while True:
+        example = output_queue.get()
+        if type(example) is str and example == 'DONE':
+          break
+        pbar.update(1)
+        count += 1
+        found = example['wtq_id'] is not None
+        founds.append(found)
+        found_in_monitored += int(example['wtq_id'] in monitored_ids)
+        if found:
+          fout.write(json.dumps(example) + '\n')
+        if count % 10000 == 0:
+          print(f'found {np.mean(founds)}, '
+          f'found in test set {found_in_monitored}')
+
+    print(f'found {np.mean(founds)}, '
+          f'found in test set {found_in_monitored}')
+
+  _sig2id: Dict[str, str] = {}
+  sig2id: Dict[str, str] = {}
+  cell2id: Dict[str, Set[str]] = defaultdict(set)
+  monitored_ids: Set[str] = set()
+  for wtq_file_id, wtq_prep_file in enumerate(wtq_prep_files):
+    with open(wtq_prep_file, 'r') as fin:
+      for l in fin:
+        l = json.loads(l)
+        id = l['uuid']
+        table, table_normalized = get_table_signature(l['table'])
+        if table not in _sig2id and table_normalized in sig2id:
+          raise Exception(f'collision after normalizing for {id}')
+        _sig2id[table] = id
+        sig2id[table_normalized] = id
+        for cell in get_table_cells(l['table']):
+          cell2id[cell].add(id)
+        if wtq_file_id == len(wtq_prep_files) - 1:
+          monitored_ids.add(id)
+  print(f'#tables in WTQ {len(sig2id)}')
+
+  mpw = MultiprocessWrapper(
+    num_threads=threads,
+    worker=functools.partial(worker, sig2id=sig2id, cell2id=cell2id),
+    writer=functools.partial(writer, monitored_ids=monitored_ids),
+    output_file=out_file,
+    batch_size=128)
+
+  with open(tapex_prep_file, 'r') as fin:
+    for l in fin:
+      mpw.add_example({'json_str': l})
+  mpw.finish()
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
-    'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files', 'dump_correct_bart'])
+    'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
+    'dump_correct_bart', 'tapex_which_table'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -464,3 +576,9 @@ if __name__ == '__main__':
     model = BartForConditionalGeneration.from_pretrained(model_name).eval()
     save_function = lambda obj, f: torch.save(obj, f, _use_new_zipfile_serialization=False)
     model.save_pretrained(dump_dir, save_function=save_function)
+
+  elif args.task == 'tapex_which_table':
+    wtq_prep_files = args.inp[:-1]
+    tapex_prep_file = args.inp[-1]
+    out_file = args.out
+    tapex_which_table(wtq_prep_files, tapex_prep_file, out_file, threads=8)

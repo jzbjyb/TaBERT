@@ -9,8 +9,11 @@ source initialize.sh
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.preprocessed.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_bart_qa
 
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.num512_preprocessed.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.num512_preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa
+
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.num512_preprocessed.with_wtqid.jsonl.topic/topic.sports
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa_sports
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -22,7 +25,7 @@ max_num_mention_per_example=3
 column_delimiter='|'
 row_delimiter='none'
 mkdir -p ${output_dir}
-worldsize=20
+worldsize=10
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}

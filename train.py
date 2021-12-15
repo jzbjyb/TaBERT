@@ -120,7 +120,7 @@ def parse_train_arg():
     # test details
     parser.add_argument('--only_test', action='store_true')
     parser.add_argument('--mode', type=str, choices=[
-        'generate-test', 'evaluate-test', 'generate-dev', 'evaluate-dev', 'represent-test',
+        'generate-test', 'generate-test_all', 'evaluate-test', 'generate-dev', 'evaluate-dev', 'represent-test',
         'represent-dev', 'represent-train', 'generate-train', 'computeloss-train', None], default=None)
     parser.add_argument('--index_repr', type=str, choices=['whole', 'whole_avg_cell', 'span_context', 'span_noncontext'], default='whole', help='how to build representations for index')
     parser.add_argument('--num_beams', type=int, default=5, help='beam search size for the generate mode')
@@ -298,6 +298,16 @@ def main():
             train_set = dataset_cls(
                 epoch=0, training_path=args.data_dir / 'train_noshuf', tokenizer=model_ptr.tokenizer,
                 config=table_bert_config, multi_gpu=args.multi_gpu, debug=args.debug_dataset, not_even=True)
+        elif which_part == 'test_all':  # test on multiple test set
+            raw_output_file = trainer.args.output_file
+            assert raw_output_file, 'output_file should be set'
+            all_test_data_dirs = [d for d in args.data_dir.iterdir() if d.is_dir() and d.name.startswith('test_')]
+            for _test_data_dir in all_test_data_dirs:
+                trainer.args.output_file = raw_output_file + f'.{_test_data_dir.name}'
+                _test_set = dataset_cls(epoch=0, training_path=_test_data_dir, tokenizer=model_ptr.tokenizer,
+                                        config=table_bert_config, multi_gpu=False, debug=args.debug_dataset)
+                trainer.test(_test_set, mode=mode)
+            exit()
         trainer.test(eval(f'{which_part}_set'), mode=mode)
         exit()
 

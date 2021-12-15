@@ -570,20 +570,23 @@ if __name__ == '__main__':
   elif args.task == 'wikitq':
     pageid2topic_file, prep_file, wtq_path = args.inp
     out_path = args.out
-    split = 'train'
+    splits = ['train', 'dev', 'test']
+    wtq_id_key = 'wtq_id'
 
     pageid2topic: Dict[str, str] = dict(l.strip().split('\t') for l in open(pageid2topic_file, 'r').readlines())
 
     wtq = WikiTQ(wtq_path)
-    data = getattr(wtq, f'{split}_data')
-    id2tableid = {e['id']: e['table_id'] for e in data}
+    id2tableid = dict()
+    for split in splits:
+      data = getattr(wtq, f'{split}_data')
+      id2tableid.update({e['id']: e['table_id'] for e in data})
 
     topic2file = {}
     topic2count = defaultdict(lambda: 0)
     with open(prep_file, 'r') as fin:
-      for l in fin:
-        uuid = json.loads(l)['uuid']
-        pageid = wtq.tableid2pageid[id2tableid[uuid]]
+      for l in tqdm(fin):
+        wtq_id = json.loads(l)[wtq_id_key]
+        pageid = wtq.tableid2pageid[id2tableid[wtq_id]]
         if pageid in pageid2topic:
           topic = pageid2topic[pageid]
           if topic not in topic2file:

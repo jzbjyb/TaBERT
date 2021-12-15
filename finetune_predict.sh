@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 
 # --- arguments ---
-pipeline=skip
+pipeline=all
 # all: (default) run all
+# last_epoch: run finetune and only evaluate the last epoch
+# only_last_epoch: only evaluate the last epoch
 # single: only perform evaluation for a single checkpoint
 # multi: only perform evaluation for all checkpoints
 # skip: skip evaluation
 task=$1  # "wtqqa"
+test_task=""  # "wtqqa_topic"
 model_size=$2  # "base", "large"
 scale=$3  # "full" (8 gpus), "half" (4 gpus)
 
@@ -81,6 +84,18 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "wtqqa_strict_1024" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_num1024
     mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_culture_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_num1024
+    mode=generate-test
   elif [[ "$task" == "wtqqa_strict_culture_exclude" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude
     mode=generate-test
@@ -92,6 +107,18 @@ for task in "${tasks[@]}"; do
     mode=generate-test
   elif [[ "$task" == "wtqqa_strict_culture_exclude_1024" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_culture_exclude_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_misc_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_num1024
     mode=generate-test
   elif [[ "$task" == "wtqqa_strict_misc_exclude" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_exclude
@@ -105,6 +132,18 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "wtqqa_strict_misc_exclude_1024" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_misc_exclude_num1024
     mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_people_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_num1024
+    mode=generate-test
   elif [[ "$task" == "wtqqa_strict_people_exclude" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_exclude
     mode=generate-test
@@ -117,6 +156,18 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "wtqqa_strict_people_exclude_1024" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_people_exclude_num1024
     mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_politics_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_num1024
+    mode=generate-test
   elif [[ "$task" == "wtqqa_strict_politics_exclude" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_exclude
     mode=generate-test
@@ -128,6 +179,18 @@ for task in "${tasks[@]}"; do
     mode=generate-test
   elif [[ "$task" == "wtqqa_strict_politics_exclude_1024" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_politics_exclude_num1024
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_num16
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_num128
+    mode=generate-test
+  elif [[ "$task" == "wtqqa_strict_sports_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_num1024
     mode=generate-test
   elif [[ "$task" == "wtqqa_strict_sports_exclude" ]]; then
     data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_sports_exclude
@@ -178,7 +241,7 @@ for task in "${tasks[@]}"; do
   fi
 
   for epoch in "${epochs[@]}"; do
-    if [[ "$pipeline" == "multi" ]]; then
+    if [[ "$pipeline" == "multi" || "$pipeline" == "only_last_epoch" ]]; then
       if [[ ${model_ckpt} == *.bin ]]; then   # a real checkpoint
         output="$(dirname "${model_ckpt}")"_${task}_ep${epoch}
       else
@@ -203,11 +266,21 @@ for task in "${tasks[@]}"; do
       # evaluate every checkpoint
       remain=${ngpu}
       isfirst=true
-      max_epoch=$(expr $epoch - 1)  # skip the last epoch because it's already evaluated
-      for (( i=0; i<$max_epoch; ++i )); do
+      if [[ "$test_task" == "" ]]; then
+        max_epoch=$(expr $epoch - 2)  # skip the last epoch because it's already evaluated
+      else
+        max_epoch=$(expr $epoch - 1)  # evalute all epochs
+      fi
+      for (( i=$max_epoch; i>=0; --i )); do
         iwz=$(printf "%02d" $i)  # add a preceding zero
         inter_ckpt=${output}/pytorch_model_epoch${iwz}.bin
         prediction_file=ep${iwz}.tsv
+
+        if [[ "$test_task" == "wtqqa_topic" ]]; then  # use another test data directory
+          data=/mnt/root/TaBERT/data/train_data/wtq_qa_tapex_strict_1024_all_topic_test
+          mode=generate-test_all
+        fi
+
         CUDA_VISIBLE_DEVICES="$((remain - 1))" ./run_vanilla.sh \
           1 ${data} ${output} seq2seq ${batch_size} 1 '"'${inter_ckpt}'"' \
           --base-model-name ${base_model_name} \
@@ -216,6 +289,9 @@ for task in "${tasks[@]}"; do
           # run the first exclusively to download necessary files
           wait
           isfirst=false
+          if [[ "$pipeline" == "last_epoch" || "$pipeline" == "only_last_epoch" ]]; then
+            break
+          fi
         fi
         remain="$((remain - 1))"
         if (( ${remain} == 0 )); then

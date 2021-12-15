@@ -5,11 +5,12 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import List
+from typing import List, Callable, Any
 import logging
 from enum import Enum
 import numpy as np
 import os
+from multiprocessing import Queue, Process
 
 
 class TransformerVersion(Enum):
@@ -101,3 +102,39 @@ class BartTokenizerFastWrapper(BartTokenizerFast):
         else:
             result = super(BartTokenizerFastWrapper, self).__call__(*args, **kwargs)
         return result
+
+
+class MultiprocessWrapper(object):
+  def __init__(self, num_threads: int, worker: Callable, writer: Callable, output_file: str, batch_size: int = 1):
+    self.num_threads = num_threads
+    self.batch_size = batch_size
+
+    # start processes
+    self.input_queue = Queue()
+    self.output_queue = Queue()
+    self.processes = []
+    for _ in range(num_threads):
+      p = Process(target=worker, args=(self.input_queue, self.output_queue))
+      p.daemon = True
+      p.start()
+      self.processes.append(p)
+    self.write_p = Process(target=writer, args=(output_file, self.output_queue))
+    self.write_p.start()
+
+    self.batch: List[Any] = []
+
+  def add_example(self, example: Any):
+    self.batch.append(example)
+    if len(self.batch) >= self.batch_size:
+      self.input_queue.put(self.batch)
+      self.batch = []
+
+  def finish(self):
+    if len(self.batch) > 0:  # check if there is any remaining examples
+      self.input_queue.put(self.batch)
+    for _ in self.processes:
+      self.input_queue.put('DONE')
+    for p in self.processes:
+      p.join()
+    self.output_queue.put('DONE')
+    self.write_p.join()

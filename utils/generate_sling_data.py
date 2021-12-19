@@ -6,6 +6,7 @@ import random
 from tqdm import tqdm
 from collections import defaultdict
 import functools
+from operator import itemgetter
 import time
 import sling
 import re
@@ -452,11 +453,44 @@ class SlingExtractor(object):
     return pageid2topcate
 
 
+def wikitq_topic_overlap(test_wtq_path: Path, train_wtq_path: Path, topics: List[str], topk: int = 100):
+  from spacy.lang.en import English
+  nlp = English()
+  tokenizer = nlp.tokenizer
+
+  # count words
+  test_topic2word2count: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(lambda: 0))
+  train_topic2word2count: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(lambda: 0))
+  for topic in topics:
+    with open(str(test_wtq_path) + f'.{topic}', 'r') as test_fin, open(str(train_wtq_path) + f'.{topic}', 'r') as train_fin:
+      for topic2word2count, fin in [(test_topic2word2count, test_fin), (train_topic2word2count, train_fin)]:
+        for l in tqdm(fin):
+          question = json.loads(l)['context_before'][0].lower()
+          tokens = tokenizer(question)
+          for t in tokens:
+            if t.is_stop:
+              continue
+            topic2word2count[topic][t.text] += 1
+
+  # choose top k words
+  for topic in topics:
+    tops = sorted(test_topic2word2count[topic].items(), key=lambda x: -x[1])[:topk]
+    test_topic2word2count[topic] = list(map(itemgetter(0), tops))
+    print(f'{topic}: {tops[:10]}')
+
+  # compute overlap
+  for test_topic in topics:
+    for train_topic in topics:
+      o = np.mean([w in train_topic2word2count[train_topic] for w in test_topic2word2count[test_topic]])
+      print(o, end='\t')
+    print('')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, choices=[
     'url_as_key', 'pageid_as_key', 'match_raw', 'build_category_hierarchy',
-    'pageid2topic', 'assign_topic', 'wikitq'], default='url_as_key')
+    'pageid2topic', 'assign_topic', 'wikitq', 'wikitq_topic_overlap'], default='url_as_key')
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
@@ -595,3 +629,9 @@ if __name__ == '__main__':
           topic2count[topic] += 1
 
     print('topic2count', sorted(topic2count.items(), key=lambda x: -x[1]))
+
+  elif args.task == 'wikitq_topic_overlap':
+    topics = ['misc', 'people', 'politics', 'culture', 'sports']
+    test_wtq_path, train_wtq_path = args.inp
+
+    wikitq_topic_overlap(test_wtq_path, train_wtq_path, topics)

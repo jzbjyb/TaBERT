@@ -537,6 +537,94 @@ jobs:
   - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 large full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
 
+- name: wholetable_tapex_05m_wtqnl_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num1024_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num1024_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num1024_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num1024_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num512_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num512_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num512_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num256_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num256_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num256_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num256_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num128_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num64_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num64_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num64_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num64_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num32_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num32_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num32_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num32_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_num16_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num16_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num16_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num16_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
 - name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_and_finetune
   sku: G8
   command:

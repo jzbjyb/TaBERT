@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 # -- TAPAS data --
 input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_withcells.jsonl.data0

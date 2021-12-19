@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 input_dir=/mnt/root/TaBERT/data/tapex/raw_data/train.src
 output_dir=/mnt/root/TaBERT/data/train_data/tapex_bart

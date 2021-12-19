@@ -721,10 +721,12 @@ class VanillaTableBert(TableBertModel):
 
     def evaluate(self, data_loader, args):
         output_file = 'evaluation.jsonl' if args.output_file is None else args.output_file
+        output_path = args.output_dir / output_file
+        os.makedirs(os.path.dirname(str(output_path)), exist_ok=True)
         was_training = self.training
         self.eval()
 
-        with torch.no_grad(), open(args.output_dir / output_file, 'w') as fout:
+        with torch.no_grad(), open(output_path, 'w') as fout:
             with tqdm(total=len(data_loader), desc='Evaluation', file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
                     for result in getattr(self, f'evaluate_{self.config.model_type.value}')(batch):
@@ -759,13 +761,15 @@ class VanillaTableBert(TableBertModel):
         output_file = 'generation.tsv' if args.output_file is None else args.output_file
         if args.multi_gpu:
             output_file += f'.{args.global_rank}'
+        output_path = args.output_dir / output_file
+        os.makedirs(os.path.dirname(str(output_path)), exist_ok=True)
         was_training = self.training
         self.eval()
 
         nrs = args.num_return_sequences
         sst = nrs > 1
         post_process = lambda x: self.tokenizer.decode(x, skip_special_tokens=sst).replace('\n', '\\n').replace('\t', '\\t')
-        with torch.no_grad(), open(args.output_dir / output_file, 'w') as fout:
+        with torch.no_grad(), open(output_path, 'w') as fout:
             with tqdm(total=len(data_loader), desc='Generation', file=sys.stdout) as pbar:
                 for step, batch in enumerate(data_loader):
                     if args.top_k is not None or args.top_p is not None:  # sampling

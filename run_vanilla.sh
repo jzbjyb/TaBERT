@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 MAX_NUM_GPU_PER_NODE=8
 num_gpu=$1

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 # -- TAPEX data --
 input_dir=data/totto_data/train/preprocessed_mention_cell.jsonl

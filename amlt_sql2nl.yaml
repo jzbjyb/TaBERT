@@ -3,9 +3,13 @@ description: sql2nl
 environment:
   image: jzbjyb/my-repo:latest
 
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
 target:
-  service: amlk8s
-  name: itp-scus-v100
+  service: aml
+  name: V10032G
   vc: AlexTScience
 
 storage:
@@ -52,3 +56,124 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/spider_sql2nl_num512_bartlarge/pytorch_model_epoch49.bin"'
     --base-model-name facebook/bart-large --only_test --mode generate-train
     --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/sql2nl_num512/nl.txt
+
+- name: wtq_sql2nl_num16_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num16
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num16_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 1 --base-model-name facebook/bart-large
+- name: wtq_sql2nl_num16_bartlarge_run
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num16_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num16_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num16/nl.txt
+
+- name: wtq_sql2nl_num32_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num32
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num32_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 2 --base-model-name facebook/bart-large
+- name: wtq_sql2nl_num32_bartlarge_run
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num32_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num32_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num32/nl.txt
+
+- name: wtq_sql2nl_num64_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num64
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num64_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 4 --base-model-name facebook/bart-large
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num64_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num64_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num64/nl.txt
+
+- name: wtq_sql2nl_num128_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num128
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num128_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 8 --base-model-name facebook/bart-large
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num128_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num128_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num128/nl.txt
+
+- name: wtq_sql2nl_num256_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num256
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num256_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 16 --base-model-name facebook/bart-large
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num256_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num256_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num256/nl.txt
+
+- name: wtq_sql2nl_num512_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num512
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num512_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 16 --base-model-name facebook/bart-large
+- name: wtq_sql2nl_num512_bartlarge_run
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num512_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num512_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num512/nl.txt
+
+- name: wtq_sql2nl_num1024_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl_num1024
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num1024_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 16 --base-model-name facebook/bart-large
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_num1024_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_num1024_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_num1024/nl.txt
+
+- name: wtq_sql2nl_bartlarge
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wtq_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_bartlarge seq2seq 2 50 null
+    --gradient-accumulation-steps 16 --base-model-name facebook/bart-large
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+    /mnt/root/TaBERT/data/runs/wtq_sql2nl_bartlarge seq2seq 8 1
+    '"/mnt/root/TaBERT/data/runs/wtq_sql2nl_bartlarge/pytorch_model_epoch49.bin"'
+    --base-model-name facebook/bart-large --only_test --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl/nl.txt

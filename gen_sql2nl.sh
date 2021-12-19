@@ -6,8 +6,14 @@ source initialize.sh
 #input_dir=data/spider/train/sqlnl.json
 #output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl
 
-input_dir=data/spider/train/sqlnl.json.2048
-output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl_num2048
+#input_dir=data/spider/train/sqlnl.json.2048
+#output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl_num2048
+
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl
+
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src.1024
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_num1024
 
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl

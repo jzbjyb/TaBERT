@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 output_dir=/mnt/root/TaBERT/data/train_data/wtq_qa_allrow_1024
 input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src

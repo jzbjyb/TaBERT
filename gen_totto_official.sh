@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 input_dir=data/totto_data/totto_train_data.official_preprocessed.jsonl
 output_dir=/mnt/root/TaBERT/data/train_data/totto_data2text_official_bart

@@ -95,63 +95,87 @@ class DistributedSampler(Sampler):
 class TableDataset(Dataset):
     DEFAULT_CONFIG_CLS = TableBertConfig
 
-    def __init__(self, training_path, epoch=0, config=None, tokenizer=None, reduce_memory=False, multi_gpu=False, indices=None, debug=False, not_even=False):
+    def __init__(self,
+                 training_paths: Union[Path, List[Path]],
+                 epoch=0,
+                 config=None,
+                 tokenizer=None,
+                 reduce_memory=False,
+                 multi_gpu=False,
+                 indices=None,
+                 debug=False,
+                 not_even=False):
         # self.vocab = tokenizer.vocab
         # self.tokenizer = tokenizer
-        num_data_epochs = self.get_data_num_epochs(training_path)
-        self.data_epoch = self.epoch = epoch
-        if self.data_epoch >= num_data_epochs:
-            self.data_epoch = self.data_epoch % num_data_epochs  # reuse dataset for more epochs
-        data_file_prefix = training_path / f"epoch_{self.data_epoch}"
-        # metrics_file = training_path / f"epoch_{self.data_epoch}.metrics.json"
-        # assert metrics_file.is_file()
-        # metrics = json.loads(metrics_file.read_text())
-        # dataset_size = metrics['num_training_examples']
-
-        epoch_info = self.get_epoch_shards_info(data_file_prefix)
-        epoch_dataset_size = epoch_info['total_size']
-
-        assert reduce_memory is False, 'reduce_memory is not implemented'
-
         self.config = config or self.DEFAULT_CONFIG_CLS()
+        if type(training_paths) is not list:
+            training_paths = [training_paths]
+        self.epoch = epoch
 
-        if not indices:
-            if multi_gpu:
-                num_shards = torch.distributed.get_world_size()
-                local_shard_id = torch.distributed.get_rank()
+        self.examples = []
+        for training_path in training_paths:
+            num_data_epochs = self.get_data_num_epochs(training_path)
 
-                shard_size = None
-                if not not_even:
-                    shard_size = epoch_dataset_size // num_shards
+            data_epoch = epoch
+            if data_epoch >= num_data_epochs:
+                data_epoch = data_epoch % num_data_epochs  # reuse dataset for more epochs
+            data_file_prefix = training_path / f'epoch_{data_epoch}'
 
-                logging.info(f'dataset_size={epoch_dataset_size}, shard_size={shard_size}')
+            epoch_info = self.get_epoch_shards_info(data_file_prefix)
+            epoch_dataset_size = epoch_info['total_size']
 
-                g = torch.Generator()
-                g.manual_seed(self.epoch)
-                indices = torch.randperm(epoch_dataset_size, generator=g).tolist()
+            assert reduce_memory is False, 'reduce_memory is not implemented'
 
-                if not not_even:  # make it evenly divisible
-                    indices = indices[:shard_size * num_shards]
-                    assert len(indices) == shard_size * num_shards
+            if not indices:
+                if multi_gpu:
+                    num_shards = torch.distributed.get_world_size()
+                    local_shard_id = torch.distributed.get_rank()
 
-                # subsample
-                indices = indices[local_shard_id:len(indices):num_shards]
-                if not not_even:
-                    assert len(indices) == shard_size
+                    shard_size = None
+                    if not not_even:
+                        shard_size = epoch_dataset_size // num_shards
 
-                indices = set(indices)
+                    logging.info(f'dataset_size={epoch_dataset_size}, shard_size={shard_size}')
+
+                    g = torch.Generator()
+                    g.manual_seed(self.epoch)
+                    _indices = torch.randperm(epoch_dataset_size, generator=g).tolist()
+
+                    if not not_even:  # make it evenly divisible
+                        _indices = _indices[:shard_size * num_shards]
+                        assert len(_indices) == shard_size * num_shards
+
+                    # subsample
+                    _indices = _indices[local_shard_id:len(_indices):num_shards]
+                    if not not_even:
+                        assert len(_indices) == shard_size
+
+                    _indices = set(_indices)
+                else:
+                    _indices = set(range(epoch_dataset_size))
             else:
-                indices = set(range(epoch_dataset_size))
+                _indices = set(indices)
 
-        indices = set(indices)
-        if debug:
-            indices = set(list(indices)[:1000])
+            if debug:
+                _indices = set(list(_indices)[:1000])
 
-        logging.info(f"Loading examples from {training_path} for epoch {epoch}")
-        if indices:
-            logging.info(f'Load a sub-sample of the whole dataset')
+            logging.info(f"Loading examples from {training_path} for epoch {epoch}")
+            if _indices:
+                logging.info(f'Load a sub-sample of the whole dataset')
 
-        self.examples = self.load_epoch(data_file_prefix, epoch_info['shard_num'], indices)
+            self.examples.extend(self.load_epoch(data_file_prefix, epoch_info['shard_num'], _indices))
+
+    @classmethod
+    def get_dataset_info_multi(cls, data_paths: List[Path], max_epoch=-1):
+        assert len(data_paths) > 0, 'no path'
+        infos: List[Dict] = []
+        for data_path in data_paths:
+            infos.append(cls.get_dataset_info(data_path, max_epoch=max_epoch))
+        info = infos[0]
+        for _info in infos[1:]:
+            info['total_size'] += _info['total_size']
+        info['one_epoch_size'] = info['total_size'] // info['max_epoch']
+        return info
 
     @classmethod
     def get_dataset_info(cls, data_path: Path, max_epoch=-1):

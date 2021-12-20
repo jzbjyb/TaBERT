@@ -4,6 +4,7 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+from typing import List
 import logging
 import re
 import sys
@@ -68,7 +69,7 @@ def parse_train_arg():
                         help="Whether not to use CUDA when available")
     parser.add_argument('--save-init', action='store_true', help='save the initial checkpoint')
 
-    parser.add_argument('--data-dir', type=Path, required=True)
+    parser.add_argument('--data-dir', type=str, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
 
     parser.add_argument('--base-model-name', type=str, required=False, default=None,
@@ -173,13 +174,28 @@ def main():
 
     init_signal_handler()
 
-    train_data_dir = args.data_dir / 'train'
-    dev_data_dir = args.data_dir / 'dev'
-    test_data_dir = args.data_dir / 'test'
+    args.data_dir: List[Path] = [Path(dd) for dd in args.data_dir.split(':')]
+
+    train_data_dirs = [dd / 'train' for dd in args.data_dir]
+    dev_data_dirs = [dd / 'dev' for dd in args.data_dir]
+    test_data_dirs = [dd / 'test' for dd in args.data_dir]
+
+    train_data_exist = [dd for dd in train_data_dirs if dd.exists()]
+    dev_data_exist = [dd for dd in dev_data_dirs if dd.exists()]
+    test_data_exist = [dd for dd in test_data_dirs if dd.exists()]
+    none_or_all_have = {0, len(train_data_dirs)}
+    assert len(train_data_exist) in none_or_all_have and \
+           len(dev_data_exist) in none_or_all_have and \
+           len(test_data_exist) in none_or_all_have, \
+        'train/dev/test sub-dir must exist or not exist for all data dirs'
+
+    has_dev = len(dev_data_exist) > 0
+    has_test = len(test_data_exist) > 0
+
     if args.multi_gpu and args.local_rank != 0:  # load tokenizer needs barrier
         torch.distributed.barrier()
     table_bert_config = task['config'].from_file(
-        args.data_dir / 'config.json', **args.table_bert_extra_config)
+        args.data_dir[0] / 'config.json', **args.table_bert_extra_config)
     if args.multi_gpu and args.local_rank == 0:
         torch.distributed.barrier()
 
@@ -191,16 +207,13 @@ def main():
 
             logger.info(f'Table Bert Config: {table_bert_config.to_log_string()}')
 
-            # copy the table bert config file to the working directory
-            # shutil.copy(args.data_dir / 'config.json', args.output_dir / 'tb_config.json')
-            # save table BERT config
             table_bert_config.save(args.output_dir / 'tb_config.json')
 
     wandb_run = None
     if args.is_master and not args.only_test:
         wandb_run = wandb.init(entity=args.entity, project=args.project, name=args.name)
 
-    assert args.data_dir.is_dir(), \
+    assert args.data_dir[0].is_dir(), \
         "--data_dir should point to the folder of files made by pregenerate_training_data.py!"
 
     if args.cpu:
@@ -266,7 +279,7 @@ def main():
     dataset_cls = task['dataset']
 
     if not args.only_test:
-        train_set_info = dataset_cls.get_dataset_info(train_data_dir, args.max_epoch)
+        train_set_info = dataset_cls.get_dataset_info_multi(train_data_dirs, args.max_epoch)
         # adjust batch size for really small datasets (or few-shot learning)
         args.train_batch_size = min(args.train_batch_size, train_set_info['one_epoch_size'] // args.world_size // args.gradient_accumulation_steps)
         assert args.train_batch_size >= 1, 'batch size is not positive'
@@ -285,26 +298,27 @@ def main():
     # we also partitation the dev set for every local process
     logger.info('Loading dev/test (optional) set...')
     sys.stdout.flush()
-    dev_set = dataset_cls(epoch=0, training_path=dev_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
-                          multi_gpu=args.multi_gpu, debug=args.debug_dataset) if dev_data_dir.exists() else None
-    test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config,
-                           multi_gpu=args.multi_gpu, debug=args.debug_dataset) if test_data_dir.exists() else None
+    dev_set = dataset_cls(epoch=0, training_paths=dev_data_dirs, tokenizer=model_ptr.tokenizer, config=table_bert_config,
+                          multi_gpu=args.multi_gpu, debug=args.debug_dataset) if has_dev else None
+    test_set = dataset_cls(epoch=0, training_paths=test_data_dirs, tokenizer=model_ptr.tokenizer, config=table_bert_config,
+                           multi_gpu=args.multi_gpu, debug=args.debug_dataset) if has_test else None
 
     if args.only_test:
+        assert len(args.data_dir) == 1
         assert args.mode is not None, 'need to set mode for only_test'
         mode, which_part = args.mode.split('-')
         if which_part == 'train':  # load train dataset without shuffle
             logger.info(f'run test with multi gpu {args.multi_gpu}')
             train_set = dataset_cls(
-                epoch=0, training_path=args.data_dir / 'train_noshuf', tokenizer=model_ptr.tokenizer,
+                epoch=0, training_paths=args.data_dir[0] / 'train_noshuf', tokenizer=model_ptr.tokenizer,
                 config=table_bert_config, multi_gpu=args.multi_gpu, debug=args.debug_dataset, not_even=True)
         elif which_part == 'test_all':  # test on multiple test set
             raw_output_file = trainer.args.output_file
             assert raw_output_file, 'output_file should be set'
-            all_test_data_dirs = [d for d in args.data_dir.iterdir() if d.is_dir() and d.name.startswith('test_')]
+            all_test_data_dirs = [d for d in args.data_dir[0].iterdir() if d.is_dir() and d.name.startswith('test_')]
             for _test_data_dir in all_test_data_dirs:
                 trainer.args.output_file = raw_output_file + f'.{_test_data_dir.name}'
-                _test_set = dataset_cls(epoch=0, training_path=_test_data_dir, tokenizer=model_ptr.tokenizer,
+                _test_set = dataset_cls(epoch=0, training_paths=_test_data_dir, tokenizer=model_ptr.tokenizer,
                                         config=table_bert_config, multi_gpu=False, debug=args.debug_dataset)
                 trainer.test(_test_set, mode=mode)
             exit()
@@ -336,7 +350,7 @@ def main():
         with torch.random.fork_rng(devices=None if args.cpu else [device.index]):
             torch.random.manual_seed(131 + epoch)
 
-            epoch_dataset = dataset_cls(epoch=trainer.epoch, training_path=train_data_dir, config=table_bert_config,
+            epoch_dataset = dataset_cls(epoch=trainer.epoch, training_paths=train_data_dirs, config=table_bert_config,
                                         tokenizer=model_ptr.tokenizer, multi_gpu=args.multi_gpu, debug=args.debug_dataset)
             train_sampler = RandomSampler(epoch_dataset)
             train_dataloader = DataLoader(epoch_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=0,
@@ -386,12 +400,12 @@ def main():
             # perform validation
             logger.info("** ** * Perform validation ** ** * ")
             dev_results = {}
-            if dev_data_dir.exists():
+            if has_dev:
                 dev_results = trainer.validate(dev_set)
                 dev_results['epoch'] = epoch
                 dev_results = {f'dev-{k}': v for k, v in dev_results.items()}
             test_results = {}
-            if test_data_dir.exists():
+            if has_test:
                 test_results = trainer.validate(test_set)
                 test_results['epoch'] = epoch
                 test_results = {f'test-{k}': v for k, v in test_results.items()}
@@ -401,7 +415,7 @@ def main():
                 logger.info(f'Epoch {epoch} Validation Results: {dev_results}, Test Results: {test_results}')
                 if wandb_run is not None:
                     wandb_run.log(dev_results)
-                    if test_data_dir.exists():
+                    if has_test:
                         wandb_run.log(test_results)
 
             # flush logging information to disk
@@ -411,8 +425,8 @@ def main():
 
     # run evaluation at the end of the training
     if args.mode is not None and args.is_master:  # evaluate after training using the whole dataset
-        dev_set = dataset_cls(epoch=0, training_path=dev_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if dev_data_dir.exists() else None
-        test_set = dataset_cls(epoch=0, training_path=test_data_dir, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if test_data_dir.exists() else None
+        dev_set = dataset_cls(epoch=0, training_paths=dev_data_dirs, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if has_dev else None
+        test_set = dataset_cls(epoch=0, training_paths=test_data_dirs, tokenizer=model_ptr.tokenizer, config=table_bert_config, multi_gpu=False) if has_test else None
         mode, which_part = args.mode.split('-')
         trainer.args.output_file = f'ep{args.max_epoch - 1}.tsv'
         trainer.test(eval(f'{which_part}_set'), mode=mode)

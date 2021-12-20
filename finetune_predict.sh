@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # --- arguments ---
-pipeline=all
+pipeline=skip
 # all: (default) run all
 # last_epoch: run finetune and only evaluate the last epoch
 # only_last_epoch: only evaluate the last epoch

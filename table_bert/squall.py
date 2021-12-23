@@ -3,25 +3,41 @@ import json
 from tqdm import tqdm
 from pathlib import Path
 from table_bert.dataset_utils import BasicDataset
+from table_bert.wikitablequestions import WikiTQ
 
 
 class Squall(BasicDataset):
-    def __init__(self, json_file: Path):
-        self.ntid2example = self.load(json_file)
+    def __init__(self, json_file: Path, wikitq: WikiTQ = None):
+        self.ntid2example = self.load(json_file, wikitq=wikitq)
 
     @staticmethod
-    def load(filepath: Path) -> Dict[str, Dict]:
+    def load(filepath: Path, wikitq: WikiTQ = None) -> Dict[str, Dict]:
       ntid2example: Dict[str, Dict] = {}
+      oob = 0
       with open(filepath, 'r') as fin:
         data = json.load(fin)
         for example in data:
           ntid = example['nt']
+          if wikitq:
+            columns = wikitq.get_table(wikitq.wtqid2tableid[ntid])[0]
           nl: str = ' '.join(example['nl'])
-          sql: str = ' '.join([t[1] for t in example['sql']])
+          sql = []
+          for t in example['sql']:
+            if t[0] == 'Column' and wikitq:
+              ci = int(t[1].split('_', 1)[0][1:]) - 1
+              if ci < len(columns):
+                sql.append(columns[ci])
+              else:  # TODO: squall annotation error?
+                sql.append(t[1])
+                oob += 1
+            else:
+              sql.append(t[1])
+          sql = ' '.join(sql)
           ntid2example[ntid] = {
             'nl': nl,
             'sql': sql
           }
+      print(f'column out of bound: {oob}')
       return ntid2example
 
     def gen_sql2nl_data(self, output_path: Path, restricted_ntids: Set[str] = None):
@@ -36,6 +52,7 @@ class Squall(BasicDataset):
           td = {
             'uuid': f'squall_{eid}',
             'metadata': {
+              'ntid': ntid,
               'sql': sql,
               'nl': nl,
             },

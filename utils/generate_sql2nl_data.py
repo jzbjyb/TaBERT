@@ -4,6 +4,7 @@ import os
 import json
 from table_bert.spider import Spider
 from table_bert.squall import Squall
+from table_bert.wikitablequestions import WikiTQ
 
 
 def main():
@@ -23,10 +24,11 @@ def main():
         #spider.sample_negative(args.split, args.output / args.split / 'samples.tsv', neg_num=9)
 
     elif args.task == 'squall':
-        squall_file, wtq_dir = args.path
+        squall_file, wtq_path, wtq_dir = args.path
         output_path = args.output
         fews = [16, 32, 64, 128, 256, 512, 1024]
-        squall = Squall(squall_file)
+        wtq = WikiTQ(wtq_path)
+        squall = Squall(squall_file, wikitq=wtq)
         for few in fews:
             print(f'load the sql for few-shot {few}')
             squall.get_subset(wtq_dir / f'train.src.{few}', output_path / f'train.src.{few}')

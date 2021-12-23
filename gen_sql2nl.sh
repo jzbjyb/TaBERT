@@ -9,8 +9,11 @@ source initialize.sh
 #input_dir=data/spider/train/sqlnl.json.2048
 #output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl_num2048
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl
+
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src.128.bm25_top1
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_bm25_top1_num128
 
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src.1024
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_num1024
@@ -18,6 +21,9 @@ output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
+
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl.bm25_top1
+output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl_bm25_top1
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -29,7 +35,7 @@ max_num_mention_per_example=3
 column_delimiter='|'
 row_delimiter='none'
 mkdir -p ${output_dir}
-worldsize=1
+worldsize=10
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -64,6 +70,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --seq2seq_format sql2nl \
     --table_linearization tapex \
     --dev_num 0 \
+    --no_shuffle \
     --global_rank $i &
 done
 wait

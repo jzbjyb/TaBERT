@@ -50,6 +50,9 @@ class ESWrapper():
         print('add docs')
         print(bulk(self.es, doc_iter))
 
+    def delete_index(self):
+        self.es.indices.delete(index=self.index_name, ignore=[400, 404])
+
     @staticmethod
     def format_text(example):
         return ' '.join(example['context_before'] + example['context_after'])

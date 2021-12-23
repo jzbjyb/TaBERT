@@ -15,10 +15,12 @@ class WikiTQ(BasicDataset):
         self.test_data = self.load(root_dir / 'data' / 'pristine-unseen-tables.tsv')
         self.table_root_dir = root_dir
         self.misc_file = root_dir / 'misc' / 'table-metadata.tsv'
+        self.wtqid2tableid = self.get_wtqid2tableid()
         self.tableid2pageid = self.get_tableid2pageid(self.misc_file)
+        self.pageid2wtqids = self.get_pageid2wtqids()
 
-    @staticmethod
-    def get_table(filename: Path):
+    def get_table(self, table_id: str):
+        filename = self.table_root_dir / table_id
         with open(filename, 'r') as fin:
             csv_reader = csv.reader(fin, delimiter=',', doublequote=False, escapechar='\\')
             header = [str(c) for c in next(csv_reader)]
@@ -41,6 +43,20 @@ class WikiTQ(BasicDataset):
                 assert tableid not in tableid2pageid, 'duplicate table id'
                 tableid2pageid[tableid] = pageid
         return tableid2pageid
+
+    def get_wtqid2tableid(self):
+        wtqid2tableid: Dict[str, str] = {}
+        for split in ['train', 'dev', 'test']:
+            data = getattr(self, f'{split}_data')
+            wtqid2tableid.update({e['id']: e['table_id'] for e in data})
+        return wtqid2tableid
+
+    def get_pageid2wtqids(self):
+        pageid2wtqids: Dict[str, List[str]] = defaultdict(list)
+        for wtqid, tableid in self.wtqid2tableid.items():
+            pageid = self.tableid2pageid[tableid]
+            pageid2wtqids[pageid].append(wtqid)
+        return pageid2wtqids
 
     def load(self, filename: Path):
         numans2count: Dict[int, int] = defaultdict(lambda: 0)
@@ -71,7 +87,7 @@ class WikiTQ(BasicDataset):
                 }
                 td['uuid'] = f'wtq_{split}_{idx}'
                 question = example['utterance']
-                table_header, header_types, table_data = self.get_table(self.table_root_dir / example['table_id'])
+                table_header, header_types, table_data = self.get_table(example['table_id'])
 
                 td['context_before'].append(question)
                 td['table']['data'] = table_data

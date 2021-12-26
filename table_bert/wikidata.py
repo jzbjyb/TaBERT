@@ -1,5 +1,6 @@
 import time
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Union, Tuple
+from collections import defaultdict
 from tqdm import tqdm
 import requests
 
@@ -28,8 +29,12 @@ topic2categories: Dict[str, List[str]] = {
 }
 
 class WikipediaCategory(object):
+  PREFIX = 'Category:'
   PAGEID2OTHER_URL = 'https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&pageids={}&format=json'
-  PAGEID2CATE_URL = 'https://en.wikipedia.org/w/api.php?action=query&prop=categories&pageids={}&format=json'
+  PAGEID2CATE_URL = 'https://en.wikipedia.org/w/api.php?action=query&prop=categories&pageids={}&clshow=!hidden&cllimit=50&clprop=sortkey&format=json'
+  REVID2CATE_URL = 'https://en.wikipedia.org/w/api.php?action=query&prop=categories&revids={}&clshow=!hidden&cllimit=50&clprop=sortkey&format=json'
+  TITLE2CATE_URL = 'https://en.wikipedia.org/w/api.php?action=query&prop=categories&titles={}&clshow=!hidden&cllimit=50&clprop=sortkey&format=json'
+  PAGEID2REDIRECT_URL = 'https://en.wikipedia.org/w/api.php?action=query&pageids={}&redirects&format=json'
   TITLE2OTHER_URL = 'https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&titles={}&format=json'
   WIKIDATA_ID2NAME = 'https://www.wikidata.org/w/api.php?action=wbgetentities&props=labels&ids={}&languages=en&format=json'
   max_limit = 50
@@ -66,12 +71,28 @@ class WikipediaCategory(object):
             self.parent2child[parent].append(child)
 
   @classmethod
-  def batcher(cls, examples: List, max_limit: int = None, wait: int = None):
+  def batcher(cls, examples: List, max_limit: int = None, wait: int = None, disable: bool = False):
     max_limit = max_limit or cls.max_limit
     wait = wait or cls.wait
-    for i in tqdm(range(0, len(examples), max_limit)):
+    for i in tqdm(range(0, len(examples), max_limit), disable=disable):
       yield examples[i:i + max_limit]
       time.sleep(wait)
+
+  @classmethod
+  def find_promising_cate(cls, cates: List[str]) -> str:
+    skips: List[str] = ['category', 'categories', 'wikipedia', 'wikiproject', 'articles with', 'pages with']
+    remains = []
+    for cate in cates:
+      _cate = cate.lstrip('Category:').lower()
+      _skip = False
+      for skip in skips:
+        if skip in _cate:
+          _skip = True
+          break
+      if _skip:
+        continue
+      remains.append(cate)
+    return remains[0]
 
   def find_all_childs_recursively(self, parent: str) -> List[Set[str]]:
     layers = [{parent}]
@@ -88,21 +109,48 @@ class WikipediaCategory(object):
       layers.append(to_extend)
     return layers
 
-  def find_closest_top_category(self, categories: List[str], top_categories: Set[str]):
-    to_go = categories
+  def find_closest_top_category(self,
+                                categories: List[str],
+                                top_categories: Set[str],
+                                track_num_path: bool = False) -> Union[List[str], List[Tuple[str, int]]]:
+    to_go: Dict[str, int] = {c: 1 for c in categories}  # track the number of path (initialized with 1)
     visited: Set[str] = set()
     while len(to_go) > 0:
-      reached = set(to_go) & top_categories
+      reached = set(to_go.keys()) & top_categories
       if len(reached) > 0:
-        return list(reached)
-      _to_go = set()
+        if track_num_path:
+          return [(r, to_go[r]) for r in reached]
+        else:
+          return list(reached)
+      _to_go: Dict[str, int] = defaultdict(lambda: 0)
       for tg in to_go:
         visited.add(tg)
         if tg not in self.child2parent:
           continue
-        _to_go.update(self.child2parent[tg])
-      _to_go = list(_to_go - visited)
+        for _tg in self.child2parent[tg]:
+          _to_go[_tg] = _to_go[_tg] + to_go[tg]
+      _to_go = {k: v for k, v in _to_go.items() if k not in visited}
       to_go = _to_go
+    raise Exception("can't reach top categories")
+
+  def find_closest_top_category_by_request(self, cate: str, top_categories: Set[str], max_try: int = 50):  # all in title format
+    tries = 0
+    while cate:
+      if cate in top_categories:
+        return cate
+      if tries >= max_try:
+        raise Exception("reach max try")
+      next = self.title2cate([cate], disable=True)
+      tries += 1
+      if len(next) <= 0:
+        cate = None
+      else:
+        matches = list(set(next[cate]) & top_categories)
+        if len(matches) > 0:  # find top
+          cate = matches[0]
+        else:
+          next_cate = self.find_promising_cate(next[cate])
+          cate = next_cate
     raise Exception("can't reach top categories")
 
   @classmethod
@@ -165,10 +213,29 @@ class WikipediaCategory(object):
     return list(set(title2pageid.values()))
 
   @classmethod
-  def pageid2cate(cls, pageids: List[str], **kwargs):
+  def pageid2cate(cls, pageids: List[str], use_revid: bool = False, **kwargs):
     pageid2cates: Dict[str, List[str]] = {}
     for batch in cls.batcher(pageids, **kwargs):
-      url = cls.PAGEID2CATE_URL.format('|'.join(batch))
+      if use_revid:
+        url = cls.REVID2CATE_URL.format('|'.join(batch))
+      else:
+        url = cls.PAGEID2CATE_URL.format('|'.join(batch))
+      r = requests.get(url).json()
+      r = r['query']['pages']
+      for k, v in r.items():
+        if 'missing' in v:
+          continue
+        if 'categories' not in v:
+          continue
+        cates = [c['title'] for c in sorted(v['categories'], key=lambda x: x['sortkey'])]
+        pageid2cates[k] = cates
+    return pageid2cates
+
+  @classmethod
+  def title2cate(cls, titles: List[str], **kwargs):
+    title2cates: Dict[str, List[str]] = {}
+    for batch in cls.batcher(titles, **kwargs):
+      url = cls.TITLE2CATE_URL.format('|'.join(batch))
       r = requests.get(url)
       r = r.json()['query']['pages']
       for k, v in r.items():
@@ -176,18 +243,42 @@ class WikipediaCategory(object):
           continue
         if 'categories' not in v:
           continue
-        cates = [c['title'] for c in v['categories']]
-        pageid2cates[k] = cates
-    return pageid2cates
+        cates = [c['title'] for c in sorted(v['categories'], key=lambda x: x['sortkey'])]
+        title2cates[v['title']] = cates
+    return title2cates
+
+  @classmethod
+  def pageid2redirect(cls, pageids: List[str], **kwargs):
+    redirects: List[str] = []
+    for batch in cls.batcher(pageids, **kwargs):
+      url = cls.PAGEID2REDIRECT_URL.format('|'.join(batch))
+      r = requests.get(url).json()['query']['pages']
+      r = {k: v for k, v in r.items() if 'missing' not in v}
+      # TODO: the order might not be corresponding and some pageid might not have redirects
+      redirects = list(r.keys())
+    return redirects
 
 
 def convert_title_to_pageid():
   topic2categories: Dict[str, List[str]] = {}
   for topic, categories in _topic2categories.items():
-    categories = [f'Category:{c}' for c in categories]
+    categories = [f'{WikipediaCategory.PREFIX}{c}' for c in categories]
     title2pageid = WikipediaCategory.titles2other(categories, field='wikidata')
     topic2categories[topic] = [title2pageid[c] for c in categories]
   print(topic2categories)
+
+
+def get_cateid2name(use_prefix: bool = False):
+  cateid2name: Dict[str, str] = {}
+  catename2id: Dict[str, str] = {}
+  for topic in topic2categories:
+    assert len(topic2categories[topic]) == len(_topic2categories[topic])
+    for id, name in zip(topic2categories[topic], _topic2categories[topic]):
+      if use_prefix:
+        name = WikipediaCategory.PREFIX + name
+      cateid2name[id] = name
+      catename2id[name] = id
+  return cateid2name, catename2id
 
 
 if __name__ == '__main__':

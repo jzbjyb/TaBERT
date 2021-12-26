@@ -3,9 +3,13 @@ description: pretrain
 environment:
   image: jzbjyb/my-repo:latest
 
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
 target:
-  service: amlk8s
-  name: itp-scus-v100
+  service: aml
+  name: V10032G
   vc: AlexTScience
 
 storage:
@@ -224,6 +228,26 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_sports_128:wtqqa_strict_politics_128:wtqqa_strict_people_128:wtqqa_strict_culture_128:wtqqa_strict_misc_128:wtqqa_strict_sports:wtqqa_strict_politics:wtqqa_strict_people:wtqqa_strict_culture:wtqqa_strict_misc base full
     /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_base_tapex8
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_fp_all base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_base_tapex9
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_all base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_base_tapex10
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_fp_politics base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_base_tapex11
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_16 base full
+    /mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_num128_base_bart
   sku: G8
@@ -299,6 +323,26 @@ jobs:
   sku: G8
   command:
   - ./finetune_predict.sh wtqqa_strict_sports_128:wtqqa_strict_politics_128:wtqqa_strict_people_128:wtqqa_strict_culture_128:wtqqa_strict_misc_128:wtqqa_strict_sports:wtqqa_strict_politics:wtqqa_strict_people:wtqqa_strict_culture:wtqqa_strict_misc large full
+    /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_large_tapex6
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_fp_all large full
+    /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_large_tapex7
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_all large full
+    /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_large_tapex8
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_fp_politics large full
+    /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
+- name: wtqqa_tapex_linear_1024_num128_large_tapex9
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_16 large full
     /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin 50
 
 - name: wtqqa_tapex_linear_1024_num128_large_bart

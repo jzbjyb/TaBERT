@@ -44,6 +44,18 @@ class WikiTQ(BasicDataset):
                 tableid2pageid[tableid] = pageid
         return tableid2pageid
 
+    @staticmethod
+    def get_pageid2oldid(mis_file: Path, pageids: List[str] = None):
+        pageid2oldid: Dict[str, str] = {}
+        with open(mis_file, 'r') as fin:
+            csv_reader = csv.reader(fin, delimiter='\t')
+            _ = next(csv_reader)  # skip tsv head
+            for row in csv_reader:
+                tableid, pageid, oldid = row[:3]
+                if not pageids or pageid in pageids:
+                    pageid2oldid[pageid] = oldid
+        return pageid2oldid
+
     def get_wtqid2tableid(self):
         wtqid2tableid: Dict[str, str] = {}
         for split in ['train', 'dev', 'test']:

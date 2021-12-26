@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 inp=$1
+nums=$2
+IFS=':' read -ra nums <<< "$nums"
 
 get_seeded_random() {
   seed="$1"
@@ -8,7 +10,7 @@ get_seeded_random() {
 }
 
 # 16 32 64 128 256 512 1024
-for num in 16 32 64 128 256 512 1024; do
+for num in "${nums[@]}"; do
   echo ${num}
   shuf --random-source=<(get_seeded_random ${num}) ${inp} | head -n ${num} > ${inp}.${num}
 done

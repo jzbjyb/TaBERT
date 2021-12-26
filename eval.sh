@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-task=$1
-pred=$2
+task=wtqqa
+pred=$1
 
 host=$(hostname)
 if [[ "$host" == "GPU02" ]]; then

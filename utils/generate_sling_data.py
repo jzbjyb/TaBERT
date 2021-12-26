@@ -3,6 +3,8 @@ import argparse
 from pathlib import Path
 import json
 import random
+import glob
+import os
 from tqdm import tqdm
 from collections import defaultdict
 import functools
@@ -14,7 +16,7 @@ import numpy as np
 from multiprocessing import Process, Queue
 from table_bert.utils import get_url, MultiprocessWrapper
 from table_bert.dataset_utils import BasicDataset
-from table_bert.wikidata import topic2categories, WikipediaCategory
+from table_bert.wikidata import topic2categories, get_cateid2name, WikipediaCategory
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.retrieval import ESWrapper
 
@@ -521,28 +523,84 @@ class SlingExtractor(object):
                                   pageids: List[str],
                                   wc: WikipediaCategory,
                                   top_categories: Set[str],
-                                  out_file: str = None):
+                                  out_file: str = None,
+                                  redirect: bool = False,
+                                  follow_cate_hierachy_by_request: bool = False,
+                                  use_revid: bool = False,
+                                  cateid2name: Dict[str, str] = None,
+                                  catename2id: Dict[str, str] = None,
+                                  pageid2revid: Dict[str, str] = None):
+    out_file = out_file or '/tmp/test'
+
+    # revision id
+    if use_revid:
+      assert follow_cate_hierachy_by_request and not redirect, 'not implemented'
+      with open(out_file, 'w') as fout:
+        for pageid in pageids:
+          try:
+            revids = pageid2revid[pageid]
+            pageid2cates = wc.pageid2cate([revids], use_revid=use_revid, max_limit=1)
+            cates = list(pageid2cates.values())[0]
+            promising_cate_title = WikipediaCategory.find_promising_cate(cates)
+            _top_categories = set(cateid2name[c] for c in top_categories)
+            top_category = wc.find_closest_top_category_by_request(promising_cate_title, _top_categories)
+            top_category = catename2id[top_category]
+            fout.write(f'{pageid}\t{top_category}\n')
+          except:
+            print(f'error {pageid}')
+      return
+
+    # redirect
+    torawpageid: Dict[str, str] = {}
+    if redirect:
+      new_pageids: List[str] = []
+      for pi in pageids:
+        redirects = wc.pageid2redirect([pi])
+        if len(redirects) > 0:
+          new_pageids.append(redirects[0])
+          torawpageid[redirects[0]] = pi
+        else:
+          new_pageids.append(pi)
+      print(f'found redirects for {len(torawpageid)}/{len(pageids)}')
+      pageids = new_pageids
+
+    # get direct categories
     pageid2cates = wc.pageid2cate(pageids, max_limit=1)
 
-    all_cates = list(set(c for cates in pageid2cates.values() for c in cates))
-    print(f'#categories {len(all_cates)}')
-    title2wid = wc.titles2other(all_cates, field='wikidata')
+    # get wikidata id of cetegoris
+    if not redirect:
+      all_cates = list(set(c for cates in pageid2cates.values() for c in cates))
+      print(f'#categories {len(all_cates)}')
+      title2wid = wc.titles2other(all_cates, field='wikidata')
 
-    out_file = out_file or '/tmp/test'
+    # find the top category
     with open(out_file, 'w') as fout:
-      for pageid, cates in pageid2cates.items():
-        cates = [title2wid[c] for c in cates if c in title2wid]
+      for pageid, cates in tqdm(pageid2cates.items()):
+        promising_cate_title = WikipediaCategory.find_promising_cate(cates)
+        if not redirect:
+          cates = [title2wid[c] for c in cates if c in title2wid]
         try:
           if len(cates) <= 0:
             raise Exception('not categories as wikidata ids')
-          top_category = wc.find_closest_top_category(cates, top_categories)
+          if follow_cate_hierachy_by_request:
+            _top_categories = set(cateid2name[c] for c in top_categories)
+            top_category = wc.find_closest_top_category_by_request(promising_cate_title, _top_categories)
+            top_category = [catename2id[top_category]]
+          else:
+            top_category: List[Tuple[str, int]] = wc.find_closest_top_category(cates, top_categories, track_num_path=True)
+            max_num_path = max(map(itemgetter(1), top_category))
+            top_category: List[str] = [c for c, n in top_category if n == max_num_path]
           top_category: str = ','.join(top_category)
+          if pageid in torawpageid:
+            pageid = torawpageid[pageid]
           fout.write(f'{pageid}\t{top_category}\n')
         except KeyboardInterrupt as e:
           raise e
         except:
-          print(f'error {pageid}')
-
+          if pageid in torawpageid:
+            print(f'error {torawpageid[pageid]}')
+          else:
+            print(f'error {pageid}')
 
   def get_top_category(self,
                        pageids: Set[str],
@@ -566,21 +624,33 @@ class SlingExtractor(object):
             continue
           categories = self.get_categories(doc_frame)
           try:
-            top_category = wc.find_closest_top_category(categories, top_categories)
+            top_category: List[Tuple[str, int]] = \
+              wc.find_closest_top_category(categories, top_categories, track_num_path=True)
+            max_num_path = max(map(itemgetter(1), top_category))
+            top_category: List[str] = [c for c, n in top_category if n == max_num_path]
             pageid2topcate[pageid] = top_category
             top_category: str = ','.join(top_category)
             fout.write(f'{pageid}\t{top_category}\n')
           except KeyboardInterrupt as e:
             raise e
-          except:
+          except Exception as e:
             print(f'error {pageid}')
     return pageid2topcate
 
 
-def wikitq_topic_overlap(test_wtq_path: Path, train_wtq_path: Path, topics: List[str], topk: int = 100):
+def wikitq_overlap(test_wtq_path: Path,
+                   train_wtq_path: Path,
+                   topics: List[str],
+                   topk: int = 100,
+                   proportional: bool = False,
+                   method: str = 'include'):
+  assert method in {'include', 'overlap'}
+
   from spacy.lang.en import English
   nlp = English()
   tokenizer = nlp.tokenizer
+  from transformers import BertTokenizer, BasicTokenizer
+  #tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
   # count words
   test_topic2word2count: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(lambda: 0))
@@ -590,7 +660,10 @@ def wikitq_topic_overlap(test_wtq_path: Path, train_wtq_path: Path, topics: List
       for topic2word2count, fin in [(test_topic2word2count, test_fin), (train_topic2word2count, train_fin)]:
         for l in tqdm(fin):
           question = json.loads(l)['context_before'][0].lower()
-          tokens = tokenizer(question)
+          if isinstance(tokenizer, BasicTokenizer):
+            tokens = tokenizer.tokenize(question)
+          else:
+            tokens = tokenizer(question)
           for t in tokens:
             if t.is_stop:
               continue
@@ -598,14 +671,34 @@ def wikitq_topic_overlap(test_wtq_path: Path, train_wtq_path: Path, topics: List
 
   # choose top k words
   for topic in topics:
-    tops = sorted(test_topic2word2count[topic].items(), key=lambda x: -x[1])[:topk]
-    test_topic2word2count[topic] = list(map(itemgetter(0), tops))
-    print(f'{topic}: {tops[:10]}')
+    if method == 'include':
+      to_get_topk = [test_topic2word2count]
+    elif method == 'overlap':
+      to_get_topk = [test_topic2word2count, train_topic2word2count]
+    else:
+      raise NotImplementedError
+    for tgt in to_get_topk:
+      tops: List[Tuple[str, int]] = sorted(tgt[topic].items(), key=lambda x: -x[1])[:topk]
+      sum_count = sum(map(itemgetter(1), tops)) or 1
+      tgt[topic] = [(x[0], x[1] / sum_count) for x in tops]  # normalize
+      print(f'{topic}: {tops[:10]}')
 
-  # compute overlap
+  # compute train/test stat
   for test_topic in topics:
     for train_topic in topics:
-      o = np.mean([w in train_topic2word2count[train_topic] for w in test_topic2word2count[test_topic]])
+      if method == 'include':
+        if proportional:
+          o = np.sum([w[1] for w in test_topic2word2count[test_topic] if w[0] in train_topic2word2count[train_topic]])
+        else:
+          o = np.mean([w[0] in train_topic2word2count[train_topic] for w in test_topic2word2count[test_topic]])
+      elif method == 'overlap':
+        if proportional:
+          raise NotImplementedError
+        tests = set(map(itemgetter(0), test_topic2word2count[test_topic]))
+        trains = set(map(itemgetter(0), train_topic2word2count[train_topic]))
+        o = len(tests & trains) / (len(tests | trains) or 1)
+      else:
+        raise NotImplementedError
       print(o, end='\t')
     print('')
 
@@ -614,7 +707,8 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, choices=[
     'url_as_key', 'pageid_as_key', 'match_raw', 'build_category_hierarchy',
-    'pageid2topic', 'assign_topic', 'wikitq', 'wikitq_topic_overlap', 'sql2nl_with_retrieval'])
+    'pageid2topic', 'assign_topic', 'wikitq_split_topic', 'wikitq_split_cate', 'wikitq_overlap',
+    'sql2nl_with_retrieval'])
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
@@ -659,8 +753,15 @@ if __name__ == '__main__':
     se.build_category_hierarchy(out_file)
 
   elif args.task == 'pageid2topic':
-    find_missing_from_sling = 2
+    find_missing_from_sling = 3
+    redirect = False
+    hierachy_request = True
+    use_revid = True
     wikipedia_cate_hierachy = 'data/wikipedia_category/sling_category_child2parents.txt'
+    wtq_meta_file = Path('data/wikitablequestions/WikiTableQuestions/misc/table-metadata.tsv')
+
+    cateid2name, catename2id = get_cateid2name(use_prefix=True)
+    pageid2revid = WikiTQ.get_pageid2oldid(wtq_meta_file)
 
     if find_missing_from_sling:
       prep_files = args.inp[:-find_missing_from_sling]
@@ -691,8 +792,11 @@ if __name__ == '__main__':
 
     if find_missing_from_sling:
       miss_pids = list(pids - found_pids)
-      print(f'#missing page ids {len(miss_pids)}')
-      SlingExtractor.get_top_category_by_request(miss_pids, wc, top_categories, out_file=out_file)
+      print(f'#missing page ids {len(miss_pids)}: {miss_pids}')
+      SlingExtractor.get_top_category_by_request(
+        miss_pids, wc, top_categories, out_file=out_file, redirect=redirect,
+        follow_cate_hierachy_by_request=hierachy_request, use_revid=use_revid,
+        cateid2name=cateid2name, catename2id=catename2id, pageid2revid=pageid2revid)
     else:
       se = SlingExtractor(sling_root)
       pageid2category: Dict[str, str] = se.get_top_category(
@@ -710,6 +814,8 @@ if __name__ == '__main__':
     pageid2cates: Dict[str, List[str]] = {}
     pageid2topic: Dict[str, str] = {}
     topic2count: Dict[str, int] = defaultdict(lambda: 0)
+    numtopic2count: Dict[int, int] = defaultdict(lambda: 0)
+    numcate2count: Dict[int, int] = defaultdict(lambda: 0)
     with open(out_file, 'w') as fout:
       for pageid2cate_file in pageid2cate_files:
         with open(pageid2cate_file, 'r') as fin:
@@ -718,43 +824,91 @@ if __name__ == '__main__':
             cates = cates.split(',')
             pageid2cates[pageid] = cates
             topics, counts = np.unique([cate2topic[cate] for cate in cates], return_counts=True)
-            topic = topics[np.argsort(-counts)[0]]
+            max_count = max(counts)
+            topic: List[str] = [t for t, c in zip(topics, counts) if c == max_count]
+            topic: str = np.random.choice(topic)
             pageid2topic[pageid] = topic
             topic2count[topic] += 1
+            numtopic2count[len(topics)] += 1
+            numcate2count[len(cates)] += 1
             fout.write(f'{pageid}\t{topic}\n')
-
     print('topic2count', sorted(topic2count.items(), key=lambda x: -x[1]))
+    print('numtopic2count', sorted(numtopic2count.items(), key=lambda x: x[0]))
+    print('numcate2count', sorted(numcate2count.items(), key=lambda x: x[0]))
 
-  elif args.task == 'wikitq':
-    pageid2topic_file, prep_file, wtq_path = args.inp
+    print('examples')
+    pageid2cates: List[Tuple[str, List[str]]] = list(pageid2cates.items())
+    random.shuffle(pageid2cates)
+    cateid2name = get_cateid2name()[0]
+    for pageid, cates in pageid2cates[:10]:
+      cates = [cateid2name[c] for c in cates]
+      print(f'https://en.wikipedia.org/?curid={pageid} {cates}')
+
+  elif args.task == 'wikitq_split_topic':
+    pageid2topic_file, wtq_path, prep_file = args.inp
     out_path = args.out
-    wtq_id_key = 'wtq_id'
+    wtq_id_key = 'uuid'
 
-    pageid2topic: Dict[str, str] = dict(l.strip().split('\t') for l in open(pageid2topic_file, 'r').readlines())
-
+    pageid2topic: Dict[str, str] = dict(tuple(l.strip().split('\t')) for l in open(pageid2topic_file, 'r').readlines())
     wtq = WikiTQ(wtq_path)
-    id2tableid = wtq.wtqid2tableid
 
     topic2file = {}
     topic2count = defaultdict(lambda: 0)
     with open(prep_file, 'r') as fin:
       for l in tqdm(fin):
         wtq_id = json.loads(l)[wtq_id_key]
-        pageid = wtq.tableid2pageid[id2tableid[wtq_id]]
+        pageid = wtq.tableid2pageid[wtq.wtqid2tableid[wtq_id]]
         if pageid in pageid2topic:
           topic = pageid2topic[pageid]
           if topic not in topic2file:
             topic2file[topic] = open(str(out_path) + f'.{topic.lower()}', 'w')
           topic2file[topic].write(l)
           topic2count[topic] += 1
-
     print('topic2count', sorted(topic2count.items(), key=lambda x: -x[1]))
 
-  elif args.task == 'wikitq_topic_overlap':
-    topics = ['misc', 'people', 'politics', 'culture', 'sports']
-    test_wtq_path, train_wtq_path = args.inp
+  elif args.task == 'wikitq_split_cate':
+    exclusive = True
+    pageid2cate_file, wtq_path, prep_file = args.inp
+    out_path = args.out
 
-    wikitq_topic_overlap(test_wtq_path, train_wtq_path, topics)
+    pageid2cates: Dict[str, str] = dict(l.strip().split('\t') for l in open(pageid2cate_file, 'r').readlines())
+    pageid2cates: Dict[str, List[str]] = {k: v.split(',') for k, v in pageid2cates.items()}
+    wtq = WikiTQ(wtq_path)
+
+    cate2file = {}
+    cate2count = defaultdict(lambda: 0)
+    with open(prep_file, 'r') as fin:
+      for l in tqdm(fin):
+        wtq_id = json.loads(l)['uuid']
+        pageid = wtq.tableid2pageid[wtq.wtqid2tableid[wtq_id]]
+        if pageid in pageid2cates:
+          cates = pageid2cates[pageid]
+          if exclusive and len(cates) > 1:
+            continue
+          for cate in cates:
+            if cate not in cate2file:
+              cate2file[cate] = open(str(out_path) + f'.{cate}', 'w')
+            cate2file[cate].write(l)
+            cate2count[cate] += 1
+    print('cate2count', sorted(cate2count.items(), key=lambda x: -x[1]))
+
+  elif args.task == 'wikitq_overlap':
+    split_dir = args.inp[0]
+    split_by = 'cates'
+    if split_by == 'topics':
+      split_by = ['misc', 'people', 'politics', 'culture', 'sports']  # list(map(lambda x: x.lower(), topic2categories.keys()))
+      print('\t'.join(split_by))
+    elif split_by == 'cates':
+      files = list(glob.glob(str(split_dir) + '/train.src.*'))  # get all train files
+      sorted_files = sorted(files, key=lambda x: -os.path.getsize(x))  # sort by size
+      split_by = [f.rsplit('.', 1)[1] for f in sorted_files]  # get category
+      split_by = [c for c in split_by if
+                  Path(str(split_dir / 'valid.src') + f'.{c}').exists() and
+                  Path(str(split_dir / 'test.src') + f'.{c}').exists()]  # filter with dev/test
+      cateid2name = get_cateid2name()[0]
+      print('\t'.join(split_by))
+      print('\t'.join([cateid2name[sb] for sb in split_by]))
+    wikitq_overlap(split_dir / 'test.src', split_dir / 'train.src', split_by, topk=100, proportional=False, method='overlap')
 
   elif args.task == 'sql2nl_with_retrieval':
     data = 'wikitq'

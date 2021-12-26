@@ -3,9 +3,13 @@ description: pretrain with setup in paper
 environment:
   image: jzbjyb/my-repo:latest
 
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
 target:
-  service: amlk8s
-  name: itp-scus-v100
+  service: aml
+  name: V10032G
   vc: AlexTScience
 
 storage:
@@ -537,6 +541,24 @@ jobs:
   - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_samepage_hardmatch_tapex05m_sqlandnl/pytorch_model_epoch04.bin 50
 
+- name: wholetable_tapas_data0_samepage_hardmatch_tapex05m_sqlandnl_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_bartmask_salientmask:/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num128_bart_qa:/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_samepage_hardmatch_tapex05m_sqlandnl_large seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name facebook/bart-large
+- name: wholetable_tapas_data0_samepage_hardmatch_tapex05m_sqlandnl_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapas_data0_samepage_hardmatch_tapex05m_sqlandnl_large/pytorch_model_epoch04.bin 50
+
 - name: wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit_and_finetune
   sku: G8
   command:
@@ -546,6 +568,11 @@ jobs:
     '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
     --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
   - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_all base full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_nl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_tapex_05m_nl_num512_bart_qa_sports_tapexbaseinit_and_finetune
@@ -632,6 +659,24 @@ jobs:
   - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 base full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
 
+- name: wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_vanilla.sh 24
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num128_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit_large seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name facebook/bart-large
+- name: wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_128:wtqqa_strict:wtqqa_strict_16:wtqqa_strict_32:wtqqa_strict_64:wtqqa_strict_256:wtqqa_strict_512:wtqqa_strict_1024 large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_num128_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
+
 - name: wholetable_tapex_05m_wtqnl_num64_bart_qa_tapexbaseinit_and_finetune
   sku: G8
   command:
@@ -696,6 +741,26 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_sports_128:wtqqa_strict_politics_128:wtqqa_strict_people_128:wtqqa_strict_culture_128:wtqqa_strict_misc_128:wtqqa_strict_sports:wtqqa_strict_politics:wtqqa_strict_people:wtqqa_strict_culture:wtqqa_strict_misc base full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_finetune4
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_fp_all base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_finetune5
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_all base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_finetune6
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_fp_politics base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_finetune7
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_16 base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
 
 - name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large
   sku: G8
@@ -723,4 +788,24 @@ jobs:
   sku: G8
   command:
   - ./finetune_predict.sh wtqqa_strict_sports_128:wtqqa_strict_politics_128:wtqqa_strict_people_128:wtqqa_strict_culture_128:wtqqa_strict_misc_128:wtqqa_strict_sports:wtqqa_strict_politics:wtqqa_strict_people:wtqqa_strict_culture:wtqqa_strict_misc large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large_finetune4
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_fp_all large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large_finetune5
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_all large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large_finetune6
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_fp_politics large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
+- name: wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large_finetune7
+  sku: G8
+  command:
+  - ./finetune_predict.sh cate_efp_16 large full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50

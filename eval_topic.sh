@@ -5,7 +5,16 @@ root_dir=$1
 collection=$2
 epoch=50
 
-if [[ "$collection" == cate_efp_* ]]; then
+if [[ "$collection" == "cate_efp_16" ]]; then
+  topics=(Q1457982 Q4047087 Q54070 Q1457673 Q8255 Q1458390 Q6337045 Q7214908 Q2944929 Q1457595
+          Q7386634 Q1457756 Q4103183 Q5613113 Q5850187 Q8413436 Q4049293 Q4103249 Q9715089
+          Q6528585 Q6353120 Q6576895 Q5645580)
+  names=(Sports People Government Geography Music MassMedia Entertainment Events Culture History
+         World Society Politics Organizations Military Energy Nature Education Economy Industry
+         Business Objects FoodAndDrink)
+  prefix=wtqqa_strict_efp_
+  suffix=_16_ep${epoch}
+elif [[ "$collection" == cate_efp_* ]]; then
   topics=(Q1457982 Q4047087 Q54070 Q1457673 Q8255 Q1458390 Q6337045 Q7214908 Q2944929 Q1457595)
   names=(Sports People Government Geography Music MassMedia Entertainment Events Culture History)
   prefix=wtqqa_strict_efp_

@@ -27,8 +27,14 @@ source env_initialize.sh
 #input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch.jsonl.data0
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_bartmask_salientmask
 
-input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_topk3.jsonl.data0
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_topk3_bartmask_salientmask
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_topk3.jsonl.data0
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_topk3_bartmask_salientmask
+
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_min.jsonl.data0
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_min_bartmask_salientmask
+
+input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_hardmatch_random_shuffle.jsonl.data0
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_data0_bart_samepage_hardmatch_random_shuffle_bartmask_salientmask
 
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.preprocessed.jsonl

@@ -511,12 +511,33 @@ def tapex_which_table(wtq_prep_files: List[str], tapex_prep_file: str, out_file:
   mpw.finish()
 
 
+def random_pair_context_with_table(prep_file: str, out_file: str):
+  context_related_keys = ['context_before', 'context_before_mentions',
+                          'context_after', 'context_after_mentions']
+  tables: List[Dict] = []
+  contexts: List[Dict] = []
+  with open(prep_file, 'r') as fin:
+    for i, l in enumerate(fin):
+      l = json.loads(l)
+      tables.append(l)
+      contexts.append({k: l[k] for k in context_related_keys if k in l})
+  perm = np.random.permutation(len(contexts))
+  with open(out_file, 'w') as fout:
+    for i in range(len(tables)):
+      example = tables[i]
+      for k in context_related_keys:
+        if k not in example:
+          continue
+        example[k] = contexts[perm[i]][k]
+      fout.write(json.dumps(example) + '\n')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
     'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
-    'dump_correct_bart', 'tapex_which_table'])
+    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -582,3 +603,8 @@ if __name__ == '__main__':
     tapex_prep_file = args.inp[-1]
     out_file = args.out
     tapex_which_table(wtq_prep_files, tapex_prep_file, out_file, threads=8)
+
+  elif args.task == 'random_pair_context_with_table':
+    prep_file = args.inp[0]
+    out_file = args.out
+    random_pair_context_with_table(prep_file, out_file)

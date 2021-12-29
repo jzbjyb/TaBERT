@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Callable
 import argparse
 from pathlib import Path
 import json
@@ -13,6 +13,7 @@ import time
 import sling
 import re
 import numpy as np
+import spacy
 from multiprocessing import Process, Queue
 from table_bert.utils import get_url, MultiprocessWrapper
 from table_bert.dataset_utils import BasicDataset
@@ -188,43 +189,34 @@ class SlingExtractor(object):
     return tok_to_sent_id, sent_to_span
 
   @staticmethod
-  def annotate_sentence(urls: List[str],
-                        documents: List[bytes],
-                        tables_li: List[List[Dict]],
+  def annotate_sentence(input_examples: List[Dict],
                         use_all_more_than_num_mentions: int,
-                        topk: int) -> List[Dict]:
+                        topk: int,
+                        filter_function: Callable = None) -> List[Dict]:
     examples: List[Dict] = []
 
-    for url, document, tables in zip(urls, documents, tables_li):
-      # parse document
-      store = sling.Store(self_commons)
-      doc_frame = store.parse(document)
-      document = sling.Document(doc_frame, store, self_docschema)
-      tokens = [t.word for t in document.tokens]
-      token_brks = [t.brk for t in document.tokens]
-      tokens = [t if tb == 0 else (' ' + t) for t, tb in zip(tokens, token_brks)]  # add space if needed
+    for inp_example in input_examples:
+      key, document, tables = inp_example['key'], inp_example['document'], inp_example['tables']
 
-      # split by sentence
-      tok_to_sent_id, sent_to_span = SlingExtractor.split_document_by_sentence(document.tokens)
+      # get sentences
+      sentences = SlingExtractor.get_sentences(document)
+
+      # skip sentences where most characters are numeric characters
+      _sentences: List[str] = []
+      for sent in sentences:
+        sent_only_alphanumeric = only_alphanumeric.sub('', sent)
+        sent_only_numberic = re.sub('[^0-9]', '', sent_only_alphanumeric)
+        number_ratio = len(sent_only_numberic) / (len(sent_only_alphanumeric) or 1)
+        if number_ratio > 0.8:
+          continue
+        _sentences.append(sent)
+      sentences = _sentences
 
       for index, table in enumerate(tables):
         kept_sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]] = []
         # find the topk best-matching sentence
         local_num_context_count = 0
-        for sent_id, (sent_start, sent_end) in sent_to_span.items():
-          if sent_end - sent_start > 512:
-            # rule 0: skip long sentence
-            continue
-          sent = ''.join(tokens[sent_start:sent_end])
-          if not sent.endswith(('!', '"', "'", '.', ':', ';', '?')):
-            # rule 1: skip text without punctuations at the end (e.g., table snippets)
-            continue
-          sent_only_alphanumeric = only_alphanumeric.sub('', sent)
-          sent_only_numberic = re.sub('[^0-9]', '', sent_only_alphanumeric)
-          number_ratio = len(sent_only_numberic) / (len(sent_only_alphanumeric) or 1)
-          if number_ratio > 0.8:
-            # rule 2: skip text where most characters are numeric characters
-            continue
+        for sent in sentences:
           locations, location2cells = BasicDataset.get_mention_locations(sent, table['data'])
           mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
           data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
@@ -237,7 +229,7 @@ class SlingExtractor(object):
           elif use_all_more_than_num_mentions and len(locations) >= use_all_more_than_num_mentions:
             table['data_used'] = data_used
             examples.append({
-              'uuid': f'sling_{url}_{index}_{local_num_context_count}',
+              'uuid': f'sling_{key}_{index}_{local_num_context_count}',
               'table': table,
               'context_before': [sent],
               'context_before_mentions': [locations],
@@ -250,8 +242,15 @@ class SlingExtractor(object):
           continue
 
         if not use_all_more_than_num_mentions:  # output topk
-          # sort by number of mentions
-          kept_sent_with_mentions = sorted(kept_sent_with_mentions, key=lambda x: -len(x[1]))[:topk]
+          if filter_function is not None:  # use filter function
+            kept_sent_with_mentions = filter_function(kept_sent_with_mentions)
+          else:  # use topk
+            kept_sent_with_mentions = sorted(kept_sent_with_mentions, key=lambda x: -len(x[1]))[:topk]
+
+          if len(kept_sent_with_mentions) <= 0:
+            continue
+
+          # merge multiple sentences
           merge_sent: str = ''
           merge_locations: List[Tuple] = []
           merge_mention_cells: List[List[Tuple]] = []
@@ -263,7 +262,7 @@ class SlingExtractor(object):
           data_used = sorted(list(set(mc for mcs in merge_mention_cells for mc in mcs)))
           table['data_used'] = data_used
           examples.append({
-            'uuid': f'sling_{url}_{index}',
+            'uuid': f'sling_{key}_{index}',
             'table': table,
             'context_before': [merge_sent],
             'context_before_mentions': [merge_locations],
@@ -276,15 +275,49 @@ class SlingExtractor(object):
   def match_sentence_with_table_worker(input_queue: Queue,
                                        output_queue: Queue,
                                        use_all_more_than_num_mentions: int,
-                                       topk: int):
+                                       topk: int,
+                                       filter_function: Callable = None):
     func = functools.partial(SlingExtractor.annotate_sentence,
-                             use_all_more_than_num_mentions=use_all_more_than_num_mentions, topk=topk)
+                             use_all_more_than_num_mentions=use_all_more_than_num_mentions,
+                             topk=topk,
+                             filter_function=filter_function)
     while True:
       args = input_queue.get()
       if type(args) is str and args == 'DONE':
         break
-      for example in func(**args):
+      for example in func(args):
         output_queue.put(example)
+
+  @staticmethod
+  def random_sentence_with_table_worker(input_queue: Queue,
+                                        output_queue: Queue,
+                                        num_entities: int = 2):
+    nlp = spacy.load('en_core_web_sm')
+    while True:
+      inp_examples = input_queue.get()
+      if type(inp_examples) is str and inp_examples == 'DONE':
+        break
+      for inp_example in inp_examples:
+        key, document, tables = inp_example['key'], inp_example['document'], inp_example['tables']
+        # get sentences
+        sentences = SlingExtractor.get_sentences(document)
+        if len(sentences) <= 0:
+          continue
+        for index, table in enumerate(tables):
+          sent = sentences[np.random.choice(len(sentences), 1)[0]]
+          doc = nlp(sent)
+          ents = [(ent.start_char, ent.end_char) for ent in doc.ents]
+          if len(ents) <= 0:
+            continue
+          ents = sorted([ents[i] for i in np.random.choice(len(ents), min(num_entities, len(ents)), replace=False)])
+          example = {
+            'uuid': f'random_{index}',
+            'table': table,
+            'context_before': [sent],
+            'context_before_mentions': [ents],
+            'context_after': []
+          }
+          output_queue.put(example)
 
   @staticmethod
   def get_sentences(doc: bytes) -> List[str]:
@@ -375,10 +408,8 @@ class SlingExtractor(object):
           break
         pbar.update(1)
         nm = len(example['context_before_mentions'][0])
-        if nm <= 0:
-          empty_count += 1
-          continue
-        non_empty_count += 1
+        empty_count += int(nm <= 0)
+        non_empty_count += int(nm > 0)
         sent_len_li.append(len(example['context_before'][0]))
         num_mentions_li.append(nm)
         fout.write(json.dumps(example) + '\n')
@@ -388,73 +419,52 @@ class SlingExtractor(object):
                 f'empty/non-empty {empty_count}/{non_empty_count}')
 
   def match_sentence_with_table(self,
-                                url2tables: Dict[str, List],
+                                key2tables: Dict[str, List],
                                 key_feild: str,
                                 from_split: int,  # inclusive
                                 to_split: int,  # exclusive
                                 output_file: str,
                                 use_all_more_than_num_mentions: int = 0,
                                 topk: int = 1,
+                                filter_function: Callable = None,
+                                use_random: bool = False,
                                 batch_size: int = 16,
                                 num_threads: int = 1,
                                 log_interval: int = 5000):
+    if use_random:
+      worker = self.random_sentence_with_table_worker
+    else:
+      worker = functools.partial(self.match_sentence_with_table_worker,
+                                 use_all_more_than_num_mentions=use_all_more_than_num_mentions,
+                                 topk=topk,
+                                 filter_function=filter_function)
 
-    input_queue = Queue()
-    output_queue = Queue()
-    processes = []
-
-    # start processes
-    for _ in range(num_threads):
-      p = Process(target=functools.partial(self.match_sentence_with_table_worker,
-                                           use_all_more_than_num_mentions=use_all_more_than_num_mentions,
-                                           topk=topk),
-                  args=(input_queue, output_queue))
-      p.daemon = True
-      p.start()
-      processes.append(p)
-    write_p = Process(target=functools.partial(self.mention_write_worker, log_interval=log_interval),
-                      args=(output_file, output_queue))
-    write_p.start()
+    mpw = MultiprocessWrapper(
+      num_threads=num_threads,
+      worker=worker,
+      writer=functools.partial(self.mention_write_worker, log_interval=log_interval),
+      output_file=output_file,
+      batch_size=batch_size)
 
     # read data
-    coverted_urls: Set[str] = set()
-    urls: List[str] = []
-    doc_raws: List[bytes] = []
-    tables_li: List[List[Dict]] = []
+    coverted_keys: Set[str] = set()
     for sp in range(from_split, to_split):
       corpus = sling.Corpus(str(self.root_dir / self.lang / f'documents-0000{sp}-of-00010.rec'))
       for n, (doc_id, doc_raw) in tqdm(enumerate(corpus.input), disable=True):
-        doc_id = doc_id.decode('utf-8')
         store = sling.Store(self_commons)
         doc_frame = store.parse(doc_raw)
         metadata = self.get_metadata(doc_frame)
-        url = metadata[key_feild]
-
-        if url not in url2tables:
+        key = metadata[key_feild]
+        if key not in key2tables:
           continue
-        if url in coverted_urls:
-          print(f'{url} shows multiple times')
-        coverted_urls.add(url)
+        if key in coverted_keys:
+          print(f'{key} shows multiple times')
+        coverted_keys.add(key)
+        mpw.add_example({'key': key, 'document': doc_raw, 'tables': key2tables[key]})
+    mpw.finish()
 
-        urls.append(url)
-        doc_raws.append(doc_raw)
-        tables_li.append(url2tables[url])
-
-        if len(urls) >= batch_size:
-          input_queue.put({'urls': urls, 'documents': doc_raws, 'tables_li': tables_li})
-          urls = []
-          doc_raws = []
-          tables_li = []
-
-    for _ in processes:
-      input_queue.put('DONE')
-    for p in processes:
-      p.join()
-    output_queue.put('DONE')
-    write_p.join()
-
-    print(f'#coverted urls {len(coverted_urls)}, #total urls {len(url2tables)}')
-    print(f'uncovered urls {list(set(url2tables.keys()) - coverted_urls)[:10]}')
+    print(f'#coverted keys {len(coverted_keys)}, #total keys {len(key2tables)}')
+    print(f'uncovered keys {list(set(key2tables.keys()) - coverted_keys)[:10]}')
 
   def match_sentence_with_sql(self,
                               pageid2sqlnls: Dict[str, List[Tuple[str, str, str]]],
@@ -722,12 +732,31 @@ if __name__ == '__main__':
   if args.task == 'url_as_key':
     prep_file, sling_root = args.inp
     out_file = args.out
+    filter_function = 'filter_function_min'
+    use_random = True
+    log_interval = 5000
+    batch_size = 16
 
+    def filter_function_max(sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]]):
+      # return the sentence with max #mentions (return nothing if it's zero)
+      top1 = sorted(sent_with_mentions, key=lambda x: -len(x[1]))[0]
+      return [top1] if len(top1[1]) > 0 else []
+
+    def filter_function_min(sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]]):
+      # return the sentence with min #mentions (execept those with zero mentions)
+      sorted_swms = sorted(sent_with_mentions, key=lambda x: len(x[1]))
+      for swm in sorted_swms:
+        if len(swm[1]) > 0:
+          return [swm]
+      return []
+
+    filter_function = eval(filter_function)
     url2tables = load_url2tables(prep_file)[0]
     se = SlingExtractor(sling_root)
     se.match_sentence_with_table(
       url2tables, key_feild='url', from_split=0, to_split=10, output_file=out_file,
-      use_all_more_than_num_mentions=0, topk=args.topk, batch_size=16, num_threads=args.threads, log_interval=5000)
+      use_all_more_than_num_mentions=0, topk=args.topk, filter_function=filter_function, use_random=use_random,
+      batch_size=batch_size, num_threads=args.threads, log_interval=log_interval)
 
   elif args.task == 'pageid_as_key':
     prep_file, sling_root = args.inp

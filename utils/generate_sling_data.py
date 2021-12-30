@@ -886,7 +886,7 @@ if __name__ == '__main__':
     with open(prep_file, 'r') as fin:
       for l in tqdm(fin):
         wtq_id = json.loads(l)[wtq_id_key]
-        pageid = wtq.tableid2pageid[wtq.wtqid2tableid[wtq_id]]
+        pageid = wtq.wtqid2pageid[wtq_id]
         if pageid in pageid2topic:
           topic = pageid2topic[pageid]
           if topic not in topic2file:
@@ -909,7 +909,7 @@ if __name__ == '__main__':
     with open(prep_file, 'r') as fin:
       for l in tqdm(fin):
         wtq_id = json.loads(l)['uuid']
-        pageid = wtq.tableid2pageid[wtq.wtqid2tableid[wtq_id]]
+        pageid = wtq.wtqid2pageid[wtq_id]
         if pageid in pageid2cates:
           cates = pageid2cates[pageid]
           if exclusive and len(cates) > 1:
@@ -954,7 +954,7 @@ if __name__ == '__main__':
           wtqid = l['metadata']['ntid']
           sql = l['metadata']['sql']
           nl = l['metadata']['nl']
-          pageid = wtq.tableid2pageid[wtq.wtqid2tableid[wtqid]]
+          pageid = wtq.wtqid2pageid[wtqid]
           pageid2sqlnls[pageid].append((wtqid, sql, nl))
     elif data == 'tapex':
       with open(prep_file, 'r') as fin:
@@ -963,7 +963,7 @@ if __name__ == '__main__':
           wtqid = l['wtq_id']
           sql = l['context_before'][0]
           nl = 'dummy'
-          pageid = wtq.tableid2pageid[wtq.wtqid2tableid[wtqid]]
+          pageid = wtq.wtqid2pageid[wtqid]
           pageid2sqlnls[pageid].append((wtqid, sql, nl))
 
     se = SlingExtractor(sling_root)

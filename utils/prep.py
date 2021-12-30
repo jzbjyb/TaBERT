@@ -288,7 +288,7 @@ def visualize_prep_file(prep_file: str, output_file: str, sample_ratio: float = 
       fout.write('<hr>\n')
 
 
-def replace_context(generation_file: str, prep_file: str, output_file: str, num_files: int, remove_dup: bool = False):
+def replace_context(generation_file: Path, prep_file: Path, output_file: Path, num_files: int, remove_dup: bool = False):
   idx2gens: Dict[int, List[str]] = {}
   num_gens_after_dedup: List[int] = []
   for i in range(num_files):
@@ -312,18 +312,22 @@ def replace_context(generation_file: str, prep_file: str, output_file: str, num_
   prev_len: List[int] = []
   new_len: List[int] = []
   ids: Set[str] = set()
-  with open(prep_file, 'r') as fin, open(output_file, 'w') as fout:
+  with open(prep_file, 'r') as fin, \
+    open(output_file, 'w') as fout, \
+    open(f'{output_file}.compare', 'w') as cfout:
     for idx, l in enumerate(tqdm(fin)):
       l = json.loads(l)
       if idx not in idx2gens:
         continue
-      prev_len.append(len(l['context_before'][0]))
+      prev = l['context_before'][0]
+      prev_len.append(len(prev))
       assert l['uuid'] not in ids
       ids.add(l['uuid'])
       for gen in idx2gens[idx]:
         l['context_before'] = [gen]
         new_len.append(len(gen))
         fout.write(json.dumps(l) + '\n')
+        cfout.write(f'{prev}\t{gen}\n')
 
   print(f'#len {np.mean(prev_len)} -> {np.mean(new_len)}')
 

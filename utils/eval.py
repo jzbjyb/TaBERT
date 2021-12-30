@@ -59,6 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_type', type=str, default='facebook/bart-base')
     parser.add_argument('--clean', action='store_true',
                         help='clean the output file and print (which can be followed by other evaluation scripts)')
+    parser.add_argument('--compare_em', action='store_true')
     args = parser.parse_args()
     if '_sql' in args.data:
         from rouge import Rouge
@@ -205,6 +206,11 @@ if __name__ == '__main__':
 
     if args.clean:
         exit(0)
+
+    if args.compare_em:
+        for emsa in ems_all:
+            print('\t'.join(map(lambda x: str(int(x)), emsa)))
+        exit()
 
     print(np.mean(ems))  # the fine line of output is used for automatic analysis
     print(f'Exact match #1: [Overall] {np.mean(ems)} [TAPAS] {np.mean(tapas_ems)}, avg #cell {np.mean(num_cells)}')

@@ -17,6 +17,8 @@ class WikiTQ(BasicDataset):
         self.misc_file = root_dir / 'misc' / 'table-metadata.tsv'
         self.wtqid2tableid = self.get_wtqid2tableid()
         self.tableid2pageid = self.get_tableid2pageid(self.misc_file)
+        self.wtqid2pageid = {wtqid: self.tableid2pageid[tableid] for wtqid, tableid in self.wtqid2tableid.items()
+                             if tableid in self.tableid2pageid}
         self.pageid2wtqids = self.get_pageid2wtqids()
 
     def get_table(self, table_id: str):

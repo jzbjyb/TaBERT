@@ -889,3 +889,179 @@ jobs:
   command:
   - ./finetune_predict.sh cate_efp_16 large full
     /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_sqlandnl_num512_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa_tapexbaseinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa_tapexbaseinit seq2seq 6 5
+    '"/mnt/root/TaBERT/data/runs/tapex_base/pytorch_model.bin"'
+    --gradient-accumulation-steps 12 --base-model-name /mnt/root/TaBERT/data/runs/bart_base
+  - ./finetune_predict.sh default base full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa_tapexbaseinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num1024_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num512_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num256_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num32_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50
+
+- name: wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa_tapexlargeinit_and_finetune
+  sku: G8
+  command:
+  - ./run_vanilla.sh 8
+    /mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa_tapexlargeinit seq2seq 2 5
+    '"/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin"'
+    --gradient-accumulation-steps 36 --base-model-name facebook/bart-large
+  - ./finetune_predict.sh default large full
+    /mnt/root/TaBERT/data/runs/wholetable_tapex_05m_wtqnl_denormalized_num16_bart_qa_tapexlargeinit/pytorch_model_epoch04.bin 50

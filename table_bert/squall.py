@@ -11,19 +11,22 @@ class Squall(BasicDataset):
         self.ntid2example = self.load(json_file, wikitq=wikitq)
 
     @staticmethod
-    def load(filepath: Path, wikitq: WikiTQ = None) -> Dict[str, Dict]:
+    def load(filepath: Path, wikitq: WikiTQ = None, fromw: str = ' from w') -> Dict[str, Dict]:
       ntid2example: Dict[str, Dict] = {}
-      oob = 0
+      oob = count_fromw = 0
       with open(filepath, 'r') as fin:
         data = json.load(fin)
         for example in data:
           ntid = example['nt']
+          # use either WikiTQ or the preprocessed columns in SQUALL
           if wikitq:
             columns = wikitq.get_table(wikitq.wtqid2tableid[ntid])[0]
+          else:
+            columns = [c[0] for c in example['columns']]
           nl: str = ' '.join(example['nl'])
           sql = []
           for t in example['sql']:
-            if t[0] == 'Column' and wikitq:
+            if t[0] == 'Column':  # match the column index to the corresponding name
               ci = int(t[1].split('_', 1)[0][1:]) - 1
               if ci < len(columns):
                 sql.append(columns[ci])
@@ -33,11 +36,16 @@ class Squall(BasicDataset):
             else:
               sql.append(t[1])
           sql = ' '.join(sql)
+          has_fromw = sql.find(fromw + ' ') >= 0 or sql.endswith(fromw)
+          count_fromw += int(has_fromw)
+          sql = sql.replace(fromw + ' ', ' ')
+          if sql.endswith(fromw):
+            sql = sql[:-len(fromw)]
           ntid2example[ntid] = {
             'nl': nl,
             'sql': sql
           }
-      print(f'column out of bound: {oob}')
+      print(f'total: {len(ntid2example)}; column out of bound: {oob}; #examples with "{fromw}": {count_fromw}')
       return ntid2example
 
     def gen_sql2nl_data(self, output_path: Path, restricted_ntids: Set[str] = None):

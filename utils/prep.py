@@ -321,7 +321,6 @@ def replace_context(generation_file: Path, prep_file: Path, output_file: Path, n
         continue
       prev = l['context_before'][0]
       prev_len.append(len(prev))
-      assert l['uuid'] not in ids
       ids.add(l['uuid'])
       for gen in idx2gens[idx]:
         l['context_before'] = [gen]

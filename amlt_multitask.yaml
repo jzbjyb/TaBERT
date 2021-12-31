@@ -1,0 +1,87 @@
+description: multitask
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
+target:
+  service: aml
+  name: V10032G
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num128_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_data0_bart_samepage_hardmatch_max_bartmask_salientmask:wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num128_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num128_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num128_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_sqlandnl_num128_large_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_05m_wtqnl_denormalized_num128_bart_qa:wholetable_tapex_05m_bart_qa
+    wholetable_tapex_sqlandnl_num128_large
+    tapex_large/pytorch_model.bin
+    2 36 5
+- name: wholetable_tapex_sqlandnl_num128_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_sqlandnl_num128_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num64_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_data0_bart_samepage_hardmatch_max_bartmask_salientmask:wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num64_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num64_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepagehardmatchmax_tapex_sqlandnl_num64_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_sqlandnl_num64_large_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_05m_wtqnl_denormalized_num64_bart_qa:wholetable_tapex_05m_bart_qa
+    wholetable_tapex_sqlandnl_num64_large
+    tapex_large/pytorch_model.bin
+    2 36 5
+- name: wholetable_tapex_sqlandnl_num64_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_sqlandnl_num64_large/pytorch_model_epoch04.bin

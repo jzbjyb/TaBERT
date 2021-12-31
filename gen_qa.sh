@@ -18,11 +18,14 @@ source env_initialize.sh
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl.num1024_preprocessed.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num1024_bart_qa
 
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.preprocessed.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_bart_qa
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_bart_qa
 
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_bm25_top1.num128_preprocessed_with_wtqid.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_bm25_top1_num128_bart_qa
+
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_bm25_top1.num128_preprocessed.jsonl.wtqid
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_bm25_top1_num128_bart_qa
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0

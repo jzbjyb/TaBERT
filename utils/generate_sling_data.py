@@ -367,20 +367,13 @@ class SlingExtractor(object):
         time.sleep(1)  # flush the index to avoid bug
 
         # search
-        for id, sql, nl in example['sqlnls']:
+        for id, sql, nl, raw_example in example['sqlnls']:
           ret_sents = [doc['sent'] for doc, score in es.get_topk(sql, field='sent', topk=topk)]
           sqlbm25 = '{} {}'.format(' '.join(ret_sents), sql)
-          td = {
-            'uuid': f'sqlbm25_{index_name}_{id}',
-            'metadata': {
-              'sql': sqlbm25,
-              'nl': nl,
-            },
-            'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
-            'context_before': [sqlbm25],
-            'context_after': []
-          }
-          output_queue.put(td)
+          raw_example['uuid'] = f'sqlbm25_{index_name}_{id}'
+          raw_example['metadata'] = {'sql': sqlbm25, 'nl': nl}
+          raw_example['context_before'] = [sqlbm25]
+          output_queue.put(raw_example)
 
         # delete index
         es.delete_index()
@@ -467,7 +460,7 @@ class SlingExtractor(object):
     print(f'uncovered keys {list(set(key2tables.keys()) - coverted_keys)[:10]}')
 
   def match_sentence_with_sql(self,
-                              pageid2sqlnls: Dict[str, List[Tuple[str, str, str]]],
+                              pageid2sqlnls: Dict[str, List[Tuple[str, str, str, Dict]]],
                               from_split: int,  # inclusive
                               to_split: int,  # exclusive
                               output_file: str,
@@ -495,22 +488,18 @@ class SlingExtractor(object):
         found.add(pageid)
         mpw.add_example({'pageid': pageid, 'doc': doc_raw, 'sqlnls': pageid2sqlnls[pageid]})
 
+    # output examples where pageids are not found
+    unfound = 0
     for pageid, sqlnls in pageid2sqlnls.items():
       if pageid in found:
         continue
-      for id, sql, nl in sqlnls:
-        td = {
-          'uuid': f'sqlbm25_{pageid}_{id}',
-          'metadata': {
-            'sql': sql,
-            'nl': nl,
-          },
-          'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
-          'context_before': [sql],
-          'context_after': []
-        }
-        mpw.output_queue.put(td)
-
+      unfound += 1
+      for id, sql, nl, raw_example in sqlnls:
+        raw_example['uuid'] = f'sqlbm25_{pageid}_{id}'
+        raw_example['metadata'] = {'sql': sql, 'nl': nl}
+        raw_example['context_before'] = [sql]
+        mpw.output_queue.put(raw_example)
+    print(f'unfound #pageids {unfound}')
     mpw.finish()
 
   def build_category_hierarchy(self, out_file: str):
@@ -945,7 +934,7 @@ if __name__ == '__main__':
     out_path = args.out
 
     wtq = WikiTQ(wtq_path)
-    pageid2sqlnls: Dict[str, List[Tuple[str, str, str]]] = defaultdict(list)
+    pageid2sqlnls: Dict[str, List[Tuple[str, str, str, Dict]]] = defaultdict(list)
 
     if data == 'wikitq':
       with open(prep_file, 'r') as fin:
@@ -955,7 +944,7 @@ if __name__ == '__main__':
           sql = l['metadata']['sql']
           nl = l['metadata']['nl']
           pageid = wtq.wtqid2pageid[wtqid]
-          pageid2sqlnls[pageid].append((wtqid, sql, nl))
+          pageid2sqlnls[pageid].append((wtqid, sql, nl, l))
     elif data == 'tapex':
       with open(prep_file, 'r') as fin:
         for l in fin:
@@ -964,7 +953,7 @@ if __name__ == '__main__':
           sql = l['context_before'][0]
           nl = 'dummy'
           pageid = wtq.wtqid2pageid[wtqid]
-          pageid2sqlnls[pageid].append((wtqid, sql, nl))
+          pageid2sqlnls[pageid].append((wtqid, sql, nl, l))
 
     se = SlingExtractor(sling_root)
     se.match_sentence_with_sql(

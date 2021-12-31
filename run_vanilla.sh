@@ -26,29 +26,33 @@ args="${@:8}"
 
 # use different lanucher for single/multi-node
 if (( ${num_gpu} == 1 )); then
-    echo 'single-GPU'
-    prefix=""
+  echo 'single-GPU'
+  prefix=""
 elif (( ${num_gpu} <= ${MAX_NUM_GPU_PER_NODE} )); then
-    echo 'single-node'
-    export NGPU=${num_gpu}
-    prefix="-m torch.distributed.launch --nproc_per_node=${num_gpu}"
+  echo 'single-node'
+  export NGPU=${num_gpu}
+  prefix="-m torch.distributed.launch --nproc_per_node=${num_gpu}"
 else
-    echo 'multi-node'
-    prefix=""
+  echo 'multi-node'
+  prefix=""
+fi
+
+if [[ "$load" != "null" ]]; then  # add quote for json-based config
+  load='"'${load}'"'
 fi
 
 python ${prefix} train.py \
-    --task vanilla \
-    --data-dir ${input_dir} \
-    --output-dir ${output_dir} \
-    --table-bert-extra-config '{"objective_function": "'${loss}'", "load_model_from": '${load}'}' \
-    --train-batch-size ${batchsize} \
-    --learning-rate 2e-5 \
-    --max-epoch ${epochs} \
-    --adam-eps 1e-08 \
-    --weight-decay 0.0 \
-    --fp16 \
-    --clip-norm 1.0 \
-    --empty-cache-freq 128 \
-    --name ${name} \
-    ${args}
+  --task vanilla \
+  --data-dir ${input_dir} \
+  --output-dir ${output_dir} \
+  --table-bert-extra-config '{"objective_function": "'${loss}'", "load_model_from": '${load}'}' \
+  --train-batch-size ${batchsize} \
+  --learning-rate 2e-5 \
+  --max-epoch ${epochs} \
+  --adam-eps 1e-08 \
+  --weight-decay 0.0 \
+  --fp16 \
+  --clip-norm 1.0 \
+  --empty-cache-freq 128 \
+  --name ${name} \
+  ${args}

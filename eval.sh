@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+model_root=/mnt/root/TaBERT/data/runs
+
 task=wtqqa
 pred=$1
 

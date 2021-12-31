@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source initialize.sh
+source env_initialize.sh
 
 # -- Spider data --
 #input_dir=data/spider/train/sqlnl.json
@@ -9,6 +9,7 @@ source initialize.sh
 #input_dir=data/spider/train/sqlnl.json.2048
 #output_dir=/mnt/root/TaBERT/data/train_data/spider_sql2nl_num2048
 
+# -- SQUALL data --
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl
 
@@ -21,14 +22,17 @@ source initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.1024
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num1024
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.1024
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num1024
+
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.64.bm25_top1
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_num64
 
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl
 
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl.bm25_top1
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl.bm25_top1.wtqid
 #output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl_bm25_top1
 
 # --no_shuffle is needed for dev/test

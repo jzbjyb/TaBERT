@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+model_root=/mnt/root/TaBERT/data/runs
+
 # --- arguments ---
 pipeline=skip
 # all: (default) run all
@@ -44,8 +46,9 @@ else
   exit 1
 fi
 
-model_ckpt=$4  # use for initialization if it follows the pattern "*.bin"; otherwise use it as output directory
-epoch=$5
+epoch=$4
+model_ckpt=$5  # use for initialization if it follows the pattern "*.bin"; otherwise use it as output directory
+model_ckpt=${model_root}/${model_ckpt}
 args="${@:6}"  # additional args
 
 # predefined collections of tasks
@@ -459,7 +462,7 @@ for task in "${tasks[@]}"; do
     output="$(dirname "${model_ckpt}")"
     prediction_file=${model_ckpt}.${task}.tsv
     ./run_vanilla.sh \
-      1 ${data} ${output} seq2seq ${batch_size} 1 '"'${model_ckpt}'"' \
+      1 ${data} ${output} seq2seq ${batch_size} 1 ${model_ckpt} \
       --base-model-name ${base_model_name} \
       --only_test --mode ${mode} --output_file ${prediction_file}
     exit
@@ -476,7 +479,7 @@ for task in "${tasks[@]}"; do
       # finetune
       if [[ ${model_ckpt} == *.bin ]]; then   # a real checkpoint
         output="$(dirname "${model_ckpt}")"_${task}_ep${epoch}
-        ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} '"'${model_ckpt}'"' \
+        ./run_vanilla.sh ${ngpu} ${data} ${output} seq2seq ${batch_size} ${epoch} ${model_ckpt} \
           --gradient-accumulation-steps ${grad_acc} --base-model-name ${base_model_name} \
           --mode ${mode} ${args}
       else
@@ -516,7 +519,7 @@ for task in "${tasks[@]}"; do
         fi
 
         CUDA_VISIBLE_DEVICES="$((remain - 1))" ./run_vanilla.sh \
-          1 ${data} ${output} seq2seq ${batch_size} 1 '"'${inter_ckpt}'"' \
+          1 ${data} ${output} seq2seq ${batch_size} 1 ${inter_ckpt} \
           --base-model-name ${base_model_name} \
           --only_test --mode ${mode} --output_file ${prediction_file} &
         if [[ "$isfirst" == "true" ]]; then

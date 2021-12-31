@@ -36,19 +36,18 @@ class ESWrapper():
             size=topk)['hits']['hits']
         return [(doc['_source'], doc['_score']) for doc in results]
 
-    def build_index(self, doc_iter: Iterator, shards: int = 1, replicas: int = 1):
+    def build_index(self, doc_iter: Iterator, shards: int = 1, replicas: int = 1, verbose: bool = False):
         request_body = {
             'settings': {
                 'number_of_shards': shards,
                 'number_of_replicas': replicas
             }
         }
-        print('delete index')
         self.es.indices.delete(index=self.index_name, ignore=[400, 404])
-        print('create index')
-        print(self.es.indices.create(index=self.index_name, body=request_body, ignore=400))
-        print('add docs')
-        print(bulk(self.es, doc_iter))
+        self.es.indices.create(index=self.index_name, body=request_body, ignore=400)
+        e = bulk(self.es, doc_iter)
+        if verbose:
+            print(e)
 
     def delete_index(self):
         self.es.indices.delete(index=self.index_name, ignore=[400, 404])

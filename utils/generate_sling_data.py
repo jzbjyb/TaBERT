@@ -20,6 +20,7 @@ from table_bert.dataset_utils import BasicDataset
 from table_bert.wikidata import topic2categories, get_cateid2name, WikipediaCategory
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.retrieval import ESWrapper
+from table_bert.squall import Squall
 
 
 def get_commons_docschema():
@@ -346,7 +347,8 @@ class SlingExtractor(object):
   @staticmethod
   def match_sentence_with_sql_worker(input_queue: Queue,
                                      output_queue: Queue,
-                                     topk: int):
+                                     topk: int,
+                                     remove_keyword: bool = False):
     while True:
       examples = input_queue.get()
       if type(examples) is str and examples == 'DONE':
@@ -368,7 +370,13 @@ class SlingExtractor(object):
 
         # search
         for id, sql, nl, raw_example in example['sqlnls']:
-          ret_sents = [doc['sent'] for doc, score in es.get_topk(sql, field='sent', topk=topk)]
+          sql_query = sql
+          if remove_keyword:
+            sql_wo_kw: List[str] = sql.strip().lower().split()  # split by whitespace
+            sql_wo_kw = [w for w in sql_wo_kw if w not in Squall.KEYWORDS]
+            sql_wo_kw: str = ' '.join(sql_wo_kw)
+            sql_query = sql_wo_kw
+          ret_sents = [doc['sent'] for doc, score in es.get_topk(sql_query, field='sent', topk=topk)]
           sqlbm25 = '{} {}'.format(' '.join(ret_sents), sql)
           raw_example['uuid'] = f'sqlbm25_{index_name}_{id}'
           raw_example['metadata'] = {'sql': sqlbm25, 'nl': nl}
@@ -465,12 +473,13 @@ class SlingExtractor(object):
                               to_split: int,  # exclusive
                               output_file: str,
                               topk: int = 1,
+                              remove_keyword: bool = False,
                               batch_size: int = 16,
                               num_threads: int = 1):
 
     mpw = MultiprocessWrapper(
       num_threads=num_threads,
-      worker=functools.partial(self.match_sentence_with_sql_worker, topk=topk),
+      worker=functools.partial(self.match_sentence_with_sql_worker, topk=topk, remove_keyword=remove_keyword),
       writer=self.write_worker,
       output_file=output_file,
       batch_size=batch_size)
@@ -929,7 +938,9 @@ if __name__ == '__main__':
     wikitq_overlap(split_dir / 'test.src', split_dir / 'train.src', split_by, topk=100, proportional=False, method='overlap')
 
   elif args.task == 'sql2nl_with_retrieval':
-    data = 'wikitq'
+    topk = 1
+    remove_keyword = True
+    data = 'tapex'
     wtq_path, sling_root, prep_file = args.inp
     out_path = args.out
 
@@ -957,4 +968,4 @@ if __name__ == '__main__':
 
     se = SlingExtractor(sling_root)
     se.match_sentence_with_sql(
-      pageid2sqlnls, 0, 10, out_path, topk=1, batch_size=1, num_threads=8)
+      pageid2sqlnls, 0, 10, out_path, topk=topk, remove_keyword=remove_keyword, batch_size=1, num_threads=8)

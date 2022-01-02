@@ -523,10 +523,14 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                                                       additional_rows=additional_rows, fake=True))
                 if 'bidirection' in seq2seq_format:
                     instances.extend(self.create_bidirection_instances(example, context, example.header, additional_rows=additional_rows))
-                if 'sql2nl' in seq2seq_format:
+
+                if 'sqltable2nl' in seq2seq_format:
+                    instances.extend(self.create_sqltable2nl_instances(example.metadata, example.header, additional_rows=additional_rows))
+                elif 'sql2nl' in seq2seq_format:
                     instances.extend(self.create_sql2nl_instances(example.metadata))
                 elif 'sql' in seq2seq_format:
                     instances.extend(self.create_sql_instances(context, example.header, example.sql))
+
                 if 'cell-filling-mask' in seq2seq_format:
                     instance = self.create_cf_mask_instance(context, example.header)
                     instance['target_token_ids'] = instance['token_ids']
@@ -551,7 +555,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                     instances.extend(self.create_table_row_instances(context, example, additional_rows))
 
             stop = False
-            for fm in {'mlm', 'qa', 'sql', 'sql2nl', 'cell-filling', 'schema-augmentation', 'clean-text', 'bidirection'}:
+            for fm in {'mlm', 'qa', 'sql', 'sql2nl', 'sqltable2nl', 'cell-filling', 'schema-augmentation', 'clean-text', 'bidirection'}:
                 # for these formats, do not iterative over context
                 if fm in seq2seq_format:
                     stop = True
@@ -782,7 +786,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
 
     def create_qa_tapex_instances(self, context, header: List[Column], answer: str, additional_rows: List[List[Any]] = []):
         mtl = TableBertConfig.MAX_TARGET_LEN
-        table = Table('fake_table', header)  # the dummy header is for the first index element
+        table = Table('fake_table', header)
         instance = self.get_input(context, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
@@ -813,7 +817,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         else:
             metastr: List[str] = []
         mtl = TableBertConfig.MAX_TARGET_LEN
-        table = Table('fake_table', header)  # the dummy header is for the first index element
+        table = Table('fake_table', header)
         instance = self.get_input(metastr, table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
@@ -843,7 +847,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         mtl = TableBertConfig.MAX_TARGET_LEN
         instances = []
         if fake:
-            table = Table('fake_table', header)  # the dummy header is for the first index element
+            table = Table('fake_table', header)
             instance = self.get_input(context, table, additional_rows)
             target = [self.config.cls_token] + context[:mtl - 2] + [self.config.sep_token]
             tokens = instance['tokens']
@@ -864,7 +868,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
         for sa in metadata['sentence_annotations']:
             noisy_text: List[str] = self.tokenizer.tokenize(sa['original_sentence'])
             clean_text: List[str] = self.tokenizer.tokenize(sa['final_sentence'])
-            table = Table('fake_table', header)  # the dummy header is for the first index element
+            table = Table('fake_table', header)
             instance = self.get_input(noisy_text, table, additional_rows)
             target = [self.config.cls_token] + clean_text[:mtl - 2] + [self.config.sep_token]
             tokens = instance['tokens']
@@ -890,7 +894,7 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
                                      additional_rows: List[List[Any]] = []):
         mtl = TableBertConfig.MAX_TARGET_LEN
         # table (with highlights) -> text
-        table = Table('fake_table', header)  # the dummy header is for the first index element
+        table = Table('fake_table', header)
         instance = self.get_input([], table, additional_rows)
         tokens = instance['tokens']
         seq_a_len = instance['segment_a_length']
@@ -973,6 +977,28 @@ class VanillaTableBertInputFormatter(TableBertBertInputFormatter):
             'target_tokens': target,
             'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
             'segment_a_length': len(source),
+            'masked_lm_positions': [],
+            'masked_lm_labels': [],
+            'masked_lm_label_ids': [],
+            'info': None
+        }
+        return [instance]
+
+    def create_sqltable2nl_instances(self, metadata: Dict, header: List[Column], additional_rows: List[List[Any]] = []):
+        mtl = TableBertConfig.MAX_TARGET_LEN
+        sql: List[str] = self.tokenizer.tokenize(metadata['sql'].strip())
+        nl: List[str] = self.tokenizer.tokenize(metadata['nl'].strip())
+        table = Table('fake_table', header)
+        instance = self.get_input(sql, table, additional_rows)
+        tokens = instance['tokens']
+        seq_a_len = instance['segment_a_length']
+        target = [self.config.cls_token] + nl[:mtl - 2] + [self.config.sep_token]
+        instance = {
+            'tokens': tokens,
+            'token_ids': self.tokenizer.convert_tokens_to_ids(tokens),
+            'target_tokens': target,
+            'target_token_ids': self.tokenizer.convert_tokens_to_ids(target),
+            'segment_a_length': seq_a_len,
             'masked_lm_positions': [],
             'masked_lm_labels': [],
             'masked_lm_label_ids': [],

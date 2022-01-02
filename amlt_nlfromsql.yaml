@@ -1,0 +1,111 @@
+description: nl converted from sql
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
+target:
+  service: aml
+  name: V10032G
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wholetable_tapex_wtqnl_withtable_denormalized_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num1024_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num1024_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num1024_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num1024_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num512_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num512_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num512_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num512_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num256_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num256_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num256_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num256_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num128_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num128_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num128_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num128_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num64_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num64_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num64_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num64_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num32_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num32_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num32_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num32_qa_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_withtable_denormalized_num16_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_withtable_denormalized_num16_qa
+    wholetable_tapex_wtqnl_withtable_denormalized_num16_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_withtable_denormalized_num16_qa_tapexlarge/pytorch_model_epoch04.bin

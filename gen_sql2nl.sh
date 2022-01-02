@@ -13,9 +13,6 @@ source env_initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl
 
-#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src.128.bm25_top1
-#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_bm25_top1_num128
-
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl/train.src.1024
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_num1024
 
@@ -25,8 +22,11 @@ source env_initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.1024
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num1024
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.64.bm25_top1
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_num64
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.128.bm25_top1
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_num128
+
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.bm25_top1_wokeyword
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_wokeyword_num128
 
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl
@@ -34,6 +34,9 @@ output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_nu
 
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl.bm25_top1.wtqid
 #output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl_bm25_top1
+
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl.bm25_top1_wokeyword.wtqid
+#output_dir=/mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl_bm25_top1_wokeyword
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0

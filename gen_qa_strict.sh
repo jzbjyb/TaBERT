@@ -3,29 +3,11 @@
 source env_initialize.sh
 
 # -- TAPEX data --
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_bart_qa
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_withtable_denormalized.preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_withtable_denormalized_qa
 
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_bart_qa
-
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.num512_preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa
-
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.nl.num512_preprocessed.with_wtqid.jsonl.topic/topic.sports
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_nl_num512_bart_qa_sports
-
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl.num1024_preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_num1024_bart_qa
-
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_denormalized_bart_qa
-
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_bm25_top1.num128_preprocessed.jsonl.wtqid
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_bm25_top1_num128_bart_qa
-
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_bm25_top1_wokeyword.num128_preprocessed.jsonl.wtqid
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_05m_wtqnl_bm25_top1_wokeyword_num128_bart_qa
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_withtable_denormalized.num16_preprocessed.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_withtable_denormalized_num16_qa
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -35,6 +17,7 @@ max_target_len=1024
 max_context_len=128
 max_num_mention_per_example=3
 column_delimiter='|'
+column_delimiter_first=':'
 row_delimiter='none'
 mkdir -p ${output_dir}
 worldsize=10
@@ -59,6 +42,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --max_predictions_per_seq 200 \
     --cell_input_template 'value' \
     --column_delimiter ${column_delimiter} \
+    --column_delimiter_first ${column_delimiter_first} \
     --row_delimiter ${row_delimiter} \
     --world_size ${worldsize} \
     --additional_row_count ${additional_row_count} \
@@ -71,6 +55,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --not_skip_empty_column_name \
     --seq2seq_format qa_tapex \
     --table_linearization tapex \
+    --skip_sep_in_middle \
     --dev_num 0 \
     --global_rank $i &
 done

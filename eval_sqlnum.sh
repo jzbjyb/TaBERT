@@ -15,10 +15,10 @@ echo ''
 # content
 for i in "${!nums[@]}"; do
   wtq_num=${nums[i]}
+  echo -en ${wtq_num} '\t'
   if [[ ${wtq_num} != "" ]]; then
     wtq_num=_${wtq_num}
   fi
-  echo -en ${wtq_num} '\t'
   for j in "${!nums[@]}"; do
     sql_num=${nums[j]}
     if [[ ${sql_num} != "" ]]; then

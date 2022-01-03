@@ -25,8 +25,12 @@ source env_initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.128.bm25_top1
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_num128
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.bm25_top1_wokeyword
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_wokeyword_num128
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.bm25_top1_wokeyword
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_bm25_top1_wokeyword_num128
+
+# -- SQUALL data (with self training) --
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.beamsearchnl.multitask_filtered.top64
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64
 
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl

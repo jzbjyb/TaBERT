@@ -1,0 +1,280 @@
+description: sql2nl with self-training
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
+target:
+  service: aml
+  name: V10032G
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top2048
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top2048:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top2048_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top2048_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top2048_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top2048_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top1024
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top1024:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top1024_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top1024_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top1024_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top1024_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top512
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top512:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top512_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top512_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top512_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top512_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top256
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top256:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top256_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top256_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top256_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top256_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top128
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top128:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top128_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top128_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top128_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top128_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_top64_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top2048
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top2048:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top2048_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top2048_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top2048_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top2048_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top128
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top128:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top128_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top128_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top128_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top128_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top64
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top64:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top64_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top64_mt
+    wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top64_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_beamsearchnl_tapex_filtered_top64_mt/nl.txt
+
+
+- name: wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top2048
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top2048:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top2048_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top2048_mt
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top2048_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top2048_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top128
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top128:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top128_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top128_mt
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top128_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top128_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top64
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top64:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top64_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top64_mt
+    wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top64_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_samplenl_multitask_filtered_top64_mt/nl.txt
+
+
+- name: wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top2048
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top2048:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top2048_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top2048_mt
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top2048_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top2048_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top128
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top128:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top128_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top128_mt
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top128_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top128_mt/nl.txt
+
+- name: wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top64
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top64:wtq_sql2nl_denormalized_num128
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top64_mt
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top64_mt
+    wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top64_mt/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num128_samplenl_tapex_filtered_top64_mt/nl.txt

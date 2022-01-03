@@ -288,13 +288,20 @@ def visualize_prep_file(prep_file: str, output_file: str, sample_ratio: float = 
       fout.write('<hr>\n')
 
 
-def replace_context(generation_file: Path, prep_file: Path, output_file: Path, num_files: int, remove_dup: bool = False):
+def replace_context(generation_file: Path,
+                    prep_file: Path,
+                    full_prep_file: Path,
+                    output_file: Path,
+                    num_files: int,
+                    remove_dup: bool = False):
   idx2gens: Dict[int, List[str]] = {}
+  num_gens_before_dedup: List[int] = []
   num_gens_after_dedup: List[int] = []
+  empty_count = 0
   for i in range(num_files):
     with open(f'{generation_file}.{i}', 'r') as fin:
       for l in tqdm(fin):
-        l = l.strip().split('\t')
+        l = l.rstrip('\n').split('\t')
         idx = int(l[-1])
         gens = l[:-3]
         idx2gens[idx] = []
@@ -303,11 +310,24 @@ def replace_context(generation_file: Path, prep_file: Path, output_file: Path, n
           for rmt in ['<pad>', '<s>', '</s>']:
             gen = gen.replace(rmt, '')
           gen = gen.strip()
+          if len(gen) <= 0:
+            empty_count += 1
+            continue
           if not remove_dup or gen not in used:
             used.add(gen)
             idx2gens[idx].append(gen)
+        num_gens_before_dedup.append(len(gens))
         num_gens_after_dedup.append(len(used))
-  print(f'#sentences after dedup {np.mean(num_gens_after_dedup)}')
+  print(f'#sentences before/after dedup {np.mean(num_gens_before_dedup)}/{np.mean(num_gens_after_dedup)} '
+        f'with {empty_count} empty generations')
+
+  # load some other stuff from the full prep file
+  wtqid2answer: Dict[str, str] = {}
+  if full_prep_file:
+    with open(full_prep_file, 'r') as fin:
+      for idx, l in enumerate(tqdm(fin)):
+        l = json.loads(l)
+        wtqid2answer[l['uuid']] = l['answers']
 
   prev_len: List[int] = []
   new_len: List[int] = []
@@ -319,6 +339,8 @@ def replace_context(generation_file: Path, prep_file: Path, output_file: Path, n
       l = json.loads(l)
       if idx not in idx2gens:
         continue
+      if 'metadata' in l and 'wtqid' in l['metadata'] and l['metadata']['wtqid'] in wtqid2answer:  # add answer
+        l['answers'] = wtqid2answer[l['metadata']['wtqid']]
       prev = l['context_before'][0]
       prev_len.append(len(prev))
       ids.add(l['uuid'])
@@ -329,6 +351,59 @@ def replace_context(generation_file: Path, prep_file: Path, output_file: Path, n
         cfout.write(f'{prev}\t{gen}\n')
 
   print(f'#len {np.mean(prev_len)} -> {np.mean(new_len)}')
+
+
+def select_by_loss(loss_file: Path,
+                   prep_file: Path,
+                   output_file: Path,
+                   num_files: int,
+                   topks: List[int],
+                   visualize_range: float = -100,
+                   skips: Set[str] = None,
+                   used_for_sql2nl: bool = False):
+  idx2lp: Dict[int, float] = {}
+  for i in range(num_files):
+    with open(f'{loss_file}.{i}', 'r') as fin:
+      for l in tqdm(fin):
+        l = l.rstrip('\n').split('\t')
+        idx, loss = int(l[1]), float(l[0])
+        idx2lp[idx] = -loss
+
+  # aggregate based on wtq id
+  skip_count = 0
+  wtqid2examples: Dict[str, List[Tuple[Dict, float]]] = defaultdict(list)
+  with open(prep_file, 'r') as fin:
+    for idx, l in enumerate(tqdm(fin)):
+      l = json.loads(l)
+      wtqid = l['metadata']['wtqid']
+      if skips and wtqid in skips:  # skip examples with real NL
+        skip_count += 1
+        continue
+      wtqid2examples[wtqid].append((l, idx2lp[idx]))
+  print(f'#skip {skip_count}')
+
+  # only use the sampled nl with max lp
+  wtqid2example: Dict[str, Tuple[Dict, float]] = {}
+  for wtqid, examples in wtqid2examples.items():
+    maxind = np.argmax([lp for _, lp in examples])
+    example = examples[maxind]
+    if used_for_sql2nl:
+      example[0]['metadata']['nl'] = example[0]['context_before'][0]
+    wtqid2example[wtqid] = example
+
+  # visualize
+  lps = [lp for _, lp in wtqid2example.values()]
+  print(f'avg lp {np.mean(lps)}')
+  plt.hist(lps, bins=100, weights=np.ones(len(lps)) / len(lps))
+  plt.savefig('test.png')
+
+  for topk in topks:
+    # get topk
+    _wtqid2example: List[Tuple[str, Tuple[Dict, float]]] = sorted(wtqid2example.items(), key=lambda x: -x[1][1])[:topk]
+    with open(f'{output_file}.top{topk}', 'w') as fout:
+      for wtqid, (example, lp) in _wtqid2example:
+        fout.write(json.dumps(example) + '\n')
+    print(f'topk: {topk}: avg lp {np.mean([lp for _, (_, lp) in _wtqid2example])}')
 
 
 def process_bidirection(bi_file: str, prep_file: str, output_file: str, num_files: int):
@@ -540,7 +615,7 @@ if __name__ == '__main__':
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
     'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
-    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table'])
+    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table', 'select_by_loss'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -577,10 +652,13 @@ if __name__ == '__main__':
     visualize_prep_file(prep_file, output_file, sample_ratio=0.01)
 
   elif args.task == 'replace_context':
-    generation_file, prep_file = args.inp
+    generation_file, prep_file = args.inp[:2]
+    full_prep_file = args.inp[2] if len(args.inp) > 2 else None
     output_file = args.out
     num_gpu = 8
-    replace_context(generation_file, prep_file, output_file, num_files=num_gpu, remove_dup=False)
+    remove_dup = True
+    replace_context(generation_file, prep_file, full_prep_file=full_prep_file, output_file=output_file,
+                    num_files=num_gpu, remove_dup=remove_dup)
 
   elif args.task == 'process_bidirection':
     bi_file, prep_file = args.inp
@@ -611,3 +689,13 @@ if __name__ == '__main__':
     prep_file = args.inp[0]
     out_file = args.out
     random_pair_context_with_table(prep_file, out_file)
+
+  elif args.task == 'select_by_loss':
+    loss_file, prep_file = args.inp
+    # TODO: make sure this is the file used for sampling/beam search
+    to_skip_file = '/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.128'
+    output_file = args.out
+    num_gpu = 8
+    topks = [64, 128, 256, 512, 1024, 2048]
+    skips = set(json.loads(l)['uuid'] for l in open(to_skip_file, 'r').readlines())
+    select_by_loss(loss_file, prep_file, output_file, num_files=num_gpu, topks=topks, skips=skips, used_for_sql2nl=True)

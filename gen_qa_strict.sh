@@ -9,6 +9,10 @@ source env_initialize.sh
 input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_withtable_denormalized.num16_preprocessed.jsonl
 output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_withtable_denormalized_num16_qa
 
+# -- WTQ data (for self training candidate evaluation) --
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.samplenl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_wtq_wtqnl_denormalized_num128_sample
+
 # --no_shuffle is needed for dev/test
 additional_row_count=0
 top_row_count=10000
@@ -20,7 +24,7 @@ column_delimiter='|'
 column_delimiter_first=':'
 row_delimiter='none'
 mkdir -p ${output_dir}
-worldsize=10
+worldsize=1
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -56,6 +60,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --seq2seq_format qa_tapex \
     --table_linearization tapex \
     --skip_sep_in_middle \
+    --no_shuffle \
     --dev_num 0 \
     --global_rank $i &
 done

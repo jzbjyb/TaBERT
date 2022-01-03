@@ -1,5 +1,6 @@
 from typing import List, Dict, Tuple, Set, Callable
 import argparse
+import uuid
 from pathlib import Path
 import json
 import random
@@ -21,6 +22,7 @@ from table_bert.wikidata import topic2categories, get_cateid2name, WikipediaCate
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.retrieval import ESWrapper
 from table_bert.squall import Squall
+from table_bert.bm25 import BM25Wrapper
 
 
 def get_commons_docschema():
@@ -190,104 +192,192 @@ class SlingExtractor(object):
     return tok_to_sent_id, sent_to_span
 
   @staticmethod
-  def annotate_sentence(input_examples: List[Dict],
-                        use_all_more_than_num_mentions: int,
-                        topk: int,
-                        filter_function: Callable = None) -> List[Dict]:
-    examples: List[Dict] = []
-
-    for inp_example in input_examples:
-      key, document, tables = inp_example['key'], inp_example['document'], inp_example['tables']
-
-      # get sentences
-      sentences = SlingExtractor.get_sentences(document)
-
-      # skip sentences where most characters are numeric characters
-      _sentences: List[str] = []
-      for sent in sentences:
-        sent_only_alphanumeric = only_alphanumeric.sub('', sent)
-        sent_only_numberic = re.sub('[^0-9]', '', sent_only_alphanumeric)
-        number_ratio = len(sent_only_numberic) / (len(sent_only_alphanumeric) or 1)
-        if number_ratio > 0.8:
-          continue
-        _sentences.append(sent)
-      sentences = _sentences
-
-      for index, table in enumerate(tables):
-        kept_sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]] = []
-        # find the topk best-matching sentence
-        local_num_context_count = 0
-        for sent in sentences:
-          locations, location2cells = BasicDataset.get_mention_locations(sent, table['data'])
-          mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
-          data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
-          cover_ratio = np.sum([e - s for s, e in locations]) / (len(sent) or 1)
-          if cover_ratio > 0.8:
-            # rule 3: skip text that has over 80% of overlap with the table, which is likely to be table snippets
-            continue
-          if not use_all_more_than_num_mentions:
-            kept_sent_with_mentions.append((sent, locations, mention_cells))
-          elif use_all_more_than_num_mentions and len(locations) >= use_all_more_than_num_mentions:
-            table['data_used'] = data_used
-            examples.append({
-              'uuid': f'sling_{key}_{index}_{local_num_context_count}',
-              'table': table,
-              'context_before': [sent],
-              'context_before_mentions': [locations],
-              'context_before_mentions_cells': [mention_cells],
-              'context_after': []
-            })
-            local_num_context_count += 1
-
-        if len(kept_sent_with_mentions) <= 0:
-          continue
-
-        if not use_all_more_than_num_mentions:  # output topk
-          if filter_function is not None:  # use filter function
-            kept_sent_with_mentions = filter_function(kept_sent_with_mentions)
-          else:  # use topk
-            kept_sent_with_mentions = sorted(kept_sent_with_mentions, key=lambda x: -len(x[1]))[:topk]
-
-          if len(kept_sent_with_mentions) <= 0:
-            continue
-
-          # merge multiple sentences
-          merge_sent: str = ''
-          merge_locations: List[Tuple] = []
-          merge_mention_cells: List[List[Tuple]] = []
-          for sent, locations, mention_cells in kept_sent_with_mentions:
-            offset = len(merge_sent) + int(len(merge_sent) > 0)
-            merge_sent = (merge_sent + ' ' + sent) if len(merge_sent) > 0 else sent
-            merge_locations.extend([(s + offset, e + offset) for s, e in locations])
-            merge_mention_cells.extend(mention_cells)
-          data_used = sorted(list(set(mc for mcs in merge_mention_cells for mc in mcs)))
-          table['data_used'] = data_used
-          examples.append({
-            'uuid': f'sling_{key}_{index}',
-            'table': table,
-            'context_before': [merge_sent],
-            'context_before_mentions': [merge_locations],
-            'context_before_mentions_cells': [merge_mention_cells],
-            'context_after': []
-          })
-    return examples
-
-  @staticmethod
   def match_sentence_with_table_worker(input_queue: Queue,
                                        output_queue: Queue,
                                        use_all_more_than_num_mentions: int,
                                        topk: int,
                                        filter_function: Callable = None):
-    func = functools.partial(SlingExtractor.annotate_sentence,
-                             use_all_more_than_num_mentions=use_all_more_than_num_mentions,
-                             topk=topk,
-                             filter_function=filter_function)
     while True:
-      args = input_queue.get()
-      if type(args) is str and args == 'DONE':
+      input_examples = input_queue.get()
+      if type(input_examples) is str and input_examples == 'DONE':
         break
-      for example in func(args):
+
+      examples: List[Dict] = []
+      for inp_example in input_examples:
+        key, document, tables = inp_example['key'], inp_example['document'], inp_example['tables']
+
+        # get sentences
+        sentences = SlingExtractor.get_sentences(document)
+
+        # rule: skip sentences where most characters are numeric characters
+        _sentences: List[str] = []
+        for sent in sentences:
+          sent_only_alphanumeric = only_alphanumeric.sub('', sent)
+          sent_only_numberic = re.sub('[^0-9]', '', sent_only_alphanumeric)
+          number_ratio = len(sent_only_numberic) / (len(sent_only_alphanumeric) or 1)
+          if number_ratio > 0.8:
+            continue
+          _sentences.append(sent)
+        sentences = _sentences
+
+        for index, table in enumerate(tables):
+          kept_sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]] = []
+          # find the topk best-matching sentence
+          local_num_context_count = 0
+          for sent in sentences:
+            locations, location2cells = BasicDataset.get_mention_locations(sent, table['data'])
+            mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
+            data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
+            cover_ratio = np.sum([e - s for s, e in locations]) / (len(sent) or 1)
+            if cover_ratio > 0.8:
+              # rule: skip text that has over 80% of overlap with the table, which is likely to be table snippets
+              continue
+            if not use_all_more_than_num_mentions:
+              kept_sent_with_mentions.append((sent, locations, mention_cells))
+            elif use_all_more_than_num_mentions and len(locations) >= use_all_more_than_num_mentions:
+              table['data_used'] = data_used
+              examples.append({
+                'uuid': f'sling_{key}_{index}_{local_num_context_count}',
+                'table': table,
+                'context_before': [sent],
+                'context_before_mentions': [locations],
+                'context_before_mentions_cells': [mention_cells],
+                'context_after': []
+              })
+              local_num_context_count += 1
+
+          if len(kept_sent_with_mentions) <= 0:
+            continue
+
+          if not use_all_more_than_num_mentions:  # output topk
+            if filter_function is not None:  # use filter function
+              kept_sent_with_mentions = filter_function(kept_sent_with_mentions)
+            else:  # use topk
+              kept_sent_with_mentions = sorted(kept_sent_with_mentions, key=lambda x: -len(x[1]))[:topk]
+
+            if len(kept_sent_with_mentions) <= 0:
+              continue
+
+            # merge multiple sentences
+            merge_sent: str = ''
+            merge_locations: List[Tuple] = []
+            merge_mention_cells: List[List[Tuple]] = []
+            for sent, locations, mention_cells in kept_sent_with_mentions:
+              offset = len(merge_sent) + int(len(merge_sent) > 0)
+              merge_sent = (merge_sent + ' ' + sent) if len(merge_sent) > 0 else sent
+              merge_locations.extend([(s + offset, e + offset) for s, e in locations])
+              merge_mention_cells.extend(mention_cells)
+            data_used = sorted(list(set(mc for mcs in merge_mention_cells for mc in mcs)))
+            table['data_used'] = data_used
+            examples.append({
+              'uuid': f'sling_{key}_{index}',
+              'table': table,
+              'context_before': [merge_sent],
+              'context_before_mentions': [merge_locations],
+              'context_before_mentions_cells': [merge_mention_cells],
+              'context_after': []
+            })
+      for example in examples:
         output_queue.put(example)
+
+  @staticmethod
+  def bm25_sentence_with_table_worker_sklearn(input_queue: Queue,
+                                              output_queue: Queue,
+                                              topk: int):
+    while True:
+      examples = input_queue.get()
+      if type(examples) is str and examples == 'DONE':
+        break
+      for example in examples:
+        key, document, tables = example['key'], example['document'], example['tables']
+        sentences = SlingExtractor.get_sentences(document)
+
+        # build index
+        try:
+          bm25 = BM25Wrapper(sentences)
+        except ValueError:
+          continue  # empty vocab
+
+        # search
+        for index, table in enumerate(tables):
+          table_query: str = ESWrapper.format_table(table, full_table=True)
+          ret_sents = bm25.query(table_query, topk=topk)
+          context = ' '.join(ret_sents).strip()
+          if len(context) <= 0:  # this shouldn't happens a lot
+            continue
+
+          # find mentions
+          locations, location2cells = BasicDataset.get_mention_locations(context, table['data'])
+          mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
+          data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
+          if len(locations) <= 0:
+            continue
+
+          # output
+          table['data_used'] = data_used
+          out = {
+            'uuid': f'bm25_{key}_{index}',
+            'table': table,
+            'context_before': [context],
+            'context_before_mentions': [locations],
+            'context_before_mentions_cells': [mention_cells],
+            'context_after': []
+          }
+          output_queue.put(out)
+
+  @staticmethod
+  def bm25_sentence_with_table_worker(input_queue: Queue,
+                                      output_queue: Queue,
+                                      topk: int):
+    es = ESWrapper()
+    while True:
+      examples = input_queue.get()
+      if type(examples) is str and examples == 'DONE':
+        break
+      for example in examples:
+        key, document, tables = example['key'], example['document'], example['tables']
+        index_name = uuid.uuid4().hex  # url is not applicable as index name
+        sentences = SlingExtractor.get_sentences(document)
+
+        # build index
+        def index_doc_iter(sents: List[str]):
+          for sent in sents:
+            yield {
+              '_index': index_name,
+              '_source': {'sent': sent},
+            }
+        es.set_index_name(index_name)
+        es.build_index(index_doc_iter(sentences), refresh=True)
+
+        # search
+        for index, table in enumerate(tables):
+          table_query: str = ESWrapper.format_table(table, full_table=True)
+          ret_sents = [doc['sent'] for doc, score in es.get_topk(table_query, field='sent', topk=topk)]
+          context = ' '.join(ret_sents).strip()
+          if len(context) <= 0:  # this shouldn't happens a lot
+            continue
+
+          # find mentions
+          locations, location2cells = BasicDataset.get_mention_locations(context, table['data'])
+          mention_cells: List[List[Tuple[int, int]]] = [location2cells[ml] for ml in locations]
+          data_used = sorted(list(set(mc for mcs in mention_cells for mc in mcs)))
+          if len(locations) <= 0:
+            continue
+
+          # output
+          table['data_used'] = data_used
+          out = {
+            'uuid': f'bm25_{key}_{index}',
+            'table': table,
+            'context_before': [context],
+            'context_before_mentions': [locations],
+            'context_before_mentions_cells': [mention_cells],
+            'context_after': []
+          }
+          output_queue.put(out)
+
+        # delete index
+        es.delete_index()
 
   @staticmethod
   def random_sentence_with_table_worker(input_queue: Queue,
@@ -419,26 +509,31 @@ class SlingExtractor(object):
                 f'avg #mentions {np.mean(num_mentions_li)} '
                 f'empty/non-empty {empty_count}/{non_empty_count}')
 
-  def match_sentence_with_table(self,
-                                key2tables: Dict[str, List],
-                                key_feild: str,
-                                from_split: int,  # inclusive
-                                to_split: int,  # exclusive
-                                output_file: str,
-                                use_all_more_than_num_mentions: int = 0,
-                                topk: int = 1,
-                                filter_function: Callable = None,
-                                use_random: bool = False,
-                                batch_size: int = 16,
-                                num_threads: int = 1,
-                                log_interval: int = 5000):
-    if use_random:
+  def get_sentence_with_table(self,
+                              key2tables: Dict[str, List],
+                              key_feild: str,
+                              from_split: int,  # inclusive
+                              to_split: int,  # exclusive
+                              output_file: str,
+                              use_all_more_than_num_mentions: int = 0,
+                              topk: int = 1,
+                              filter_function: Callable = None,
+                              get_method: str = 'match',
+                              batch_size: int = 16,
+                              num_threads: int = 1,
+                              log_interval: int = 5000):
+
+    if get_method == 'random':
       worker = self.random_sentence_with_table_worker
-    else:
+    elif get_method == 'match':
       worker = functools.partial(self.match_sentence_with_table_worker,
                                  use_all_more_than_num_mentions=use_all_more_than_num_mentions,
                                  topk=topk,
                                  filter_function=filter_function)
+    elif get_method == 'bm25':
+      worker = functools.partial(self.bm25_sentence_with_table_worker_sklearn, topk=topk)
+    else:
+      raise NotImplementedError
 
     mpw = MultiprocessWrapper(
       num_threads=num_threads,
@@ -731,9 +826,9 @@ if __name__ == '__main__':
     prep_file, sling_root = args.inp
     out_file = args.out
     filter_function = 'filter_function_min'
-    use_random = True
-    log_interval = 5000
-    batch_size = 16
+    get_method = 'bm25'
+    log_interval = 1000
+    batch_size = 128
 
     def filter_function_max(sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]]):
       # return the sentence with max #mentions (return nothing if it's zero)
@@ -751,9 +846,9 @@ if __name__ == '__main__':
     filter_function = eval(filter_function)
     url2tables = load_url2tables(prep_file)[0]
     se = SlingExtractor(sling_root)
-    se.match_sentence_with_table(
+    se.get_sentence_with_table(
       url2tables, key_feild='url', from_split=0, to_split=10, output_file=out_file,
-      use_all_more_than_num_mentions=0, topk=args.topk, filter_function=filter_function, use_random=use_random,
+      use_all_more_than_num_mentions=0, topk=args.topk, filter_function=filter_function, get_method=get_method,
       batch_size=batch_size, num_threads=args.threads, log_interval=log_interval)
 
   elif args.task == 'pageid_as_key':
@@ -762,7 +857,7 @@ if __name__ == '__main__':
 
     pageid2tables = load_pageid2tables(prep_file)
     se = SlingExtractor(sling_root)
-    se.match_sentence_with_table(
+    se.get_sentence_with_table(
       pageid2tables, key_feild='pageid', from_split=0, to_split=10, output_file=out_file,
       use_all_more_than_num_mentions=1, topk=args.topk, batch_size=16, num_threads=args.threads, log_interval=100)
 

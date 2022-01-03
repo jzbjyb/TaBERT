@@ -1,0 +1,41 @@
+description: nl data from retrieval
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+#target:
+#  service: amlk8s
+#  name: itp-scus-v100
+#  vc: AlexTScience
+target:
+  service: aml
+  name: V10032G
+  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: wholetable_tapas_samepag_bm25_tapex05m_large
+  sku: G8
+  sku_count: 6
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 48 large
+    wholetable_tapas_samepag_bm25_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepag_bm25_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 6 5
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin

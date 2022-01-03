@@ -60,6 +60,8 @@ RUN pip install absl-py==0.15.0
 
 RUN pip install datasets==1.15.1
 
+RUN pip install scikit-learn==0.24.2
+
 # TAPAS
 #RUN apt-get -y install protobuf-compiler
 #COPY requirements_tapas.txt /tmp/scripts/.

@@ -293,7 +293,8 @@ def replace_context(generation_file: Path,
                     full_prep_file: Path,
                     output_file: Path,
                     num_files: int,
-                    remove_dup: bool = False):
+                    remove_dup: bool = False,
+                    remove_empty: bool = False):
   idx2gens: Dict[int, List[str]] = {}
   num_gens_before_dedup: List[int] = []
   num_gens_after_dedup: List[int] = []
@@ -310,7 +311,7 @@ def replace_context(generation_file: Path,
           for rmt in ['<pad>', '<s>', '</s>']:
             gen = gen.replace(rmt, '')
           gen = gen.strip()
-          if len(gen) <= 0:
+          if remove_empty and len(gen) <= 0:
             empty_count += 1
             continue
           if not remove_dup or gen not in used:
@@ -656,9 +657,10 @@ if __name__ == '__main__':
     full_prep_file = args.inp[2] if len(args.inp) > 2 else None
     output_file = args.out
     num_gpu = 8
-    remove_dup = True
+    remove_dup = False
+    remove_empty = False
     replace_context(generation_file, prep_file, full_prep_file=full_prep_file, output_file=output_file,
-                    num_files=num_gpu, remove_dup=remove_dup)
+                    num_files=num_gpu, remove_dup=remove_dup, remove_empty=remove_empty)
 
   elif args.task == 'process_bidirection':
     bi_file, prep_file = args.inp

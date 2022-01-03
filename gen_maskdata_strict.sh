@@ -2,20 +2,9 @@
 
 source env_initialize.sh
 
-# -- TAPEX data --
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_withtable_denormalized.preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_withtable_denormalized_qa
-
-#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_withtable_denormalized.num16_preprocessed.jsonl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_withtable_denormalized_num16_qa
-
-# -- WTQ data (for self training candidate evaluation) --
-#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.samplenl
-#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_wtq_wtqnl_denormalized_num128_sample
-
-# -- TAPEX data (after self training) --
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.num128_preprocessed.samplenl_tapex_filtered_top64_mt.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_num128_qa_samplenl_tapex_filtered_top64_mt
+# -- TAPAS data --
+input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_bm25.jsonl.data
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_samepag_bm25_bartmask_salientmask
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -28,7 +17,7 @@ column_delimiter='|'
 column_delimiter_first=':'
 row_delimiter='none'
 mkdir -p ${output_dir}
-worldsize=10
+worldsize=40
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -37,7 +26,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --train_corpus ${input_dir} \
     --base_model_name facebook/bart-base \
     --do_lower_case \
-    --epochs_to_generate 1 \
+    --epochs_to_generate 10 \
     --max_source_len ${max_source_len} \
     --max_target_len ${max_target_len} \
     --max_context_len ${max_context_len} \
@@ -61,7 +50,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format qa_tapex \
+    --seq2seq_format bart-mask_salient-mask \
     --table_linearization tapex \
     --skip_sep_in_middle \
     --dev_num 0 \

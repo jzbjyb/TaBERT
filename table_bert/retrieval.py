@@ -17,8 +17,11 @@ class ESWrapper():
     MAX_QUERY_LEN = 1024
     PUNCT_TO_SPACE = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
 
-    def __init__(self, index_name: str, timeout: int=300):
+    def __init__(self, index_name: str=None, timeout: int=300):
         self.es = Elasticsearch(timeout=timeout)
+        self.index_name = index_name
+
+    def set_index_name(self, index_name: str):
         self.index_name = index_name
 
     def lucene_format(self, query_str: str, field: str):
@@ -36,7 +39,19 @@ class ESWrapper():
             size=topk)['hits']['hits']
         return [(doc['_source'], doc['_score']) for doc in results]
 
-    def build_index(self, doc_iter: Iterator, shards: int = 1, replicas: int = 1, verbose: bool = False):
+    def simple_build_index(self, doc_iter: Iterator):
+      self.es.indices.delete(index=self.index_name, ignore=[400, 404])
+      self.es.indices.create(index=self.index_name, ignore=400)
+      for doc in doc_iter:
+        assert '_source' in doc
+        self.es.index(index=doc['_index'], body=doc['_source'], refresh=True)
+
+    def build_index(self,
+                    doc_iter: Iterator,
+                    shards: int = 1,
+                    replicas: int = 1,
+                    verbose: bool = False,
+                    refresh: bool = False):
         request_body = {
             'settings': {
                 'number_of_shards': shards,
@@ -44,8 +59,8 @@ class ESWrapper():
             }
         }
         self.es.indices.delete(index=self.index_name, ignore=[400, 404])
-        self.es.indices.create(index=self.index_name, body=request_body, ignore=400)
-        e = bulk(self.es, doc_iter)
+        self.es.indices.create(index=self.index_name, ignore=400)
+        e = bulk(self.es, doc_iter, refresh=refresh)
         if verbose:
             print(e)
 
@@ -57,21 +72,21 @@ class ESWrapper():
         return ' '.join(example['context_before'] + example['context_after'])
 
     @staticmethod
-    def format_table(example, full_table: bool = False):
+    def format_table(table: Dict, full_table: bool = False):
         if full_table:
-            header: str = ' | '.join([c['name'] for c in example['table']['header']])
-            data: List[str] = [' | '.join(row) for row in example['table']['data']]
+            header: str = ' | '.join([c['name'] for c in table['header']])
+            data: List[str] = [' | '.join(row) for row in table['data']]
             return '\n'.join([header] + data)
         else:
             return ' & '.join(['{} | {} | {}'.format(
-                h['name'], h['type'], h['sample_value']['value']) for h in example['table']['header']])
+                h['name'], h['type'], h['sample_value']['value']) for h in table['header']])
 
     def table_text_data_iterator(self, filename: str, split: str = 'train', max_length: int = 10000, full_table: bool = False):
         with open(filename, 'r') as fin:
             for idx, l in tqdm(enumerate(fin)):
                 example = json.loads(l)
                 text = self.format_text(example)[:max_length]
-                table = self.format_table(example, full_table=full_table)[:max_length]
+                table = self.format_table(example['table'], full_table=full_table)[:max_length]
                 yield {
                     '_index': self.index_name,
                     '_type': 'document',
@@ -111,7 +126,7 @@ def retrieve_part(index_name, filename, topk, full_table, cross_format, two_idx_
             if cross_format:  # use text to retrieve table
                 bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(text, field='table', topk=topk + 1)]
             elif full_table is not None:  # use table to retrieve table
-                table = ESWrapper.format_table(example, full_table=full_table)
+                table = ESWrapper.format_table(example['table'], full_table=full_table)
                 bytable = [(doc['line_idx'], score) for doc, score in es.get_topk(table, field='table', topk=topk + 1)]
             fout.write('{}\t{}\t{}\n'.format(idx, format_list(bytext), format_list(bytable)))
 

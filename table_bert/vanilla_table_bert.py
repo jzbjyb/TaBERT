@@ -380,7 +380,7 @@ class VanillaTableBert(TableBertModel):
             loss_fct = CrossEntropyLoss(ignore_index=-1, reduction='none')
             # masked_lm_labels is a combination of real mlm and seq2seq targets
             combined_loss = loss_fct(logits.view(-1, logits.size(-1)), masked_lm_labels.view(-1)).view(bs, -1)  # (bs, seq_len)
-            per_example_loss = (combined_loss * masked_lm_labels.ne(-1)).sum(-1)  # (bs, seq_len)
+            per_example_loss = (combined_loss * masked_lm_labels.ne(-1)).sum(-1)  # (bs)
             combined_loss_avg = combined_loss.sum() / (masked_lm_labels.ne(-1).sum() or 1.0)
             total_loss += combined_loss_avg  # loss is proportional to the number of tokens of each type (mlm or seq2seq)
             # separate mlm and seq2seq loss for logging
@@ -792,6 +792,23 @@ class VanillaTableBert(TableBertModel):
                             min_length=args.min_generate_length,
                             max_length=args.max_generate_length,
                             early_stopping=True)
+
+                    if args.return_log_prob:
+                      batch['return_per_example_loss'] = True
+                      is_pad = target_ids.eq(self.tokenizer.pad_token_id).to(target_ids)
+                      batch_for_loss = {
+                        'idx': torch.repeat_interleave(batch['idx'], nrs, dim=0),
+                        'input_ids': torch.repeat_interleave(batch['input_ids'], nrs, dim=0),
+                        'attention_mask': torch.repeat_interleave(batch['attention_mask'], nrs, dim=0),
+                        'token_type_ids': torch.repeat_interleave(batch['token_type_ids'], nrs, dim=0),
+                        'masked_lm_labels': target_ids * (1 - is_pad) - is_pad,  # turn pad id into -1
+                        'sample_size': batch['sample_size'],
+                        'target_input_ids': target_ids,
+                        'is_mlm': torch.repeat_interleave(batch['is_mlm'], nrs, dim=0),
+                        'is_positives': torch.repeat_interleave(batch['is_positives'], nrs, dim=0),
+                        'return_per_example_loss': True
+                      }
+                      logprobs = -getattr(self, f'computeloss_{self.config.model_type.value}')(batch_for_loss)  # add negative
                     gold_ids = batch['target_input_ids']
                     for b_idx, (input_id, gold_id) in enumerate(zip(batch['input_ids'], gold_ids)):
                         target_id = target_ids[b_idx * nrs:b_idx * nrs + nrs]
@@ -800,7 +817,12 @@ class VanillaTableBert(TableBertModel):
                         preds: str = '\t'.join(preds)
                         gold: str = post_process(gold_id)
                         global_idx = batch['idx'][b_idx].item()
-                        fout.write(f'{preds}\t{gold}\t{source}\t{global_idx}\n')
+                        if args.return_log_prob:
+                          logprob = logprobs[b_idx * nrs:b_idx * nrs + nrs]
+                          logprob: str = '\t'.join(map(lambda x: str(x.item()), logprob))
+                          fout.write(f'{preds}\t{logprob}\t{gold}\t{source}\t{global_idx}\n')
+                        else:
+                          fout.write(f'{preds}\t{gold}\t{source}\t{global_idx}\n')
                     pbar.update(1)
 
         if was_training:

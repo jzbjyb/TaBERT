@@ -7,10 +7,12 @@ import os
 from shutil import copyfile
 from pathlib import Path
 from tqdm import tqdm
+from operator import itemgetter
 from collections import defaultdict
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import scipy.stats
 import functools
 from multiprocessing import Queue
 from transformers import BartForConditionalGeneration
@@ -294,8 +296,9 @@ def replace_context(generation_file: Path,
                     output_file: Path,
                     num_files: int,
                     remove_dup: bool = False,
-                    remove_empty: bool = False):
-  idx2gens: Dict[int, List[str]] = {}
+                    remove_empty: bool = False,
+                    has_logprob: bool = False):
+  idx2gens_logprobs: Dict[int, List[Tuple[str, float]]] = {}
   num_gens_before_dedup: List[int] = []
   num_gens_after_dedup: List[int] = []
   empty_count = 0
@@ -305,9 +308,15 @@ def replace_context(generation_file: Path,
         l = l.rstrip('\n').split('\t')
         idx = int(l[-1])
         gens = l[:-3]
-        idx2gens[idx] = []
+        if has_logprob:
+          assert len(gens) % 2 == 0
+          gens, logprobs = gens[:len(gens) // 2], gens[len(gens) // 2:]
+          logprobs = list(map(float, logprobs))
+        else:
+          logprobs = [.0] * len(gens)
+        idx2gens_logprobs[idx] = []
         used: Set[str] = set()
-        for gen in gens:
+        for gen, logprob in zip(gens, logprobs):
           for rmt in ['<pad>', '<s>', '</s>']:
             gen = gen.replace(rmt, '')
           gen = gen.strip()
@@ -316,7 +325,7 @@ def replace_context(generation_file: Path,
             continue
           if not remove_dup or gen not in used:
             used.add(gen)
-            idx2gens[idx].append(gen)
+            idx2gens_logprobs[idx].append((gen, logprob))
         num_gens_before_dedup.append(len(gens))
         num_gens_after_dedup.append(len(used))
   print(f'#sentences before/after dedup {np.mean(num_gens_before_dedup)}/{np.mean(num_gens_after_dedup)} '
@@ -338,15 +347,18 @@ def replace_context(generation_file: Path,
     open(f'{output_file}.compare', 'w') as cfout:
     for idx, l in enumerate(tqdm(fin)):
       l = json.loads(l)
-      if idx not in idx2gens:
+      if idx not in idx2gens_logprobs:
         continue
       if 'metadata' in l and 'wtqid' in l['metadata'] and l['metadata']['wtqid'] in wtqid2answer:  # add answer
         l['answers'] = wtqid2answer[l['metadata']['wtqid']]
       prev = l['context_before'][0]
       prev_len.append(len(prev))
       ids.add(l['uuid'])
-      for gen in idx2gens[idx]:
+      for gen, logprob in idx2gens_logprobs[idx]:
         l['context_before'] = [gen]
+        if has_logprob:
+          if 'metadata' not in l:  l['metadata'] = {}
+          l['metadata']['logprob'] = logprob
         new_len.append(len(gen))
         fout.write(json.dumps(l) + '\n')
         cfout.write(f'{prev}\t{gen}\n')
@@ -359,9 +371,13 @@ def select_by_loss(loss_file: Path,
                    output_file: Path,
                    num_files: int,
                    topks: List[int],
-                   visualize_range: float = -100,
                    skips: Set[str] = None,
-                   used_for_sql2nl: bool = False):
+                   used_for_sql2nl: bool = False,
+                   selection_method: str = 'max',
+                   criteria: str = 'denotation'):
+  assert selection_method in {'max', 'min'}
+  assert criteria in {'denotation', 'generation'}
+
   idx2lp: Dict[int, float] = {}
   for i in range(num_files):
     with open(f'{loss_file}.{i}', 'r') as fin:
@@ -372,39 +388,66 @@ def select_by_loss(loss_file: Path,
 
   # aggregate based on wtq id
   skip_count = 0
-  wtqid2examples: Dict[str, List[Tuple[Dict, float]]] = defaultdict(list)
+  wtqid2examples: Dict[str, List[Tuple[Dict, float, float]]] = defaultdict(list)
   with open(prep_file, 'r') as fin:
     for idx, l in enumerate(tqdm(fin)):
       l = json.loads(l)
       wtqid = l['metadata']['wtqid']
+      logprob = l['metadata']['logprob'] if 'logprob' in l['metadata'] else 0.0
       if skips and wtqid in skips:  # skip examples with real NL
         skip_count += 1
         continue
-      wtqid2examples[wtqid].append((l, idx2lp[idx]))
+      wtqid2examples[wtqid].append((l, idx2lp[idx], logprob))
   print(f'#skip {skip_count}')
 
+  # compute the correlation between two log probs
+  corrs = []
+  for _, examples in wtqid2examples.items():
+    corrs.append(scipy.stats.pearsonr(list(map(itemgetter(1), examples)), list(map(itemgetter(2), examples))))
+  print(f'correlation between two log probs {np.mean(corrs)}')
+
+  if criteria == 'denotation':
+    criteria_ind = 1
+  elif criteria == 'generation':
+    criteria_ind = 2
+  else:
+    raise NotImplementedError
+
   # only use the sampled nl with max lp
-  wtqid2example: Dict[str, Tuple[Dict, float]] = {}
+  wtqid2example: Dict[str, Tuple[Dict, float, float]] = {}
   for wtqid, examples in wtqid2examples.items():
-    maxind = np.argmax([lp for _, lp in examples])
-    example = examples[maxind]
+    if selection_method == 'max':
+      ind = np.argmax(list(map(itemgetter(criteria_ind), examples)))
+    elif selection_method == 'min':
+      ind = np.argmin(list(map(itemgetter(criteria_ind), examples)))
+    else:
+      raise NotImplementedError
+    example = examples[ind]
     if used_for_sql2nl:
       example[0]['metadata']['nl'] = example[0]['context_before'][0]
     wtqid2example[wtqid] = example
 
   # visualize
-  lps = [lp for _, lp in wtqid2example.values()]
+  lps = list(map(itemgetter(criteria_ind), wtqid2example.values()))
   print(f'avg lp {np.mean(lps)}')
   plt.hist(lps, bins=100, weights=np.ones(len(lps)) / len(lps))
   plt.savefig('test.png')
 
   for topk in topks:
     # get topk
-    _wtqid2example: List[Tuple[str, Tuple[Dict, float]]] = sorted(wtqid2example.items(), key=lambda x: -x[1][1])[:topk]
+    if selection_method == 'max':
+      sort_func = lambda x: -x[1][criteria_ind]
+    elif selection_method == 'min':
+      sort_func = lambda x: x[1][criteria_ind]
+    else:
+      raise NotImplementedError
+    _wtqid2example: List[Tuple[str, Tuple[Dict, float, float]]] = sorted(wtqid2example.items(), key=sort_func)[:topk]
+    lens = []
     with open(f'{output_file}.top{topk}', 'w') as fout:
-      for wtqid, (example, lp) in _wtqid2example:
+      for wtqid, (example, lp, gen_lp) in _wtqid2example:
         fout.write(json.dumps(example) + '\n')
-    print(f'topk: {topk}: avg lp {np.mean([lp for _, (_, lp) in _wtqid2example])}')
+        lens.append(len(example['context_before'][0]))
+    print(f'topk: {topk}: avg lp {np.mean(list(map(lambda x: x[1][criteria_ind], _wtqid2example)))}, avg len {np.mean(lens)}')
 
 
 def process_bidirection(bi_file: str, prep_file: str, output_file: str, num_files: int):
@@ -659,8 +702,9 @@ if __name__ == '__main__':
     num_gpu = 8
     remove_dup = False
     remove_empty = False
+    has_logprob = False
     replace_context(generation_file, prep_file, full_prep_file=full_prep_file, output_file=output_file,
-                    num_files=num_gpu, remove_dup=remove_dup, remove_empty=remove_empty)
+                    num_files=num_gpu, remove_dup=remove_dup, remove_empty=remove_empty, has_logprob=has_logprob)
 
   elif args.task == 'process_bidirection':
     bi_file, prep_file = args.inp
@@ -697,7 +741,11 @@ if __name__ == '__main__':
     # TODO: make sure this is the file used for sampling/beam search
     to_skip_file = '/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.128'
     output_file = args.out
-    num_gpu = 8
-    topks = [64, 128, 256, 512, 1024, 2048]
+    num_gpu = 4
+    selection_method = 'max'
+    criteria = 'generation'
+    topks = [64, 128, 256, 512, 1024, 2048, 4096, 8192]
     skips = set(json.loads(l)['uuid'] for l in open(to_skip_file, 'r').readlines())
-    select_by_loss(loss_file, prep_file, output_file, num_files=num_gpu, topks=topks, skips=skips, used_for_sql2nl=True)
+    select_by_loss(loss_file, prep_file, output_file,
+                   num_files=num_gpu, topks=topks, skips=skips, used_for_sql2nl=True,
+                   selection_method=selection_method, criteria=criteria)

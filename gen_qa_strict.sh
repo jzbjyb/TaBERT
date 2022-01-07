@@ -9,13 +9,28 @@ source env_initialize.sh
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_withtable_denormalized.num16_preprocessed.jsonl
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_withtable_denormalized_num16_qa
 
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.num16_preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_num16_qa
+
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.preprocessed.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_qa
+
 # -- WTQ data (for self training candidate evaluation) --
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.samplenl
 #output_dir=/mnt/root/TaBERT/data/train_data/wholetable_wtq_wtqnl_denormalized_num128_sample
 
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.beamsearchnl_logprob
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_wtq_wtqnl_denormalized_num128_beamsearch_logprob
+
 # -- TAPEX data (after self training) --
-input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.num128_preprocessed.samplenl_tapex_filtered_top64_mt.jsonl
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_num128_qa_samplenl_tapex_filtered_top64_mt
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.num128_preprocessed.beamsearchnl_multitask_filtered_top8192_mt.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt
+
+#input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.num128_preprocessed.beamsearchnl_multitask_filtered_min_top8192_mt.jsonl
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top8192_mt
+
+input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.wtq_nl_denormalized.num128_preprocessed.beamsearchnl_logprob_multitask_filtered_top128_mt.jsonl
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top128_mt
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0

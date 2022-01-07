@@ -34,8 +34,43 @@ jobs:
     wholetable_tapas_samepag_bm25_tapex05m_large
     tapex_large/pytorch_model.bin
     2 6 5
-- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune1
   sku: G8
   command:
-  - ./finetune_predict.sh default large full 50
+  - ./finetune_predict.sh wtqqa_strict_128 large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune2
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune3
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_16 large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune4
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_32 large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune5
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_64 large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune6
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_256 large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune7
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_512 large full 50
+    wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepag_bm25_tapex05m_large_finetune8
+  sku: G8
+  command:
+  - ./finetune_predict.sh wtqqa_strict_1024 large full 50
     wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin

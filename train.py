@@ -131,6 +131,7 @@ def parse_train_arg():
     parser.add_argument('--max_generate_length', type=int, default=None, help='max number of tokens generated for the generate mode')
     parser.add_argument('--min_generate_length', type=int, default=None, help='min number of tokens generated for the generate mode')
     parser.add_argument('--output_file', type=str, default=None)
+    parser.add_argument('--return_log_prob', action='store_true')
 
     FairseqAdam.add_args(parser)
     PolynomialDecaySchedule.add_args(parser)

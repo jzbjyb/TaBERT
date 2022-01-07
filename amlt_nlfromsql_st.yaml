@@ -32,7 +32,6 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top64_mt_tapexlarge/pytorch_model_epoch04.bin
-
 - name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top128_mt_and_finetune
   sku: G8
   command:
@@ -43,7 +42,6 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top128_mt_tapexlarge/pytorch_model_epoch04.bin
-
 - name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top256_mt_and_finetune
   sku: G8
   command:
@@ -54,7 +52,6 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top256_mt_tapexlarge/pytorch_model_epoch04.bin
-
 - name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top512_mt_and_finetune
   sku: G8
   command:
@@ -65,7 +62,6 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top512_mt_tapexlarge/pytorch_model_epoch04.bin
-
 - name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top1024_mt_and_finetune
   sku: G8
   command:
@@ -76,7 +72,6 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top1024_mt_tapexlarge/pytorch_model_epoch04.bin
-
 - name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top2048_mt_and_finetune
   sku: G8
   command:
@@ -87,6 +82,188 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top2048_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top4096_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top4096_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top4096_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top4096_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top64_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top64_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top64_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top64_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top128_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top128_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top128_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top128_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top256_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top256_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top256_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top256_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top512_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top512_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top512_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top512_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top1024_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top1024_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top1024_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top1024_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top2048_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top2048_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top2048_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top2048_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top4096_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top4096_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top4096_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top4096_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top8192_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top8192_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top8192_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_logprob_multitask_filtered_top8192_mt_tapexlarge/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top64_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top64_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top64_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top64_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top128_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top128_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top128_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top128_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top256_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top256_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top256_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top256_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top512_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top512_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top512_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top512_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top1024_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top1024_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top1024_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top1024_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top2048_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top2048_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top2048_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top2048_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top4096_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top4096_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top4096_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top4096_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top8192_mt_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top8192_mt
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top8192_mt_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_min_top8192_mt_tapexlarge/pytorch_model_epoch04.bin
 
 - name: wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_tapex_filtered_top64_mt_and_finetune
   sku: G8

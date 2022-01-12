@@ -85,3 +85,39 @@ jobs:
   command:
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_sqlandnl_num64_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num128_st_large
+  sku: G8
+  sku_count: 6
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 48 large
+    wholetable_tapas_samepage_dense_bartlarge_06_bartmask_salientmask:wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num128_st_large
+    tapex_large/pytorch_model.bin
+    2 6 5
+- name: wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num128_st_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num128_st_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapex_sqlandnl_num128_st_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt:wholetable_tapex_05m_bart_qa
+    wholetable_tapex_sqlandnl_num128_st_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapex_sqlandnl_num128_st_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_sqlandnl_num128_st_large/pytorch_model_epoch04.bin

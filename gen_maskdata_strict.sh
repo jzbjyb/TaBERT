@@ -3,8 +3,14 @@
 source env_initialize.sh
 
 # -- TAPAS data --
-input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_bm25.jsonl.data
-output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_samepag_bm25_bartmask_salientmask
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_bm25.jsonl.data
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_samepag_bm25_bartmask_salientmask
+
+#input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.06.data0
+#output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_samepage_dense_bartlarge_06_bartmask_salientmask
+
+input_dir=/mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.06.data0
+output_dir=/mnt/root/TaBERT/data/train_data/wholetable_tapas_samepage_dense_bartlarge_06_salientmask  # TODO: change seq2seq_format
 
 # --no_shuffle is needed for dev/test
 additional_row_count=0
@@ -17,7 +23,7 @@ column_delimiter='|'
 column_delimiter_first=':'
 row_delimiter='none'
 mkdir -p ${output_dir}
-worldsize=40
+worldsize=20
 
 for (( i=0; i<${worldsize}; ++i)); do
   echo $i ${worldsize}
@@ -50,7 +56,7 @@ for (( i=0; i<${worldsize}; ++i)); do
     --mask_value_column_separate \
     --skip_column_name_longer_than 0 \
     --not_skip_empty_column_name \
-    --seq2seq_format bart-mask_salient-mask \
+    --seq2seq_format salient-mask \
     --table_linearization tapex \
     --skip_sep_in_middle \
     --dev_num 0 \

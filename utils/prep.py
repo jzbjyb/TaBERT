@@ -654,12 +654,23 @@ def random_pair_context_with_table(prep_file: str, out_file: str):
       fout.write(json.dumps(example) + '\n')
 
 
+def count_cells(prep_file: str):
+  nums: List[int] = []
+  with open(prep_file, 'r') as fin:
+    for l in tqdm(fin):
+      table = json.loads(l)['table']
+      nh = len(table['header'])
+      nc = np.sum([len(r) for r in table['data']])
+      nums.append(nh + nc)
+  print(f'mean {np.mean(nums)}, max {np.max(nums)}, median {np.median(nums)}')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
     'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
-    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table', 'select_by_loss'])
+    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table', 'select_by_loss', 'count_cells'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
@@ -749,3 +760,7 @@ if __name__ == '__main__':
     select_by_loss(loss_file, prep_file, output_file,
                    num_files=num_gpu, topks=topks, skips=skips, used_for_sql2nl=True,
                    selection_method=selection_method, criteria=criteria)
+
+  elif args.task == 'count_cells':
+    prep_file = args.inp[0]
+    count_cells(prep_file)

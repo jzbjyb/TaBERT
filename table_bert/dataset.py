@@ -731,7 +731,7 @@ class Example(object):
     @staticmethod
     def char_index2token_index(offsets: List[Tuple[int, int]],
                                char_mentions: List[Tuple[Tuple[int, int], List[Tuple[int, int]]]],
-                               added_prefix_space: bool):
+                               added_prefix_space: bool) -> List[Tuple[Tuple[int, int], List[Tuple[int, int]]]]:
         char_adjust = -1 if added_prefix_space else 0
         token_mentions: List[Tuple[Tuple[int, int], List[Tuple[int, int]]]] = [None for _ in range(len(char_mentions))]
         midx = tid = 0

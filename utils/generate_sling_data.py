@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Set, Callable
+from typing import List, Dict, Tuple, Set, Callable, Any
 import argparse
 import uuid
 from pathlib import Path
@@ -16,13 +16,19 @@ import re
 import numpy as np
 import spacy
 from multiprocessing import Process, Queue
+import matplotlib.pyplot as plt
+import torch
+from torch_scatter import scatter_max, scatter_mean, scatter_add
 from table_bert.utils import get_url, MultiprocessWrapper
 from table_bert.dataset_utils import BasicDataset
+from table_bert.dataset import Example
 from table_bert.wikidata import topic2categories, get_cateid2name, WikipediaCategory
 from table_bert.wikitablequestions import WikiTQ
 from table_bert.retrieval import ESWrapper
 from table_bert.squall import Squall
 from table_bert.bm25 import BM25Wrapper
+from table_bert.config import TableBertConfig
+from table_bert.vanilla_table_bert import VanillaTableBert
 
 
 def get_commons_docschema():
@@ -128,6 +134,10 @@ def match_raw(examples: List[Dict],
   write_p.join()
 
 
+class EnoughTokenException(Exception):
+  pass
+
+
 class SlingExtractor(object):
   def __init__(self, root_dir: Path, num_splits: int = 10):
     self.root_dir = root_dir
@@ -207,18 +217,7 @@ class SlingExtractor(object):
         key, document, tables = inp_example['key'], inp_example['document'], inp_example['tables']
 
         # get sentences
-        sentences = SlingExtractor.get_sentences(document)
-
-        # rule: skip sentences where most characters are numeric characters
-        _sentences: List[str] = []
-        for sent in sentences:
-          sent_only_alphanumeric = only_alphanumeric.sub('', sent)
-          sent_only_numberic = re.sub('[^0-9]', '', sent_only_alphanumeric)
-          number_ratio = len(sent_only_numberic) / (len(sent_only_alphanumeric) or 1)
-          if number_ratio > 0.8:
-            continue
-          _sentences.append(sent)
-        sentences = _sentences
+        sentences = SlingExtractor.get_sentences(document, skip_numeric_sent=True)
 
         for index, table in enumerate(tables):
           kept_sent_with_mentions: List[Tuple[str, List[Tuple], List[List[Tuple]]]] = []
@@ -411,7 +410,7 @@ class SlingExtractor(object):
           output_queue.put(example)
 
   @staticmethod
-  def get_sentences(doc: bytes) -> List[str]:
+  def get_sentences(doc: bytes, skip_numeric_sent: bool = False) -> List[str]:
     store = sling.Store(self_commons)
     doc_frame = store.parse(doc)
     document = sling.Document(doc_frame, store, self_docschema)
@@ -431,6 +430,12 @@ class SlingExtractor(object):
       if not sent.endswith(('!', '"', "'", '.', ':', ';', '?')):
         # skip text without punctuations at the end (e.g., table snippets)
         continue
+      if skip_numeric_sent:  # skip sentences where most characters are numeric characters
+        sent_only_alphanumeric = only_alphanumeric.sub('', sent)
+        sent_only_numberic = re.sub('[^0-9]', '', sent_only_alphanumeric)
+        number_ratio = len(sent_only_numberic) / (len(sent_only_alphanumeric) or 1)
+        if number_ratio > 0.8:
+          continue
       sents.append(sent)
     return sents
 
@@ -475,6 +480,15 @@ class SlingExtractor(object):
 
         # delete index
         es.delete_index()
+
+  @staticmethod
+  def emb_write_worker(output_file: str, output_queue: Queue):
+    with tqdm() as pbar:
+      while True:
+        example = output_queue.get()
+        if type(example) is str and example == 'DONE':
+          break
+        pbar.update(1)
 
   @staticmethod
   def write_worker(output_file: str, output_queue: Queue):
@@ -605,6 +619,377 @@ class SlingExtractor(object):
         mpw.output_queue.put(raw_example)
     print(f'unfound #pageids {unfound}')
     mpw.finish()
+
+  @staticmethod
+  def prepare_sentences(sents: List[str], ner, tokenizer_fast, lower: bool, max_length: int):
+    assert max_length > 2
+    sents_prep: List[Dict] = []
+    for sent in sents:
+      ents: List[Tuple[int, int, str]] = [(ent.start_char, ent.end_char, ent.label_) for ent in ner(sent).ents]
+      if lower:  sent = sent.lower()
+      # remove overlap
+      ents = sorted(ents, key=lambda x: (x[0], x[1]))
+      ents = [ent for i, ent in enumerate(ents) if (i <= 0 or ent[0] >= ents[i - 1][1])]
+      mentions: List[Tuple[Tuple[int, int], List]] = [((ent[0], ent[1]), []) for ent in ents]
+      # tokenize
+      sent_tokenized = tokenizer_fast(
+        sent, max_length=max_length, truncation=True, add_special_tokens=True, return_offsets_mapping=True)
+      offsets = sent_tokenized['offset_mapping']
+      # convert char-based index to token-based index
+      added_prefix_space = True if ('added_prefix_space' in sent_tokenized and sent_tokenized['added_prefix_space']) else False
+      mentions_tok_based: List[Tuple[Tuple[int, int], List]] = Example.char_index2token_index(
+        offsets, mentions, added_prefix_space=added_prefix_space)
+      assert len(mentions_tok_based) == len(mentions), 'the char-to-token index conversion is not revertible'
+      ents_tok_based: List[Tuple[int, int, str]] = [m[0] + (ent[-1],) for m, ent in zip(mentions_tok_based, ents)]
+      ents_char_based: List[Tuple[int, int, str]] = [m[0] + (ent[-1],) for m, ent in zip(mentions, ents)]
+      # output
+      assert len(ents_tok_based) == len(ents_char_based)
+      if len(ents_tok_based) <= 0:
+        continue
+      sent_prep = {
+        'ids': sent_tokenized['input_ids'],
+        'spans': ents_tok_based,
+        'text': sent,
+        'spans_char': ents_char_based,
+      }
+      sents_prep.append(sent_prep)
+    return sents_prep
+
+  @staticmethod
+  def prepare_tables(tables: List[Dict], tokenizer_fast, lower: bool, max_length: int, linearization: str = 'tapex'):
+    col_indicator = 'col :'
+    sep = '|'
+    assert max_length > 2
+    assert linearization in {'tapex'}
+    tokenize = lambda x: tokenizer_fast(x, add_special_tokens=False)['input_ids']
+    sep_id = tokenize(sep)[0]
+    tables_prep: List[Dict] = []
+    for table in tables:
+      header, data = [h['name'] for h in table['header']], table['data']
+      tokens: List[int] = [tokenizer_fast.cls_token_id]  # add start special token
+      text: List[str] = []
+      text_off: int = 0
+      cells_tok: List[Tuple[int, int, str]] = []
+      cells_char: List[Tuple[int, int, str]] = []
+      try:
+        toadd = tokenize(col_indicator)
+        if len(tokens) + len(toadd) > max_length - 2:  raise EnoughTokenException()
+        tokens.extend(toadd)
+        text.append(col_indicator)
+        text_off += len(col_indicator)
+        for i, h in enumerate(header):
+          if lower:  h = h.lower()
+          start = len(tokens)
+          toadd = tokenize(h)
+          if len(tokens) + len(toadd) > max_length - 2:  raise EnoughTokenException()
+          tokens.extend(toadd)
+          text.append(h)
+          cells_tok.append((start, len(tokens), 'header'))
+          cells_char.append((text_off + 1, text_off + 1 + len(h), 'header'))
+          text_off += 1 + len(h)
+          if i < len(header) - 1:
+            tokens.append(sep_id)
+            text.append(sep)
+            text_off += 1 + len(sep)
+        for row_idx, row in enumerate(data):
+          toadd = tokenize(f'row {row_idx + 1} :')
+          if len(tokens) + len(toadd) > max_length - 2:  raise EnoughTokenException()
+          tokens.extend(toadd)
+          text.append(f'row {row_idx + 1} :')
+          text_off += 1 + len(f'row {row_idx + 1} :')
+          for i, cell in enumerate(row):
+            if lower:  cell = cell.lower()
+            start = len(tokens)
+            toadd = tokenize(cell)
+            if len(tokens) + len(toadd) > max_length - 2:  raise EnoughTokenException()
+            tokens.extend(toadd)
+            text.append(cell)
+            cells_tok.append((start, len(tokens), 'data'))
+            cells_char.append((text_off + 1, text_off + 1 + len(cell), 'data'))
+            text_off += 1 + len(cell)
+            if i < len(row) - 1:
+              tokens.append(sep_id)
+              text.append(sep)
+              text_off += 1 + len(sep)
+      except EnoughTokenException:
+        pass
+      tokens.append(tokenizer_fast.sep_token_id)  # add end special token
+      text: str = ' '.join(text)
+      assert len(tokens) <= max_length
+      assert len(cells_tok) == len(cells_char)
+      if len(cells_tok) <= 0:
+        continue
+      table_prep = {
+        'ids': tokens,
+        'spans': cells_tok,
+        'text': text,
+        'spans_char': cells_char,
+        'raw_table': table
+      }
+      tables_prep.append(table_prep)
+    return tables_prep
+
+  @staticmethod
+  def gen_sentence_emb_worker(input_queue: Queue,
+                              output_queue: Queue,
+                              device_id: int,
+                              config_path: str,
+                              extra_config: Dict[str, Any],
+                              gpu_batch_size: int,
+                              topk_match: int,
+                              topk_sent: int,
+                              lower: bool,
+                              score_function: str,
+                              lowest_score: float = 0.0,
+                              debug: bool = False):
+    assert lowest_score >= 0, 'lower than zero is hard to implement'
+    assert score_function in {'mean', 'mean-max'}
+    # load the model and the tokenizer
+    if device_id != 0:  # wait for the main process to download
+      print(f'sleep {device_id}')
+      time.sleep(60 * 5)
+    config = TableBertConfig.from_file(config_path, **extra_config)
+    device = torch.device(f'cuda:{device_id}')
+    tokenizer_fast = config.tokenizer_fast_cls.from_pretrained(extra_config['base_model_name'])
+    model = VanillaTableBert(config).to(device)
+    ner = spacy.load('en_core_web_sm')
+    pad_id = tokenizer_fast.pad_token_id
+    print(f'complete download {device_id}')
+
+    def pack(prep_list: List[Dict]):
+      bs, seq_len = len(prep_list), max([len(p['ids']) for p in prep_list])
+      packed_ids = np.full((bs, seq_len), dtype=np.int64, fill_value=pad_id)
+      packed_attn_mask = np.zeros((bs, seq_len), dtype=np.int64)
+      for idx, prep in enumerate(prep_list):
+        packed_ids[idx, :len(prep['ids'])] = prep['ids']
+        packed_attn_mask[idx, :len(prep['ids'])] = 1
+      return torch.tensor(packed_ids).to(device), torch.tensor(packed_attn_mask).to(device)
+
+    def run(ids: torch.Tensor,  # (bs, seq_len)
+            attn_mask: torch.Tensor):  # (bs, seq_len)
+      with torch.no_grad():
+        reprs = []
+        for batch in range(0, ids.size(0), gpu_batch_size):
+          batch_ids = ids[batch:batch + gpu_batch_size]
+          batch_attn_mask = attn_mask[batch:batch + gpu_batch_size]
+          repr = model._bart.model(batch_ids, attention_mask=batch_attn_mask, return_dict=True).last_hidden_state
+          reprs.append(repr)
+        reprs = torch.cat(reprs, 0)
+        reprs = reprs * attn_mask.unsqueeze(-1)  # mask out padding
+        return reprs
+
+    def get_tok2span(size: Tuple[int, int],   # (bs, seq_len)
+                     prep_list: List[Dict],
+                     pad_handle: str) -> Tuple[torch.Tensor, torch.Tensor]:  # (bs, seq_len), (bs, num_span)
+      assert pad_handle in {'extend', 'zero'}  # different method to handle padding
+      # convert
+      tok2span = np.full(size, dtype=np.int64, fill_value=-1)  # (bs, seq_len) init with -1
+      for idx, prep in enumerate(prep_list):
+        for i, (start, end, _) in enumerate(prep['spans']):
+          tok2span[idx, start:end] = i
+      tok2span = torch.tensor(tok2span).to(device)
+      # validate
+      tok2span_mask = tok2span.ne(-1)  # (bs, seq_len)
+      num_spans = torch.clamp(tok2span.max(-1)[0] + 1, min=0)  # (bs)
+      max_num_spans = int(num_spans.max().item())
+      span_mask = (torch.arange(max_num_spans).unsqueeze(0).to(device) < num_spans.unsqueeze(-1)).int()  # (bs, num_span)
+      if pad_handle == 'extend':
+        tok2span_noneg = tok2span * tok2span_mask + (~tok2span_mask) * num_spans.unsqueeze(-1)  # (bs, seq_len)
+      elif pad_handle == 'zero':
+        tok2span_noneg = tok2span * tok2span_mask  # (bs, seq_len)
+      else:
+        raise NotImplementedError
+      return tok2span_noneg, span_mask
+
+    def agg_repr(repr: torch.Tensor,  # (bs, seq_len, emb_size)
+                 prep_list: List[Dict],
+                 agg_func: str = 'mean'):
+      bs, seq_len, emb_size = repr.size()
+      tok2span, span_mask = get_tok2span((bs, seq_len), prep_list, pad_handle='extend')
+      max_num_spans = span_mask.size(1)
+
+      agg_func = eval(f'scatter_{agg_func}')
+      tok2span = tok2span.unsqueeze(-1).expand(-1, -1, emb_size)  # (bs, seq_len, emb_size)
+      span_repr = agg_func(
+        repr, tok2span, dim=1,
+        dim_size=max_num_spans + 1, fill_value=0).type(repr.dtype)  # (bs, max_num_spans + 1, emb_size)
+      # remove the last "garbage" entry, mask out padding spans
+      span_repr = span_repr[:, :-1] * span_mask.unsqueeze(-1)  # (bs, max_num_spans, emb_size)
+      return span_repr, span_mask
+
+    def agg_score(score: torch.Tensor,  # (n_tab, n_sent, n_tab_tok, n_sent_tok)
+                  tab_prep_list: List[Dict],
+                  sent_prep_list: List[Dict]):
+      n_tab, n_sent, n_tab_tok, n_sent_tok = score.size()
+      tab_tok2span, tab_span_mask = get_tok2span((n_tab, n_tab_tok), tab_prep_list, pad_handle='extend')  # (n_tab, n_tab_tok), (n_tab, n_tab_span)
+      sent_tok2span, sent_span_mask = get_tok2span((n_sent, n_sent_tok), sent_prep_list, pad_handle='extend')  # (n_sent, n_sent_tok), (n_sent, n_sent_span)
+      n_sent_span, n_tab_span = sent_span_mask.size(1), tab_span_mask.size(1)
+
+      # max over sent tok
+      sent_tok2span = sent_tok2span.unsqueeze(0).unsqueeze(-2).expand(n_tab, -1, n_tab_tok, -1)  # (n_tab, n_sent, n_tab_tok, n_sent_tok)
+      # TODO: gpu support?
+      score = scatter_max(score.detach().cpu(), sent_tok2span.cpu(), dim=-1, dim_size=n_sent_span + 1, fill_value=0)[0].to(score)  # (n_tab, n_sent, n_tab_tok, n_sent_span + 1)
+      score = score[:, :, :, :-1] * sent_span_mask.unsqueeze(0).unsqueeze(-2)  # (n_tab, n_sent, n_tab_tok, n_sent_span)
+
+      # mean over tab tok
+      tab_tok2span = tab_tok2span.unsqueeze(1).unsqueeze(-1).expand(-1, n_sent, -1, n_sent_span)
+      score = scatter_mean(score, tab_tok2span, dim=-2, dim_size=n_tab_span + 1, fill_value=0).type(score.dtype)  # (n_tab, n_sent, n_tab_span + 1, n_sent_span)
+      score = score[:, :, :-1, :] * tab_span_mask.unsqueeze(1).unsqueeze(-1)  # (n_tab, n_sent, n_tab_span, n_sent_span)
+
+      return score, tab_span_mask, sent_span_mask
+
+    norm = lambda x: x / ((x * x).sum(-1, keepdim=True).sqrt() + 1e-10)
+
+    while True:
+      examples = input_queue.get()
+      if type(examples) is str and examples == 'DONE':
+        break
+      for example in examples:
+        try:
+          key, document, raw_tables = example['key'], example['document'], example['tables']
+          sents: List[str] = SlingExtractor.get_sentences(document, skip_numeric_sent=True)
+          sents_prep: List[Dict] = SlingExtractor.prepare_sentences(sents, ner, tokenizer_fast, lower=lower, max_length=1024)
+          tables_prep: List[Dict] = SlingExtractor.prepare_tables(raw_tables, tokenizer_fast, lower=lower, max_length=1024)
+          if len(sents_prep) <= 0 or len(tables_prep) <= 0:
+            continue
+
+          sents_ids, sents_attn_mask = pack(sents_prep)  # (n_sent, n_sent_tok)
+          table_ids, table_attn_mask = pack(tables_prep)  # (n_tab, n_tab_tok)
+
+          sents_repr = run(sents_ids, sents_attn_mask)  # (n_sent, n_sent_tok, emb)
+          tables_repr = run(table_ids, table_attn_mask)  # (n_tab, n_tab_tok, emb)
+
+          if score_function == 'mean':  # avg span embedding and perform cosine
+            # avg span emb
+            sents_span_repr, sents_span_mask = agg_repr(sents_repr, sents_prep, agg_func='mean')  # (n_sent, n_sent_span, emb)
+            tables_span_repr, tables_span_mask = agg_repr(tables_repr, tables_prep, agg_func='mean')  # (n_tab, n_tab_span, emb)
+            # cosine
+            sents_span_repr, tables_span_repr = norm(sents_span_repr), norm(tables_span_repr)
+            scores = torch.einsum('ijk,xyk->ixjy', tables_span_repr, sents_span_repr)  # (n_tab, n_sent, n_tab_span, n_sent_span)
+            mask = torch.einsum('ij,xy->ixjy', tables_span_mask, sents_span_mask)  # (n_tab, n_sent, n_tab_span, n_sent_span)
+          elif score_function == 'mean-max':  # mean over table span tokens - max over sent span tokens
+            # cosine
+            sents_repr, tables_repr = norm(sents_repr), norm(tables_repr)
+            scores_tok = torch.einsum('ijk,xyk->ixjy', tables_repr, sents_repr)  # (n_tab, n_sent, n_tab_tok, n_sent_tok)
+            mask_tok = torch.einsum('ij,xy->ixjy', table_attn_mask, sents_attn_mask)  # (n_tab, n_sent, n_tab_tok, n_sent_tok)
+            scores_tok = scores_tok * mask_tok
+            scores, tables_span_mask, sents_span_mask = agg_score(scores_tok, tables_prep, sents_prep)
+            mask = torch.einsum('ij,xy->ixjy', tables_span_mask, sents_span_mask)  # (n_tab, n_sent, n_tab_span, n_sent_span)
+          else:
+            raise NotImplementedError
+
+          # remove low scores
+          scores = scores * mask * scores.ge(lowest_score)
+
+          # spasify
+          n_table, n_sent, n_table_span, n_sent_span = mask.size()
+          topk = min(topk_match, n_sent_span * n_table_span)
+          sp_value, sp_ind = scores.view(n_table, n_sent, -1).topk(topk, -1)  # (n_tab, n_sent, topk)
+          sp_ind_tablespan, sp_ind_sentspan = sp_ind // n_sent_span, sp_ind % n_sent_span  # (n_tab, n_sent, topk) not all valid
+          sp_scores = torch.zeros_like(scores).view(n_table, n_sent, -1)  # (n_tab, n_sent, n_tab_span * n_sent_span)
+          scores = sp_scores.scatter_(-1, sp_ind, sp_value).view(*scores.size())  # (n_tab, n_sent, n_tab_span, n_sent_span)
+
+          # aggregate scores
+          span_scores, sent_span_choices = scores.max(-1)  # (n_tab, n_sent, n_tab_span)
+          sent_scores = span_scores.sum(-1)  # (n_tab, n_sent)
+          final_scores, sent_choices = sent_scores.topk(min(topk_sent, n_sent), -1)  # (n_tab, topk_sent)
+
+          # output
+          for table_ind in range(n_table):
+            raw_table = tables_prep[table_ind]['raw_table']
+            for sent_ind in sent_choices[table_ind]:
+              sent_ind = sent_ind.item()
+              table_str = tables_prep[table_ind]['text']
+              sent = sents_prep[sent_ind]['text']
+
+              sentspan2tablespancore: Dict[Tuple[int, int], Tuple[int, int, float]] = defaultdict(lambda: (0, 0, lowest_score))
+              for ts, ss in zip(sp_ind_tablespan[table_ind, sent_ind].cpu().numpy().tolist(),
+                                sp_ind_sentspan[table_ind, sent_ind].cpu().numpy().tolist()):
+                s = scores[table_ind, sent_ind, ts, ss].item()
+                if s <= lowest_score:
+                  continue
+                start, end, label = sents_prep[sent_ind]['spans_char'][ss]
+                tstart, tend, tlabel = tables_prep[table_ind]['spans_char'][ts]
+                if s > sentspan2tablespancore[(start, end)][-1]:
+                  sentspan2tablespancore[(start, end)] = (tstart, tend, s)
+
+              if debug:
+                print('*\t', sent.replace('\n', ' '))
+                print('*\t', table_str.replace('\n', ' '))
+                for (start, end), (tstart, tend, s) in sentspan2tablespancore.items():
+                  print(sent[start:end], table_str[tstart:tend].replace('\n', ' '), s, sep='  |  ')
+                print()
+
+              mentions: List[Tuple[int, int]] = sorted(list(sentspan2tablespancore.keys()))
+              if len(mentions) > 0:
+                out = {
+                  'uuid': f'dense_{key}_{table_ind}_{sent_ind}',
+                  'metadata': {
+                    'sent': sent,
+                    'table': table_str,
+                    'sentspan2tablespancore': list(sentspan2tablespancore.items()),
+                  },
+                  'table': raw_table,
+                  'context_before': [sent],
+                  'context_before_mentions': [mentions],
+                  'context_after': []
+                }
+                output_queue.put(out)
+        except KeyboardInterrupt as e:
+          raise e
+        except Exception as e:
+          print('error')
+          print(e)
+
+  def gen_sentence_emb(self,
+                       key2tables: Dict[str, List],
+                       key_feild: str,
+                       from_split: int,  # inclusive
+                       to_split: int,  # exclusive
+                       config_path: str,
+                       extra_config: Dict[str, Any],
+                       gpu_batch_size: int,
+                       score_function: str,
+                       topk_match: int,
+                       topk_sent: int,
+                       lower: bool,
+                       output_file: str,
+                       batch_size: int = 16,
+                       num_threads: int = 1,
+                       log_interval: int = 5000):
+    torch.multiprocessing.set_start_method('spawn', force=True)
+    mpw = MultiprocessWrapper(
+      num_threads=num_threads,
+      worker=functools.partial(self.gen_sentence_emb_worker,
+                               config_path=config_path,
+                               extra_config=extra_config,
+                               gpu_batch_size=gpu_batch_size,
+                               score_function=score_function,
+                               topk_match=topk_match,
+                               topk_sent=topk_sent,
+                               lower=lower),
+      writer=functools.partial(self.mention_write_worker, log_interval=log_interval),
+      output_file=output_file,
+      batch_size=batch_size,
+      use_gpu=True)
+
+    # read data
+    coverted_keys: Set[str] = set()
+    for sp in range(from_split, to_split):
+      corpus = sling.Corpus(str(self.root_dir / self.lang / f'documents-0000{sp}-of-00010.rec'))
+      for n, (doc_id, doc_raw) in tqdm(enumerate(corpus.input), disable=True):
+        store = sling.Store(self_commons)
+        doc_frame = store.parse(doc_raw)
+        metadata = self.get_metadata(doc_frame)
+        key = metadata[key_feild]
+        if key not in key2tables or key in coverted_keys:
+          continue
+        coverted_keys.add(key)
+        mpw.add_example({'key': key, 'document': doc_raw, 'tables': key2tables[key]})
+    mpw.finish()
+
+    print(f'#coverted keys {len(coverted_keys)}, #total keys {len(key2tables)}')
+    print(f'uncovered keys {list(set(key2tables.keys()) - coverted_keys)[:10]}')
 
   def build_category_hierarchy(self, out_file: str):
     child2parents: Dict[str, List[str]] = {}
@@ -806,16 +1191,70 @@ def wikitq_overlap(test_wtq_path: Path,
     print('')
 
 
+def select_by_embedding(prep_dir: Path,
+                        out_file: Path,
+                        num_files: int = 1,
+                        score_thres: float = 1.0,
+                        count_thres: int = 1,
+                        debug: bool = False,
+                        report: bool = False):
+  # for bart-large: 0.7, 0.6, 0.5
+  # for tapex-large: 0.8, 0.7, 0.6
+  all_scores: List[float] = []
+  key2scores: Dict[str, List[float]] = defaultdict(list)
+  num_mentions: List[int] = []
+  with open(out_file, 'w') as fout:
+    for nf in range(num_files):
+      key2examples: Dict[str, List[Tuple[Dict, float]]] = defaultdict(list)
+      with open(prep_dir / f'split{nf}.jsonl', 'r') as fin:
+        for l in tqdm(fin):
+          l = json.loads(l)
+          key = l['uuid'].rsplit('_', 1)[0]
+          sent = l['metadata']['sent']
+          table = l['metadata']['table']
+          s2ts = l['metadata']['sentspan2tablespancore']
+          mentions = []
+          total_score = 0
+          for (ss, se), (ts, te, s) in s2ts:
+            key2scores[key].append(s)
+            all_scores.append(s)
+            if s >= score_thres:
+              mentions.append((ss, se))
+              total_score += s
+              if debug:
+                print(sent[ss:se], table[ts:te].replace('\n', ' '), s, sep=' | ')
+          if len(mentions) >= count_thres:
+            l['context_before_mentions'] = [mentions]
+            key2examples[key].append((l, total_score))
+          if len(mentions) and debug:
+            input()
+      if not report:
+        for key, examples in key2examples.items():
+          # sortec first by #mentions then by total score
+          examples = sorted(examples, key=lambda x: (-len(x[0]['context_before_mentions'][0]), -x[1]))
+          example = examples[0][0]
+          num_mentions.append(len(example['context_before_mentions'][0]))
+          fout.write(json.dumps(example) + '\n')
+        print(f'count: {len(num_mentions)}, avg #mentions {np.mean(num_mentions)}')
+
+  if not report:
+    return
+  # histogram
+  plt.hist(all_scores, bins=100, weights=np.ones(len(all_scores)) / len(all_scores), cumulative=True)
+  plt.savefig('test.png')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, choices=[
     'url_as_key', 'pageid_as_key', 'match_raw', 'build_category_hierarchy',
     'pageid2topic', 'assign_topic', 'wikitq_split_topic', 'wikitq_split_cate', 'wikitq_overlap',
-    'sql2nl_with_retrieval'])
+    'sql2nl_with_retrieval', 'gen_sentence_emb', 'select_by_embedding'])
   parser.add_argument('--inp', type=Path, nargs='+')
   parser.add_argument('--out', type=Path)
   parser.add_argument('--topk', type=int, default=1, help='number of sentences used as context')
-  parser.add_argument('--threads', type=int, default=40)
+  parser.add_argument('--threads', type=int, default=1)
+  parser.add_argument('--other', type=str, nargs='+')
   args = parser.parse_args()
 
   SEED = 2021
@@ -850,6 +1289,51 @@ if __name__ == '__main__':
       url2tables, key_feild='url', from_split=0, to_split=10, output_file=out_file,
       use_all_more_than_num_mentions=0, topk=args.topk, filter_function=filter_function, get_method=get_method,
       batch_size=batch_size, num_threads=args.threads, log_interval=log_interval)
+
+  elif args.task == 'gen_sentence_emb':
+    prep_file, sling_root = args.inp
+    from_split, to_split, model_type = args.other
+    out_file = args.out
+    from_split, to_split = int(from_split), int(to_split)
+    log_interval = 1000
+    batch_size = 8
+    gpu_batch_size = 4
+    if model_type == 'bart_large':
+      config_path = '/mnt/root/TaBERT/data/runs/bart_large/config.json'
+      extra_config = {
+        'objective_function': 'seq2seq',
+        'base_model_name': 'facebook/bart-large',
+        'load_model_from': None  # /mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin
+      }
+    elif model_type == 'tapex_large':
+      config_path = '/mnt/root/TaBERT/data/runs/tapex_large/config.json'
+      extra_config = {
+        'objective_function': 'seq2seq',
+        'base_model_name': 'facebook/bart-large',
+        'load_model_from': '/mnt/root/TaBERT/data/runs/tapex_large/pytorch_model.bin'
+      }
+    else:
+      raise NotImplementedError
+    url2tables = load_url2tables(prep_file)[0]
+    se = SlingExtractor(sling_root)
+    se.gen_sentence_emb(url2tables, 'url', from_split=from_split, to_split=to_split,
+                        config_path=config_path,
+                        extra_config=extra_config,
+                        gpu_batch_size=gpu_batch_size,
+                        score_function='mean-max',
+                        topk_match=100,
+                        topk_sent=5,
+                        lower=True,
+                        output_file=out_file,
+                        batch_size=batch_size,
+                        num_threads=args.threads,
+                        log_interval=log_interval)
+
+  elif args.task == 'select_by_embedding':
+    prep_dir = args.inp[0]
+    num_files = 10
+    out_file = args.out
+    select_by_embedding(prep_dir, out_file, num_files=num_files, score_thres=0.7, count_thres=1, report=False)
 
   elif args.task == 'pageid_as_key':
     prep_file, sling_root = args.inp

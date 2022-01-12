@@ -11,6 +11,7 @@ from enum import Enum
 import numpy as np
 import os
 from multiprocessing import Queue, Process
+import time
 
 
 class TransformerVersion(Enum):
@@ -105,16 +106,26 @@ class BartTokenizerFastWrapper(BartTokenizerFast):
 
 
 class MultiprocessWrapper(object):
-  def __init__(self, num_threads: int, worker: Callable, writer: Callable, output_file: str, batch_size: int = 1):
+  def __init__(self,
+               num_threads: int,
+               worker: Callable,
+               writer: Callable,
+               output_file: str,
+               batch_size: int = 1,
+               use_gpu: bool = False):
     self.num_threads = num_threads
     self.batch_size = batch_size
+    self.use_gpu = use_gpu
 
     # start processes
     self.input_queue = Queue()
     self.output_queue = Queue()
     self.processes = []
-    for _ in range(num_threads):
-      p = Process(target=worker, args=(self.input_queue, self.output_queue))
+    for pid in range(num_threads):
+      if use_gpu:
+        p = Process(target=worker, args=(self.input_queue, self.output_queue, pid))
+      else:
+        p = Process(target=worker, args=(self.input_queue, self.output_queue))
       p.daemon = True
       p.start()
       self.processes.append(p)

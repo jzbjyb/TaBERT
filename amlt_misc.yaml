@@ -7,6 +7,10 @@ target:
   service: amlk8s
   name: itp-scus-v100
   vc: AlexTScience
+#target:
+#  service: aml
+#  name: V10032G
+#  vc: AlexTScience
 
 storage:
   data:
@@ -83,3 +87,105 @@ jobs:
   - ./run_vanilla.sh 24
     /mnt/root/TaBERT/data/train_data/wholetable_tapas_bart_mlm_contextmention
     data/runs/test seq2seq 24 5 null
+
+- name: dense_bart_large_1
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 0 1
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split0.jsonl
+- name: dense_bart_large_2
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 1 2
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split1.jsonl
+- name: dense_bart_large_3
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 2 3
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split2.jsonl
+- name: dense_bart_large_4
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 3 4
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split3.jsonl
+- name: dense_bart_large_5
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 4 5
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split4.jsonl
+- name: dense_bart_large_6
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 5 6
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split5.jsonl
+- name: dense_bart_large_7
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 6 7
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split6.jsonl
+- name: dense_bart_large_8
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 7 8
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split7.jsonl
+- name: dense_bart_large_9
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 8 9
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split8.jsonl
+- name: dense_bart_large_10
+  sku: G8
+  command:
+  - ./dense_retrieval.sh bart_large 9 10
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_bartlarge.data0/split9.jsonl
+
+- name: dense_tapex_large_1
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 0 1
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split0.jsonl
+- name: dense_tapex_large_2
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 1 2
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split1.jsonl
+- name: dense_tapex_large_3
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 2 3
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split2.jsonl
+- name: dense_tapex_large_4
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 3 4
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split3.jsonl
+- name: dense_tapex_large_5
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 4 5
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split4.jsonl
+- name: dense_tapex_large_6
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 5 6
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split5.jsonl
+- name: dense_tapex_large_7
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 6 7
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split6.jsonl
+- name: dense_tapex_large_8
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 7 8
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split7.jsonl
+- name: dense_tapex_large_9
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 8 9
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split8.jsonl
+- name: dense_tapex_large_10
+  sku: G8
+  command:
+  - ./dense_retrieval.sh tapex_large 9 10
+    /mnt/root/tapas/data/pretrain/train/preprocessed_mention_samepage_dense_tapexlarge.data0/split9.jsonl

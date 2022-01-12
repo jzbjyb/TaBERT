@@ -26,6 +26,16 @@ class Tapex(BasicDataset):
         examples.append((context, table, tgt))
     return examples
 
+  @staticmethod
+  def linearize(header: List[str], data: List[List[str]]) -> str:
+    header_str = 'col : ' + ' | '.join(header)
+    row_strs: List[str] = [header_str]
+    for row_idx, row in enumerate(data):
+      row_str = f'row {row_idx + 1} : ' + ' | '.join(row)
+      row_strs.append(row_str)
+    final = ' '.join(row_strs)
+    return final
+
   def convert_to_tabert_format(self, output_path: str):
     num_mentions: List[int] = []
     with open(output_path, 'w') as fout:

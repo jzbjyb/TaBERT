@@ -74,3 +74,210 @@ jobs:
   command:
   - ./finetune_predict.sh wtqqa_strict_1024 large full 50
     wholetable_tapas_samepag_bm25_tapex05m_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapas_samepage_dense_bartlarge_07_2_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_07_2_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_07_2_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_07_2_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_07_2_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_bartlarge_07_2_bm25_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_07_2_bartmask_salientmask:wholetable_tapas_samepag_bm25_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_07_2_bm25_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_07_2_bm25_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_07_2_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_bartlarge_07_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_07_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_07_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_07_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_07_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_bartlarge_06_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_06_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_06_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_06_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_06_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_bartlarge_06_bm25_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_06_bartmask_salientmask:wholetable_tapas_samepag_bm25_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_06_bm25_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_06_bm25_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_06_bm25_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_bartlarge_05_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_05_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_05_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_05_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_05_tapex05m_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapas_samepage_dense_tapexlarge_08_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_tapexlarge_08_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_tapexlarge_08_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_tapexlarge_08_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_tapexlarge_08_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_tapexlarge_07_2_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_tapexlarge_07_2_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_tapexlarge_07_2_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_tapexlarge_07_2_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_tapexlarge_07_2_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_tapexlarge_07_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_tapexlarge_07_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_tapexlarge_07_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_tapexlarge_07_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_tapexlarge_07_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_tapexlarge_06_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_tapexlarge_06_bartmask_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_tapexlarge_06_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_tapexlarge_06_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_tapexlarge_06_tapex05m_large/pytorch_model_epoch04.bin
+
+- name: wholetable_tapas_samepage_dense_bartlarge_06_onlysalient_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_06_salientmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_06_onlysalient_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_06_onlysalient_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_06_onlysalient_tapex05m_large/pytorch_model_epoch04.bin
+- name: wholetable_tapas_samepage_dense_bartlarge_06_onlybart_tapex05m_large
+  sku: G8
+  sku_count: 3
+  aml_mpirun:
+    process_count_per_node: 8
+    communicator: "OpenMpi"
+  command:
+  - ./run_model.sh 24 large
+    wholetable_tapas_samepage_dense_bartlarge_06_bartmask:wholetable_tapex_05m_bart_qa
+    wholetable_tapas_samepage_dense_bartlarge_06_onlybart_tapex05m_large
+    tapex_large/pytorch_model.bin
+    2 12 5
+- name: wholetable_tapas_samepage_dense_bartlarge_06_onlybart_tapex05m_large_finetune
+  sku: G8
+  command:
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapas_samepage_dense_bartlarge_06_onlybart_tapex05m_large/pytorch_model_epoch04.bin

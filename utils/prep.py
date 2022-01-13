@@ -672,6 +672,7 @@ if __name__ == '__main__':
     'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
     'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table', 'select_by_loss', 'count_cells'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
+  parser.add_argument('--other', type=str, nargs='+')
   parser.add_argument('--out', type=Path, required=False)
   args = parser.parse_args()
 
@@ -710,9 +711,7 @@ if __name__ == '__main__':
     generation_file, prep_file = args.inp[:2]
     full_prep_file = args.inp[2] if len(args.inp) > 2 else None
     output_file = args.out
-    num_gpu = 8
-    remove_dup = False
-    remove_empty = False
+    num_gpu, remove_dup, remove_empty = int(args.other[0]), eval(args.other[1]), eval(args.other[2])
     has_logprob = False
     replace_context(generation_file, prep_file, full_prep_file=full_prep_file, output_file=output_file,
                     num_files=num_gpu, remove_dup=remove_dup, remove_empty=remove_empty, has_logprob=has_logprob)
@@ -748,13 +747,11 @@ if __name__ == '__main__':
     random_pair_context_with_table(prep_file, out_file)
 
   elif args.task == 'select_by_loss':
-    loss_file, prep_file = args.inp
-    # TODO: make sure this is the file used for sampling/beam search
-    to_skip_file = '/mnt/root/TaBERT/data/wikitablequestions/tapex/train.src.128'
+    loss_file, prep_file, to_skip_file = args.inp
     output_file = args.out
-    num_gpu = 4
+    num_gpu = int(args.other[0])
     selection_method = 'max'
-    criteria = 'generation'
+    criteria = 'denotation'
     topks = [64, 128, 256, 512, 1024, 2048, 4096, 8192]
     skips = set(json.loads(l)['uuid'] for l in open(to_skip_file, 'r').readlines())
     select_by_loss(loss_file, prep_file, output_file,

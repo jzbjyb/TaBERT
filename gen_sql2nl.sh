@@ -35,8 +35,17 @@ source env_initialize.sh
 #input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.beamsearchnl.multitask_filtered_min.top8192
 #output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num128_beamsearchnl_multitask_filtered_min_top8192
 
-input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.beamsearchnl_logprob.multitask_filtered.top8192
-output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num128_beamsearchnl_logprob_multitask_filtered_top8192
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.beamsearchnl_logprob.multitask_filtered.top8192
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num128_beamsearchnl_logprob_multitask_filtered_top8192
+
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num128.beamsearchnl.bart_filtered.top8192
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num128_beamsearchnl_bart_filtered_top8192
+
+#input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num16.beamsearchnl.tapex_filtered.top8192
+#output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num16_beamsearchnl_tapex_filtered_top8192
+
+input_dir=/mnt/root/TaBERT/data/wikitablequestions/tapex/sql2nl_denormalized/train.src.num1024.beamsearchnl.tapex_filtered.top8192
+output_dir=/mnt/root/TaBERT/data/train_data/wtq_sql2nl_denormalized_num1024_beamsearchnl_tapex_filtered_top8192
 
 # -- TAPEX data --
 #input_dir=/mnt/root/TaBERT/data/tapex/preprocessed/train.500k.sql2nl.jsonl

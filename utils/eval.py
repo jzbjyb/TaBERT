@@ -110,6 +110,8 @@ if __name__ == '__main__':
     prev_example = None
     with open(pred_file1, 'r', encoding='utf-8') as pfin, \
       open(args.gold, 'r', encoding='utf-8') as gfin:
+        if args.gold.endswith('.tsv'):
+          _ = gfin.readline()  # skip the header
         pfin_others = [open(f, 'r', encoding='utf-8') for f in pred_file_others]
         for i, p in enumerate(pfin):
             # read predictions
@@ -137,6 +139,7 @@ if __name__ == '__main__':
                 print(pred)
                 continue
             # evaluate
+            em_others = []
             if args.data == 'wikisql':  # exact match
                 em = pred.lower() == gold.lower()
             elif args.data == 'wtq':  # official WTQ evaluation
@@ -181,28 +184,33 @@ if __name__ == '__main__':
             anstype = 'number' if BasicDataset.is_number(gold.strip()) else 'text'
             answertype2ems[anstype].append(em)
 
-            example = prev_example = json.loads(gfin.readline())
-            #example = next(csv_reader)
-            if 'sql' in example and type(example['sql']) is dict and 'agg' in example['sql']:  # wikisql example
-                agg = example['sql']['agg']
-                num_cond = len(example['sql']['conds'])
-                agg2ems[AGG_OPS[agg]].append(em)
-                numcond2ems[num_cond].append(em)
-                agg2cases[AGG_OPS[agg]][int(em)].append((source, pred, gold))
-                for cond in example['sql']['conds']:
-                    cond = cond[1]
-                    cond2ems[COND_OPS[cond]].append(em)
-                    cond2cases[COND_OPS[cond]][int(em)].append((source, pred, gold))
-            elif 'answer_coordinates' in example:  # tabert format
-                num_coord = len(example['answer_coordinates'])
-                numcoord2ems[num_coord].append(em)
-                if anstype == 'number' or num_coord == 1:
-                    tapas_ems.append(em)
+            if args.gold.endswith('.tsv'):
+              wtqid = gfin.readline().strip().split()[0]
+              fout.write(json.dumps({'id': wtqid, 'pred': pred, 'gold': gold, 'em': em}) + '\n')
 
-            if len(p) == 3:
-                numcell2ems[num_cell].append(em)
-                firstword2ems[first_word].append(em)
-                firstword2cases[first_word][int(em)].append((source, pred, gold))
+            else:
+              example = prev_example = json.loads(gfin.readline())
+              #example = next(csv_reader)
+              if 'sql' in example and type(example['sql']) is dict and 'agg' in example['sql']:  # wikisql example
+                  agg = example['sql']['agg']
+                  num_cond = len(example['sql']['conds'])
+                  agg2ems[AGG_OPS[agg]].append(em)
+                  numcond2ems[num_cond].append(em)
+                  agg2cases[AGG_OPS[agg]][int(em)].append((source, pred, gold))
+                  for cond in example['sql']['conds']:
+                      cond = cond[1]
+                      cond2ems[COND_OPS[cond]].append(em)
+                      cond2cases[COND_OPS[cond]][int(em)].append((source, pred, gold))
+              elif 'answer_coordinates' in example:  # tabert format
+                  num_coord = len(example['answer_coordinates'])
+                  numcoord2ems[num_coord].append(em)
+                  if anstype == 'number' or num_coord == 1:
+                      tapas_ems.append(em)
+
+              if len(p) == 3:
+                  numcell2ems[num_cell].append(em)
+                  firstword2ems[first_word].append(em)
+                  firstword2cases[first_word][int(em)].append((source, pred, gold))
 
     if args.clean:
         exit(0)

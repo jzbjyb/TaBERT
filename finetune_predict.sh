@@ -77,11 +77,18 @@ elif [[ "$task" == "topic_all" ]]; then
   task+=":wtqqa_strict_culture_128:wtqqa_strict_misc_128"
   task+=":wtqqa_strict_sports:wtqqa_strict_politics:wtqqa_strict_people"
   task+=":wtqqa_strict_culture:wtqqa_strict_misc"
+elif [[ "$task" == "topic_fp_all_fewshot" ]]; then
+  task="wtqqa_strict_fp_sports_128:wtqqa_strict_fp_politics_128:wtqqa_strict_fp_people_128"
+  task+=":wtqqa_strict_fp_culture_128:wtqqa_strict_fp_misc_128"
 elif [[ "$task" == "topic_fp_all" ]]; then
   task="wtqqa_strict_fp_sports_128:wtqqa_strict_fp_politics_128:wtqqa_strict_fp_people_128"
   task+=":wtqqa_strict_fp_culture_128:wtqqa_strict_fp_misc_128"
   task+=":wtqqa_strict_fp_sports:wtqqa_strict_fp_politics:wtqqa_strict_fp_people"
   task+=":wtqqa_strict_fp_culture:wtqqa_strict_fp_misc"
+elif [[ "$task" == "wikisql_fewshot" ]]; then
+  task="wikisqlqa_strict_16:wikisqlqa_strict_128:wikisqlqa_strict_1024"
+elif [[ "$task" == "wikisql_full" ]]; then
+  task="wikisqlqa_strict"
 fi
 
 # --- finetune & predict ---
@@ -453,6 +460,20 @@ for task in "${tasks[@]}"; do
   elif [[ "$task" == "totto_1_100" ]]; then
     data=/mnt/root/TaBERT/data/train_data/totto_data2text_bart_1_100
     mode=generate-dev
+
+  elif [[ "$task" == "wikisqlqa_strict" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wikisql_qa_tapex_strict_1024
+    mode=generate-test
+  elif [[ "$task" == "wikisqlqa_strict_16" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wikisql_qa_tapex_strict_1024_num16
+    mode=generate-test
+  elif [[ "$task" == "wikisqlqa_strict_128" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wikisql_qa_tapex_strict_1024_num128
+    mode=generate-test
+  elif [[ "$task" == "wikisqlqa_strict_1024" ]]; then
+    data=/mnt/root/TaBERT/data/train_data/wikisql_qa_tapex_strict_1024_num1024
+    mode=generate-test
+
   else
     echo 'unsupported tasks' ${task}
     exit 1

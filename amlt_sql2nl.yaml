@@ -327,6 +327,40 @@ jobs:
     --base-model-name facebook/bart-large --only_test --mode generate-train
     --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num1024/nl.txt
 
+- name: wtq_sql2nl_denormalized_num2048_bartlarge
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num2048
+    wtq_sql2nl_denormalized_num2048_bartlarge
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num2048_bartlarge
+    wtq_sql2nl_denormalized_num2048_bartlarge/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num2048/nl.txt
+
+- name: wtq_sql2nl_denormalized_num4096_bartlarge
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wtq_sql2nl_denormalized_num4096
+    wtq_sql2nl_denormalized_num4096_bartlarge
+    null
+    2 16 50
+  - ./run_model.sh 8 large
+    tapex_05m_sql2nl
+    wtq_sql2nl_denormalized_num4096_bartlarge
+    wtq_sql2nl_denormalized_num4096_bartlarge/pytorch_model_epoch49.bin
+    8 1 1
+    --only_test
+    --mode generate-train
+    --output_file /mnt/root/TaBERT/data/train_data/tapex_05m_sql2nl/wtq_sql2nl_denormalized_num4096/nl.txt
+
 - name: wtq_sql2nl_denormalized_bartlarge
   sku: G8
   command:

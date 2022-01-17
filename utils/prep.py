@@ -18,6 +18,8 @@ from multiprocessing import Queue
 from transformers import BartForConditionalGeneration
 from table_bert.dataset_utils import BasicDataset
 from table_bert.utils import get_url, MultiprocessWrapper
+from table_bert.squall import Squall
+from table_bert.wikitablequestions import WikiTQ
 
 
 def self_in_dense(ret_file: str):
@@ -37,18 +39,22 @@ def self_in_dense(ret_file: str):
   print(f'avg MRR {np.mean(mrrs)}')
 
 
-def count_mentions(prep_file: str, max_num_examples: Union[int, None] = 50000):
+def count_mentions(prep_file: str, max_num_examples: Union[int, None] = 50000, out_file: Path = None):
   num_mentions: List[int] = []
   context_lens: List[int] = []
+  if out_file:  # filter sentence with mentions
+    fout = open(out_file, 'w')
   with open(prep_file, 'r') as fin:
     for i, l in tqdm(enumerate(fin)):
       if max_num_examples and i >= max_num_examples:
         break
-      l = json.loads(l)
-      nm = len(l['context_before_mentions'][0])
-      cl = len(l['context_before'][0])
+      d = json.loads(l)
+      nm = len(d['context_before_mentions'][0])
+      cl = len(d['context_before'][0])
       num_mentions.append(nm)
       context_lens.append(cl)
+      if out_file and nm > 0:
+        fout.write(l)
   print(f'avg #mention {np.mean(num_mentions)}, avg context len {np.mean(context_lens)}')
   plt.hist(num_mentions, bins=100, weights=np.ones(len(num_mentions)) / len(num_mentions))
   plt.savefig('test_num_mentions.png')
@@ -665,15 +671,146 @@ def count_cells(prep_file: str):
   print(f'mean {np.mean(nums)}, max {np.max(nums)}, median {np.median(nums)}')
 
 
+def fewshot_pcyin_nsm(fewshot_prep_file: Path, nsm_dir: Path, out_dir: Path, from_shard: int = 0, to_shard: int = 90):
+  wtqids: Set[str] = set()
+  with open(fewshot_prep_file, 'r') as fin:
+    for l in fin:
+      wtqid = json.loads(l)['uuid']
+      wtqids.add(wtqid)
+  print(f'#ids in our file {len(wtqids)}')
+
+  os.makedirs(out_dir, exist_ok=True)
+  final_count = 0
+  for s in range(from_shard, to_shard):
+    in_file = nsm_dir / f'train_split_shard_{to_shard}-{s}.jsonl'
+    to_file = out_dir / f'train_split_shard_{to_shard}-{s}.jsonl'
+    with open(in_file, 'r') as fin, open(to_file, 'w') as fout:
+      for l in fin:
+        if json.loads(l)['id'] in wtqids:
+          assert l.endswith('\n')
+          fout.write(l)
+          final_count += 1
+  print(f'#ids in output file {final_count}')
+
+
+def lenof(cases: Dict[str, Tuple[Dict, Dict]], squall: Squall, wtq: WikiTQ, field: str = 'sql'):
+  len_list = []
+  for key, (better, worse) in cases.items():
+    l = len(squall.wtqid2example[better['id']][field])
+    len_list.append(l)
+  return np.mean(len_list)
+
+
+def distributionof(cases: Dict[str, Tuple[Dict, Dict]], squall: Squall, wtq: WikiTQ, field: str = 'sql', dedup: bool = False):
+  tok2count = defaultdict(lambda: 0)
+  for key, (better, worse) in cases.items():
+    toks = squall.wtqid2example[better['id']][field]
+    if dedup:  toks = set(toks)
+    for tok in toks:
+      tok2count[tok] += 1
+  for tok in tok2count:
+    tok2count[tok] /= len(cases)
+  return tok2count
+
+
+def sumof(cases: Dict[str, Tuple[Dict, Dict]], squall: Squall, wtq: WikiTQ, field: str = 'sql'):
+  len_list = []
+  for key, (better, worse) in cases.items():
+    l = sum(squall.wtqid2example[better['id']]['raw'][field])
+    len_list.append(l)
+  return np.mean(len_list)
+
+
+def tablecell(cases: Dict[str, Tuple[Dict, Dict]], squall: Squall, wtq: WikiTQ):
+  header_lens = []
+  data_lens = []
+  for key, (better, worse) in cases.items():
+    header, _, data = wtq.get_table(wtq.wtqid2tableid[better['id']])
+    header_lens.append(len(header))
+    data_lens.append(len(data) * len(data[0]))
+  return np.mean(header_lens), np.mean(data_lens), np.mean(header_lens) + np.mean(data_lens)
+
+
+def compare_nat_syn(nat_file: str,  syn_file: str, multi_file: str, squall: Squall, wtq: WikiTQ):
+  def compare_distribution(tok2count1: Dict[str, int], tok2count2: Dict[str, int]):
+    keys1 = [x[0] for x in sorted(tok2count1.items(), key=lambda x: -x[1])]
+    keys2 = [x[0] for x in sorted(tok2count2.items(), key=lambda x: -x[1])]
+    all_keys = keys1 + [k for k in keys2 if k not in keys1]
+    print('\t'.join(all_keys))
+    print('\t'.join(['{:.3f}'.format(tok2count1[k]) for k in all_keys]))
+    print('\t'.join(['{:.3f}'.format(tok2count2[k]) for k in all_keys]))
+
+  key2datas = []
+  for file in [nat_file,  syn_file, multi_file]:
+    key2data = {}
+    with open(file, 'r') as fin:
+      for l in fin:
+        l = json.loads(l)
+        key2data[l['id']] = l
+    key2datas.append(key2data)
+  nat_data, syn_data, multi_data = key2datas
+  print(set(nat_data.keys()) == set(syn_data.keys()) == set(multi_data.keys()))
+
+  keys = [k for k in squall.wtqid2example if k in nat_data]
+  nat_cases: Dict[str, Tuple[Dict, Dict]] = {}
+  syn_cases: Dict[str, Tuple[Dict, Dict]] = {}
+  print(f'#examples {len(keys)}')
+  for key in keys:
+    em = [nat_data[key]['em'], syn_data[key]['em'], multi_data[key]['em']]
+    if nat_data[key]['em'] and not syn_data[key]['em']:  # nat good
+      nat_cases[key] = (nat_data[key], syn_data[key])
+
+    if not nat_data[key]['em'] and syn_data[key]['em']:  # syn good
+      syn_cases[key] = (syn_data[key], nat_data[key])
+
+  print(f'nat better {len(nat_cases)}, syn better {len(syn_cases)}')
+  print('sql-char', lenof(nat_cases, squall, wtq, field='sql'), lenof(syn_cases, squall, wtq, field='sql'))
+  print('nl-char', lenof(nat_cases, squall, wtq, field='nl'), lenof(syn_cases, squall, wtq, field='nl'))
+  print('sql-kw', lenof(nat_cases, squall, wtq, field='sql_kw'), lenof(syn_cases, squall, wtq, field='sql_kw'))
+  print('sql-token', lenof(nat_cases, squall, wtq, field='sql_raw'), lenof(syn_cases, squall, wtq, field='sql_raw'))
+  print('nl-token', lenof(nat_cases, squall, wtq, field='nl_raw'), lenof(syn_cases, squall, wtq, field='nl_raw'))
+
+  print('nl_incolumns', sumof(nat_cases, squall, wtq, field='nl_incolumns'), sumof(syn_cases, squall, wtq, field='nl_incolumns'))
+  print('nl_incells', sumof(nat_cases, squall, wtq, field='nl_incells'), sumof(syn_cases, squall, wtq, field='nl_incolumns'))
+  print('columns_innl', sumof(nat_cases, squall, wtq, field='columns_innl'), sumof(syn_cases, squall, wtq, field='columns_innl'))
+
+  print('tablecell', tablecell(nat_cases, squall, wtq), tablecell(syn_cases, squall, wtq))
+
+  print('sql-kw')
+  compare_distribution(
+    distributionof(nat_cases, squall, wtq, field='sql_kw', dedup=True),
+    distributionof(syn_cases, squall, wtq, field='sql_kw', dedup=True))
+
+
+
+def fewshot_tapas(fewshot_prep_file: Path, tsv_file: Path, out_file: Path):
+  wtqids: Set[str] = set()
+  with open(fewshot_prep_file, 'r') as fin:
+    for l in fin:
+      wtqid = json.loads(l)['uuid']
+      wtqids.add(wtqid)
+  print(f'#ids in our file {len(wtqids)}')
+
+  final_count = 0
+  with open(tsv_file, 'r') as fin, open(out_file, 'w') as fout:
+    for i, l in enumerate(fin):
+      if i == 0 or l.strip().split()[0] in wtqids:
+        assert l.endswith('\n')
+        fout.write(l)
+        final_count += 1
+  print(f'#ids in output file {final_count}')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
     'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
-    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table', 'select_by_loss', 'count_cells'])
+    'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table',
+    'select_by_loss', 'count_cells', 'fewshot_pcyin_nsm', 'fewshot_tapas', 'compare_nat_syn'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--other', type=str, nargs='+')
-  parser.add_argument('--out', type=Path, required=False)
+  parser.add_argument('--out', type=Path, required=False, default=None)
   args = parser.parse_args()
 
   SEED = 2021
@@ -684,7 +821,8 @@ if __name__ == '__main__':
     self_in_dense(args.inp[0])
 
   elif args.task == 'count_mentions':
-    count_mentions(args.inp[0], max_num_examples=None)
+    out_file = args.out
+    count_mentions(args.inp[0], max_num_examples=None, out_file=out_file)
 
   elif args.task == 'tapex_ans_in_source':
     tapex_ans_in_source(args.inp[0])
@@ -761,3 +899,21 @@ if __name__ == '__main__':
   elif args.task == 'count_cells':
     prep_file = args.inp[0]
     count_cells(prep_file)
+
+  elif args.task == 'fewshot_pcyin_nsm':
+    fewshot_prep_file, nsm_dir = args.inp
+    out_dir = args.out
+    fewshot_pcyin_nsm(fewshot_prep_file, nsm_dir, out_dir)
+
+  elif args.task == 'fewshot_tapas':
+    fewshot_prep_file, wtq_dir = args.inp
+    out_file = args.out
+    tsv_file = wtq_dir / 'data' / 'random-split-1-train.tsv'
+    fewshot_tapas(fewshot_prep_file, tsv_file, out_file)
+
+  elif args.task == 'compare_nat_syn':
+    #nat_file,  syn_file, multi_file = args.inp
+    nat_file, syn_file, multi_file = 'analysis/natural.jsonl', 'analysis/synthetic.jsonl', 'analysis/multitask.jsonl'
+    squall = Squall(Path('data/squall/data/squall.json'), wikitq=None)
+    wtq = WikiTQ(Path('data/wikitablequestions/WikiTableQuestions'))
+    compare_nat_syn(nat_file, syn_file, multi_file, squall, wtq)

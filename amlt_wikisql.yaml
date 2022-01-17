@@ -1,0 +1,115 @@
+description: finetune on WikiSQL
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+#target:
+#  service: aml
+#  name: V10032G
+#  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: bartlarge
+  sku: G8
+  command:
+  - ./finetune_predict.sh wikisql_fewshot large full 50
+    bart_large/pytorch_model.bin
+  - ./finetune_predict.sh wikisql_full large full 20
+    bart_large/pytorch_model.bin
+
+- name: tapexlarge
+  sku: G8
+  command:
+  - ./finetune_predict.sh wikisql_fewshot large full 50
+    tapex_large/pytorch_model.bin
+  - ./finetune_predict.sh wikisql_full large full 20
+    tapex_large/pytorch_model.bin
+
+- name: tapexlarge_sql
+  sku: G8
+  command:
+  - ./finetune_predict.sh wikisqlqa_strict_16:wikisqlqa_strict_128 large full 50
+    wholetable_tapex_05m_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin
+- name: tapexlarge_sql2
+  sku: G8
+  command:
+  - ./finetune_predict.sh wikisql_full large full 20
+    wholetable_tapex_05m_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin
+- name: tapexlarge_sql3
+  sku: G8
+  command:
+  - ./finetune_predict.sh wikisqlqa_strict_1024 large full 50
+    wholetable_tapex_05m_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin
+
+- name: natural
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisql_fewshot large full 50
+      wholetable_tapas_samepage_dense_bartlarge_06_tapex05m_large/pytorch_model_epoch04.bin
+    - ./finetune_predict.sh wikisql_full large full 20
+      wholetable_tapas_samepage_dense_bartlarge_06_tapex05m_large/pytorch_model_epoch04.bin
+
+- name: sql
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisql_fewshot large full 50
+      wholetable_tapex_05m_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin
+    - ./finetune_predict.sh wikisql_full large full 20
+      wholetable_tapex_05m_bart_qa_tapexbaseinit_large/pytorch_model_epoch04.bin
+
+- name: synthetic16
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict_16 large full 50
+      wholetable_tapex_wtqnl_denormalized_num16_qa_beamsearchnl_tapex_filtered_top8192_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: multitask16
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict_16 large full 50
+      wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num16_st_large/pytorch_model_epoch04.bin
+
+- name: synthetic128
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict_128 large full 50
+      wholetable_tapex_wtqnl_denormalized_num128_qa_beamsearchnl_multitask_filtered_top8192_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: multitask128
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict_128 large full 50
+      wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num128_st_large/pytorch_model_epoch04.bin
+
+- name: synthetic1024
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict_1024 large full 50
+      wholetable_tapex_wtqnl_denormalized_num1024_qa_beamsearchnl_tapex_filtered_top8192_mt_tapexlarge/pytorch_model_epoch04.bin
+- name: multitask1024
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict_1024 large full 50
+      wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num1024_st_large/pytorch_model_epoch04.bin
+
+- name: synthetic_all
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict large full 20
+      wholetable_tapex_wtqnl_denormalized_qa_tapexlarge/pytorch_model_epoch04.bin
+- name: multitask_all
+  sku: G8
+  command:
+    - ./finetune_predict.sh wikisqlqa_strict large full 20
+      wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_numall_large/pytorch_model_epoch04.bin

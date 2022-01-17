@@ -61,14 +61,13 @@ class WikiSQL(BasicDataset):
         with open(output_path, 'w') as fout:
             for idx, example in tqdm(enumerate(data)):
                 td = {
-                    'uuid': None,
+                    'uuid': f'wsql_{split}_{idx}',
                     'table': {'caption': '', 'header': [], 'data': [], 'data_used': [], 'used_header': []},
                     'context_before': [],
                     'context_after': [],
                     'context_before_mentions': [],
                     'context_before_mentions_cells': [],
                 }
-                td['uuid'] = f'wsql_{split}_{idx}'
                 question = example['question']
                 td['context_before'].append(question)
                 td['table']['data'] = self.normalize_rows(example['table']['rows'])

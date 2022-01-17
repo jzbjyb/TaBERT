@@ -26,7 +26,7 @@ def main():
   elif args.task == 'squall':
     squall_file, wtq_dir = args.inp
     output_path = args.out
-    fews = [16, 32, 64, 128, 256, 512, 1024]
+    fews = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
     squall = Squall(squall_file, wikitq=None)
     #print(sorted(squall.keyword2count.items(), key=lambda x: -x[1]))
     for few in fews:

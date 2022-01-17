@@ -15,6 +15,10 @@ fi
 
 if [[ "$task" == "wtqqa" ]]; then
   gold=${prefix}/mnt/root/TaBERT/data/wikitablequestions/test/preprocessed_with_ans.jsonl
+elif [[ "$task" == "wtqqa_dev" ]]; then
+  gold=data/wikitablequestions/WikiTableQuestions/data/random-split-1-dev.tsv  # case study purpose
+elif [[ "$task" == "wikisqlqa" ]]; then
+  gold=${prefix}/mnt/root/TaBERT/data/wikisql/tapex/test.src
 elif [[ "$task" == "totto_official" ]]; then
   gold=$(pwd)/data/totto_data/totto_dev_data.jsonl
 elif [[ "$task" == "totto" ]]; then

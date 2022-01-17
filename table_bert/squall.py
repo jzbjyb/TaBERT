@@ -1,4 +1,4 @@
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, List
 import json
 from tqdm import tqdm
 from pathlib import Path
@@ -33,6 +33,7 @@ class Squall(BasicDataset):
           columns = [c[0] for c in example['columns']]
         nl: str = ' '.join(example['nl'])
         sql = []
+        sql_kw: List[str] = []
         for t in example['sql']:
           if t[0] == 'Column':  # match the column index to the corresponding name
             ci = int(t[1].split('_', 1)[0][1:]) - 1
@@ -45,6 +46,7 @@ class Squall(BasicDataset):
             sql.append(t[1])
             if t[0] == 'Keyword':
               keyword2count[t[1]] += 1
+              sql_kw.append(t[1])
         sql = ' '.join(sql)
         has_fromw = sql.find(fromw + ' ') >= 0 or sql.endswith(fromw)
         count_fromw += int(has_fromw)
@@ -52,6 +54,10 @@ class Squall(BasicDataset):
         if sql.endswith(fromw):
           sql = sql[:-len(fromw)]
         wtqid2example[wtqid] = {
+          'raw': example,
+          'sql_raw': example['sql'],
+          'nl_raw': example['nl'],
+          'sql_kw': sql_kw,
           'nl': nl,
           'sql': sql
         }

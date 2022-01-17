@@ -1,0 +1,35 @@
+description: WikiTableQuestions Topic Split
+
+environment:
+  image: jzbjyb/my-repo:latest
+
+target:
+  service: amlk8s
+  name: itp-scus-v100
+  vc: AlexTScience
+#target:
+#  service: aml
+#  name: V10032G
+#  vc: AlexTScience
+
+storage:
+  data:
+    storage_account_name: tsinterns
+    container_name: t-zhjiang
+    mount_dir: /mnt/root
+
+code:
+  local_dir: $CONFIG_DIR
+
+jobs:
+- name: tapexlarge
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_fp_all_fewshot large full 50
+    tapex_large/pytorch_model.bin
+
+- name: multitask128
+  sku: G8
+  command:
+  - ./finetune_predict.sh topic_fp_all_fewshot large full 50
+    wholetable_tapas_samepage_dense_bartlarge_06_tapex_sqlandnl_num128_st_large/pytorch_model_epoch04.bin

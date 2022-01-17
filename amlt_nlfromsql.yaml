@@ -120,6 +120,26 @@ jobs:
     2 36 5
   - ./finetune_predict.sh default large full 50
     wholetable_tapex_wtqnl_denormalized_qa_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num4096_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num4096_qa
+    wholetable_tapex_wtqnl_denormalized_num4096_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num4096_qa_tapexlarge/pytorch_model_epoch04.bin
+- name: wholetable_tapex_wtqnl_denormalized_num2048_qa_tapexlarge_and_finetune
+  sku: G8
+  command:
+  - ./run_model.sh 8 large
+    wholetable_tapex_wtqnl_denormalized_num2048_qa
+    wholetable_tapex_wtqnl_denormalized_num2048_qa_tapexlarge
+    tapex_large/pytorch_model.bin
+    2 36 5
+  - ./finetune_predict.sh default large full 50
+    wholetable_tapex_wtqnl_denormalized_num2048_qa_tapexlarge/pytorch_model_epoch04.bin
 - name: wholetable_tapex_wtqnl_denormalized_num1024_qa_tapexlarge_and_finetune
   sku: G8
   command:

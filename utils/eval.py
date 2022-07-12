@@ -2,6 +2,7 @@ import os
 os.environ['USE_TRANSFORMER'] = 'True'  # use new version
 
 from typing import List, Union, Dict
+from pathlib import Path
 from argparse import ArgumentParser
 import json
 import numpy as np
@@ -49,6 +50,26 @@ def source_contains(source: str, targets: Union[str, List[str]]):
     return True
 
 
+def tsv_unescape(x):
+  return x.replace(r'\n', '\n').replace(r'\p', '|').replace('\\\\', '\\')
+
+
+def tsv_unescape_list(x):
+  return [tsv_unescape(y) for y in x.split('|')]
+
+
+def load_tagged_file(tagged_file: Path) -> List[List[str]]:
+  results = []
+  with open(tagged_file, 'r') as fin:
+    header = fin.readline().rstrip('\n').split('\t')
+    for line in fin:
+      stuff = dict(zip(header, line.rstrip('\n').split('\t')))
+      ex_id = stuff['id']
+      original_strings = tsv_unescape_list(stuff['targetValue'])
+      results.append(original_strings)
+  return results
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--prediction', type=str, required=True, nargs='+')
@@ -60,10 +81,14 @@ if __name__ == '__main__':
     parser.add_argument('--clean', action='store_true',
                         help='clean the output file and print (which can be followed by other evaluation scripts)')
     parser.add_argument('--compare_em', action='store_true')
+    parser.add_argument('--not_split_single', action='store_true')
     args = parser.parse_args()
     if '_sql' in args.data:
         from rouge import Rouge
         rouge = Rouge()
+
+    ind2tagged = load_tagged_file('/root/exp/WikiTableQuestions/tagged/data/pristine-unseen-tables.tagged')
+    ind2tagged: Dict[int, List[List[str]]] = dict(zip(range(len(ind2tagged)), ind2tagged))
 
     cls_token, sep_token, pad_token = TableBertConfig.get_special_tokens(args.model_type)
     def clean_output_from_model(text: str):
@@ -145,9 +170,14 @@ if __name__ == '__main__':
             elif args.data == 'wtq':  # official WTQ evaluation
                 if args.multi_ans_sep:
                     sep = args.multi_ans_sep
-                    golds = gold.split(sep)
-                    preds: List[str] = pred.split(sep)
+                    if len(ind2tagged[i]) == 1 and args.not_split_single:
+                      golds = [gold]
+                      preds: List[str] = [pred]
+                    else:
+                      golds = gold.split(sep)
+                      preds: List[str] = pred.split(sep)
                     em = check_denotation(to_value_list(golds), to_value_list(preds))
+                    print(em, golds, preds)
                     aii = source_contains(source, golds)
                     ops = get_ops(source.lower())
                     for op in ops:

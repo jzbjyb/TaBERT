@@ -20,6 +20,8 @@ from table_bert.dataset_utils import BasicDataset
 from table_bert.utils import get_url, MultiprocessWrapper
 from table_bert.squall import Squall
 from table_bert.wikitablequestions import WikiTQ
+from table_bert.config import TableBertConfig
+from .eval import load_tagged_file
 
 
 def self_in_dense(ret_file: str):
@@ -801,13 +803,32 @@ def fewshot_tapas(fewshot_prep_file: Path, tsv_file: Path, out_file: Path):
   print(f'#ids in output file {final_count}')
 
 
+def convert_to_official_eval(pred_file: Path, prep_file: Path, out_file: Path):
+  ind2tagged = load_tagged_file('/root/exp/WikiTableQuestions/tagged/data/pristine-unseen-tables.tagged')
+  ind2tagged: Dict[int, List[List[str]]] = dict(zip(range(len(ind2tagged)), ind2tagged))
+
+  cls_token, sep_token, pad_token = TableBertConfig.get_special_tokens('facebook/bart-base')
+  with open(pred_file, 'r') as pfin, open(prep_file, 'r') as sfin, open(out_file, 'w') as fout:
+    for i, p in enumerate(pfin):
+      pred = p.rstrip('\n').split('\t')[0]
+      for rmt in [pad_token, cls_token, sep_token]:
+        pred = pred.replace(rmt, '')
+      if len(ind2tagged[i]) == 1:
+        pass
+      else:
+        pred = '\t'.join(pred.split(', '))
+      id = json.loads(sfin.readline())['uuid']
+      fout.write(f'{id}\t{pred}\n')
+
+
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--task', type=str, required=True, choices=[
     'self_in_dense', 'count_mentions', 'tapex_ans_in_source', 'merge_shards',
     'ret_compare', 'vis_prep', 'replace_context', 'process_bidirection', 'compare_two_files',
     'dump_correct_bart', 'tapex_which_table', 'random_pair_context_with_table',
-    'select_by_loss', 'count_cells', 'fewshot_pcyin_nsm', 'fewshot_tapas', 'compare_nat_syn'])
+    'select_by_loss', 'count_cells', 'fewshot_pcyin_nsm', 'fewshot_tapas',
+    'compare_nat_syn', 'convert_to_official_eval'])
   parser.add_argument('--inp', type=Path, required=False, nargs='+')
   parser.add_argument('--other', type=str, nargs='+')
   parser.add_argument('--out', type=Path, required=False, default=None)
@@ -917,3 +938,8 @@ if __name__ == '__main__':
     squall = Squall(Path('data/squall/data/squall.json'), wikitq=None)
     wtq = WikiTQ(Path('data/wikitablequestions/WikiTableQuestions'))
     compare_nat_syn(nat_file, syn_file, multi_file, squall, wtq)
+
+  elif args.task == 'convert_to_official_eval':
+    pred_file, prep_file = args.inp
+    out_file = args.out
+    convert_to_official_eval(pred_file, prep_file, out_file)
